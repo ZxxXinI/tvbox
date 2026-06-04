@@ -97,6 +97,44 @@ class PlaybackParserTest {
     }
 
     @Test
+    fun filtersBlockedCategoriesAndMovies() {
+        val response = json.decodeFromString<MacCmsResponse>(
+            """
+            {
+              "code": 1,
+              "class": [
+                {"type_id": 1, "type_name": "电影片"},
+                {"type_id": 2, "type_name": "伦理片"}
+              ],
+              "list": [
+                {
+                  "vod_id": 1,
+                  "vod_name": "正常电影",
+                  "type_id": 1,
+                  "type_name": "电影片",
+                  "vod_play_from": "rym3u8",
+                  "vod_play_url": "HD${'$'}https://video.test/ok.m3u8"
+                },
+                {
+                  "vod_id": 2,
+                  "vod_name": "伦理故事",
+                  "type_id": 2,
+                  "type_name": "伦理片",
+                  "vod_play_from": "rym3u8",
+                  "vod_play_url": "HD${'$'}https://video.test/blocked.m3u8"
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val page = response.toPagedMovies(testLine)
+
+        assertEquals(listOf("电影片"), page.categories.map { it.name })
+        assertEquals(listOf("正常电影"), page.movies.map { it.name })
+    }
+
+    @Test
     fun calculatesHistoryProgressPercent() {
         val item = WatchHistoryItem(
             movieId = 1,
