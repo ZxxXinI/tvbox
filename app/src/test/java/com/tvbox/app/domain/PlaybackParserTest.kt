@@ -104,7 +104,8 @@ class PlaybackParserTest {
               "code": 1,
               "class": [
                 {"type_id": 1, "type_name": "电影片"},
-                {"type_id": 2, "type_name": "伦理片"}
+                {"type_id": 2, "type_name": "伦理片"},
+                {"type_id": 3, "type_name": "电影解说"}
               ],
               "list": [
                 {
@@ -122,6 +123,14 @@ class PlaybackParserTest {
                   "type_name": "伦理片",
                   "vod_play_from": "rym3u8",
                   "vod_play_url": "HD${'$'}https://video.test/blocked.m3u8"
+                },
+                {
+                  "vod_id": 3,
+                  "vod_name": "热门电影解说",
+                  "type_id": 3,
+                  "type_name": "电影解说",
+                  "vod_play_from": "rym3u8",
+                  "vod_play_url": "HD${'$'}https://video.test/commentary.m3u8"
                 }
               ]
             }
