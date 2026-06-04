@@ -72,6 +72,8 @@ fun PlayerScreen(
     }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var reloadNonce by remember { mutableIntStateOf(0) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var controlsInteraction by remember { mutableIntStateOf(0) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -111,12 +113,24 @@ fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(controlsInteraction, playbackError) {
+        if (playbackError == null) {
+            controlsVisible = true
+            delay(4_000L)
+            controlsVisible = false
+        } else {
+            controlsVisible = true
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
+                controlsVisible = true
+                controlsInteraction++
                 when (event.nativeKeyEvent.keyCode) {
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER,
                     AndroidKeyEvent.KEYCODE_ENTER,
@@ -161,19 +175,30 @@ fun PlayerScreen(
             update = { it.player = player },
             modifier = Modifier.fillMaxSize(),
         )
-        PlayerChrome(
-            title = movie.name,
-            sourceName = source.name,
-            episodeTitle = episode.title,
-            playbackError = playbackError,
-            canPrevious = state.playerEpisodeIndex > 0,
-            canNext = state.playerEpisodeIndex < source.episodes.lastIndex,
-            onPrevious = actions::playPreviousEpisode,
-            onNext = actions::playNextEpisode,
-            onRetry = { reloadNonce++ },
-            onBack = actions::goBack,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        if (controlsVisible || playbackError != null) {
+            PlayerChrome(
+                title = movie.name,
+                sourceName = source.name,
+                episodeTitle = episode.title,
+                playbackError = playbackError,
+                canPrevious = state.playerEpisodeIndex > 0,
+                canNext = state.playerEpisodeIndex < source.episodes.lastIndex,
+                onPrevious = {
+                    controlsInteraction++
+                    actions.playPreviousEpisode()
+                },
+                onNext = {
+                    controlsInteraction++
+                    actions.playNextEpisode()
+                },
+                onRetry = {
+                    controlsInteraction++
+                    reloadNonce++
+                },
+                onBack = actions::goBack,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
     }
 }
 
