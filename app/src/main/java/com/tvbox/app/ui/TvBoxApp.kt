@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -66,12 +65,6 @@ private fun HomeScreen(
                 onRefresh = actions::refreshHome,
             )
             Spacer(modifier = Modifier.height(18.dp))
-            HistoryQuickRow(
-                state = state,
-                onOpenHistory = actions::openHistory,
-                onResume = actions::resumeHistory,
-            )
-            Spacer(modifier = Modifier.height(18.dp))
             CategoryRow(state = state, onCategory = actions::selectCategory)
             Spacer(modifier = Modifier.height(20.dp))
             when {
@@ -81,39 +74,6 @@ private fun HomeScreen(
                     state = state,
                     onMovieClick = actions::openDetail,
                     onLoadMore = actions::loadNextPage,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HistoryQuickRow(
-    state: TvBoxUiState,
-    onOpenHistory: () -> Unit,
-    onResume: (com.tvbox.app.domain.WatchHistoryItem) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "观看历史",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Button(onClick = onOpenHistory) {
-            Text(if (state.historyItems.isEmpty()) "查看历史" else "全部历史")
-        }
-    }
-    if (state.historyItems.isNotEmpty()) {
-        Spacer(modifier = Modifier.height(10.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(state.historyItems.take(8), key = { "${it.movieId}-${it.updatedAtEpochMs}" }) { item ->
-                HistoryItemCard(
-                    item = item,
-                    onClick = { onResume(item) },
-                    modifier = Modifier.width(220.dp),
                 )
             }
         }
@@ -138,11 +98,11 @@ private fun HistoryScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "观看历史",
+                        text = "历史",
                         style = MaterialTheme.typography.headlineLarge,
                     )
                     Text(
-                        text = "继续上次的线路、集数和播放进度",
+                        text = "观看记录：继续上次的线路、集数和播放进度",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
