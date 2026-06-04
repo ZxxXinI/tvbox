@@ -47,6 +47,9 @@ data class Movie(
 data class PlaySource(
     val name: String,
     val episodes: List<PlayEpisode>,
+    val lineId: String = "",
+    val lineName: String = name,
+    val sourceName: String = name,
 )
 
 data class PlayEpisode(

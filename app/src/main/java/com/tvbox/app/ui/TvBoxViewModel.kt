@@ -238,7 +238,6 @@ class TvBoxViewModel(
                             detailLoading = false,
                             detailError = null,
                             selectedSourceIndex = sourceIndex,
-                            selectedApiLineId = item.apiLineId,
                             playerSourceIndex = sourceIndex,
                             playerEpisodeIndex = episodeIndex,
                             playerStartPositionMs = item.positionMs.coerceAtLeast(0L),

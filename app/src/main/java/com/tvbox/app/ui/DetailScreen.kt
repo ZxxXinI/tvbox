@@ -149,7 +149,7 @@ fun DetailScreen(
                     }
                     Spacer(modifier = Modifier.height(sectionGap))
                     Text(
-                        text = "播放源",
+                        text = "播放线路",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
