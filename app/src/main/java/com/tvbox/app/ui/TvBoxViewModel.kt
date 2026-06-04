@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.tvbox.app.data.DefaultMovieRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.MovieRepository
+import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.WatchHistoryItem
@@ -25,6 +26,8 @@ enum class TvScreen {
 
 data class TvBoxUiState(
     val screen: TvScreen = TvScreen.Home,
+    val apiLines: List<ApiLine> = emptyList(),
+    val selectedApiLineId: String = "",
     val categories: List<Category> = emptyList(),
     val selectedCategoryId: Int? = null,
     val movies: List<Movie> = emptyList(),
@@ -49,6 +52,9 @@ data class TvBoxUiState(
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
+
+    val selectedApiLine: ApiLine?
+        get() = apiLines.firstOrNull { it.id == selectedApiLineId }
 }
 
 class TvBoxViewModel(
@@ -64,6 +70,12 @@ class TvBoxViewModel(
     private var historyResumeJob: Job? = null
 
     init {
+        _state.update {
+            it.copy(
+                apiLines = repository.apiLines,
+                selectedApiLineId = repository.apiLines.firstOrNull()?.id.orEmpty(),
+            )
+        }
         loadHistory()
         refreshHome()
     }
@@ -75,6 +87,23 @@ class TvBoxViewModel(
     fun selectCategory(categoryId: Int?) {
         if (_state.value.selectedCategoryId == categoryId) return
         _state.update { it.copy(selectedCategoryId = categoryId, movies = emptyList(), page = 1) }
+        loadHomePage(reset = true)
+    }
+
+    fun selectApiLine(apiLineId: String) {
+        if (_state.value.selectedApiLineId == apiLineId) return
+        _state.update {
+            it.copy(
+                selectedApiLineId = apiLineId,
+                selectedCategoryId = null,
+                categories = emptyList(),
+                movies = emptyList(),
+                page = 1,
+                pageCount = 1,
+                total = 0,
+                homeError = null,
+            )
+        }
         loadHomePage(reset = true)
     }
 
@@ -106,7 +135,13 @@ class TvBoxViewModel(
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             _state.update { it.copy(searchLoading = true, searchError = null) }
-            runCatching { repository.getMovies(page = 1, keyword = query) }
+            runCatching {
+                repository.getMovies(
+                    apiLineId = _state.value.selectedApiLineId,
+                    page = 1,
+                    keyword = query,
+                )
+            }
                 .onSuccess { result ->
                     _state.update {
                         it.copy(
@@ -136,7 +171,7 @@ class TvBoxViewModel(
             )
         }
         detailJob = viewModelScope.launch {
-            runCatching { repository.getDetail(movieId) }
+            runCatching { repository.getDetail(apiLineId = _state.value.selectedApiLineId, id = movieId) }
                 .onSuccess { movie ->
                     _state.update {
                         val sourceIndex = movie?.preferredSourceIndex() ?: 0
@@ -188,7 +223,7 @@ class TvBoxViewModel(
             )
         }
         historyResumeJob = viewModelScope.launch {
-            runCatching { repository.getDetail(item.movieId) }
+            runCatching { repository.getDetail(apiLineId = item.apiLineId, id = item.movieId) }
                 .onSuccess { movie ->
                     if (movie == null) {
                         _state.update {
@@ -203,6 +238,7 @@ class TvBoxViewModel(
                             detailLoading = false,
                             detailError = null,
                             selectedSourceIndex = sourceIndex,
+                            selectedApiLineId = item.apiLineId,
                             playerSourceIndex = sourceIndex,
                             playerEpisodeIndex = episodeIndex,
                             playerStartPositionMs = item.positionMs.coerceAtLeast(0L),
@@ -255,6 +291,8 @@ class TvBoxViewModel(
 
         val item = WatchHistoryItem(
             movieId = movie.id,
+            apiLineId = movie.apiLineId,
+            apiLineName = movie.apiLineName,
             movieName = movie.name,
             posterUrl = movie.posterUrl,
             typeName = movie.typeName,
@@ -315,7 +353,11 @@ class TvBoxViewModel(
                 )
             }
             runCatching {
-                repository.getMovies(page = nextPage, typeId = _state.value.selectedCategoryId)
+                repository.getMovies(
+                    apiLineId = _state.value.selectedApiLineId,
+                    page = nextPage,
+                    typeId = _state.value.selectedCategoryId,
+                )
             }.onSuccess { result ->
                 _state.update {
                     it.copy(
@@ -346,7 +388,7 @@ class TvBoxViewModel(
 
     private fun loadCategoriesOnly() {
         viewModelScope.launch {
-            runCatching { repository.getCategories() }
+            runCatching { repository.getCategories(apiLineId = _state.value.selectedApiLineId) }
                 .onSuccess { categories ->
                     _state.update { it.copy(categories = categories) }
                 }

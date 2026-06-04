@@ -5,8 +5,16 @@ data class Category(
     val name: String,
 )
 
+data class ApiLine(
+    val id: String,
+    val name: String,
+    val baseUrls: List<String>,
+)
+
 data class Movie(
     val id: Int,
+    val apiLineId: String,
+    val apiLineName: String,
     val name: String,
     val typeId: Int,
     val typeName: String,
@@ -50,7 +58,7 @@ data class PagedMovies(
     val page: Int,
     val pageCount: Int,
     val total: Int,
+    val apiLine: ApiLine,
     val categories: List<Category>,
     val movies: List<Movie>,
 )
-

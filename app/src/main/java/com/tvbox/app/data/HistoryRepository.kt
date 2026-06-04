@@ -29,7 +29,7 @@ class SharedHistoryRepository(context: Context) : HistoryRepository {
         val updated = buildList {
             add(updatedItem)
             readHistory()
-                .filterNot { it.movieId == item.movieId }
+                .filterNot { it.apiLineId == item.apiLineId && it.movieId == item.movieId }
                 .forEach(::add)
         }.take(MAX_HISTORY_ITEMS)
 
@@ -53,4 +53,3 @@ class SharedHistoryRepository(context: Context) : HistoryRepository {
         const val MAX_HISTORY_ITEMS = 100
     }
 }
-

@@ -59,12 +59,14 @@ private fun HomeScreen(
         ) {
             AppHeader(
                 title = "TVBox",
-                subtitle = "共 ${state.total} 部影片，支持 Android TV 遥控浏览",
+                subtitle = "${state.selectedApiLine?.name ?: "线路"} / 共 ${state.total} 部影片",
                 onHistory = actions::openHistory,
                 onSearch = actions::openSearch,
                 onRefresh = actions::refreshHome,
             )
             Spacer(modifier = Modifier.height(18.dp))
+            ApiLineRow(state = state, onApiLine = actions::selectApiLine)
+            Spacer(modifier = Modifier.height(14.dp))
             CategoryRow(state = state, onCategory = actions::selectCategory)
             Spacer(modifier = Modifier.height(20.dp))
             when {
@@ -74,6 +76,33 @@ private fun HomeScreen(
                     state = state,
                     onMovieClick = actions::openDetail,
                     onLoadMore = actions::loadNextPage,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApiLineRow(
+    state: TvBoxUiState,
+    onApiLine: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "线路",
+            modifier = Modifier.padding(end = 12.dp),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(state.apiLines, key = { it.id }) { line ->
+                CategoryPill(
+                    label = line.name,
+                    selected = state.selectedApiLineId == line.id,
+                    onClick = { onApiLine(line.id) },
                 )
             }
         }
@@ -131,7 +160,7 @@ private fun HistoryScreen(
                     verticalArrangement = Arrangement.spacedBy(22.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(state.historyItems, key = { "${it.movieId}-${it.updatedAtEpochMs}" }) { item ->
+                    items(state.historyItems, key = { "${it.apiLineId}-${it.movieId}-${it.updatedAtEpochMs}" }) { item ->
                         HistoryItemCard(item = item, onClick = { actions.resumeHistory(item) })
                     }
                 }
@@ -181,7 +210,7 @@ private fun MovieGrid(
         verticalArrangement = Arrangement.spacedBy(22.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(state.movies, key = { it.id }) { movie ->
+        items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
             MoviePosterCard(movie = movie, onClick = { onMovieClick(movie.id) })
         }
         if (state.canLoadMore || state.loadingMore) {

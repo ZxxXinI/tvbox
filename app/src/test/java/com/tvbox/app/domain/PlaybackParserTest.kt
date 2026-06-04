@@ -8,6 +8,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackParserTest {
+    private val testLine = ApiLine(
+        id = "test",
+        name = "测试线路",
+        baseUrls = listOf("https://example.test/api.php/provide/vod/"),
+    )
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -78,11 +84,13 @@ class PlaybackParserTest {
             """.trimIndent(),
         )
 
-        val page = response.toPagedMovies()
+        val page = response.toPagedMovies(testLine)
         val movie = page.movies.singleOrNull()
         assertNotNull(movie)
         assertEquals(1, page.categories.size)
         val decodedMovie = movie!!
+        assertEquals("test", decodedMovie.apiLineId)
+        assertEquals("测试线路", decodedMovie.apiLineName)
         assertEquals("测试影片", decodedMovie.name)
         assertEquals("简介", decodedMovie.description)
         assertEquals("https://video.test/index.m3u8", decodedMovie.playSources.single().episodes.single().url)

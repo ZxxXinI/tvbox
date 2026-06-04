@@ -279,7 +279,7 @@ fun HistoryItemCard(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = "${item.sourceName} / ${formatPlaybackPosition(item.positionMs)}",
+            text = "${item.apiLineName} / ${item.sourceName} / ${formatPlaybackPosition(item.positionMs)}",
             modifier = Modifier.padding(start = 10.dp, top = 3.dp, end = 10.dp, bottom = 12.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,

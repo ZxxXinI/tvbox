@@ -5,6 +5,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class WatchHistoryItem(
     val movieId: Int,
+    val apiLineId: String = "ruyi",
+    val apiLineName: String = "如意",
     val movieName: String,
     val posterUrl: String,
     val typeName: String,
@@ -24,4 +26,3 @@ data class WatchHistoryItem(
             return ((positionMs * 100) / durationMs).coerceIn(0, 100).toInt()
         }
 }
-

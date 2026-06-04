@@ -1,5 +1,6 @@
 package com.tvbox.app.data
 
+import com.tvbox.app.domain.ApiLine
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -35,11 +36,42 @@ object MacCmsNetwork {
         .writeTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    val api: MacCmsApi = Retrofit.Builder()
-        .baseUrl("https://cj.rycjapi.com/api.php/provide/vod/")
-        .client(client)
-        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-        .build()
-        .create(MacCmsApi::class.java)
+    private val apis = mutableMapOf<String, MacCmsApi>()
+
+    fun api(baseUrl: String): MacCmsApi {
+        return apis.getOrPut(baseUrl) {
+            Retrofit.Builder()
+                .baseUrl(baseUrl)
+                .client(client)
+                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+                .build()
+                .create(MacCmsApi::class.java)
+        }
+    }
 }
 
+object ApiLines {
+    val defaults = listOf(
+        ApiLine(
+            id = "ruyi",
+            name = "如意",
+            baseUrls = listOf("https://cj.rycjapi.com/api.php/provide/vod/"),
+        ),
+        ApiLine(
+            id = "yaya",
+            name = "鸭鸭",
+            baseUrls = listOf(
+                "https://cj.yayazy.net/api.php/provide/vod/",
+                "https://cj2.yayazy.net/api.php/provide/vod/",
+            ),
+        ),
+        ApiLine(
+            id = "liangzi",
+            name = "量子",
+            baseUrls = listOf(
+                "https://cj.lziapi.com/api.php/provide/vod/",
+                "https://cj.lzcaiji.com/api.php/provide/vod/",
+            ),
+        ),
+    )
+}

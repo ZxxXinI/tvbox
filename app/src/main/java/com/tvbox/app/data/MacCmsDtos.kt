@@ -1,5 +1,6 @@
 package com.tvbox.app.data
 
+import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.PagedMovies
@@ -19,13 +20,14 @@ data class MacCmsResponse(
     val categories: List<CategoryDto> = emptyList(),
     val list: List<VodDto> = emptyList(),
 ) {
-    fun toPagedMovies(): PagedMovies {
+    fun toPagedMovies(apiLine: ApiLine): PagedMovies {
         return PagedMovies(
             page = page.coerceAtLeast(1),
             pageCount = pagecount.coerceAtLeast(1),
             total = total.coerceAtLeast(0),
+            apiLine = apiLine,
             categories = categories.mapNotNull { it.toDomainOrNull() },
-            movies = list.mapNotNull { it.toDomainOrNull() },
+            movies = list.mapNotNull { it.toDomainOrNull(apiLine) },
         )
     }
 }
@@ -78,10 +80,12 @@ data class VodDto(
     @SerialName("vod_play_url")
     val vodPlayUrl: String = "",
 ) {
-    fun toDomainOrNull(): Movie? {
+    fun toDomainOrNull(apiLine: ApiLine): Movie? {
         if (vodId <= 0 || vodName.isBlank()) return null
         return Movie(
             id = vodId,
+            apiLineId = apiLine.id,
+            apiLineName = apiLine.name,
             name = cleanHtml(vodName),
             typeId = typeId,
             typeName = cleanHtml(typeName),
@@ -105,4 +109,3 @@ private fun normalizePosterUrl(raw: String): String {
         .substringBefore("]")
         .ifBlank { raw.trim() }
 }
-
