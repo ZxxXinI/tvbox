@@ -3,9 +3,11 @@ package com.tvbox.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tvbox.app.data.DefaultMovieRepository
+import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.Movie
+import com.tvbox.app.domain.WatchHistoryItem
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +17,7 @@ import kotlinx.coroutines.launch
 
 enum class TvScreen {
     Home,
+    History,
     Search,
     Detail,
     Player,
@@ -31,6 +34,7 @@ data class TvBoxUiState(
     val homeLoading: Boolean = false,
     val loadingMore: Boolean = false,
     val homeError: String? = null,
+    val historyItems: List<WatchHistoryItem> = emptyList(),
     val searchQuery: String = "",
     val searchResults: List<Movie> = emptyList(),
     val searchLoading: Boolean = false,
@@ -41,6 +45,7 @@ data class TvBoxUiState(
     val selectedSourceIndex: Int = 0,
     val playerSourceIndex: Int = 0,
     val playerEpisodeIndex: Int = 0,
+    val playerStartPositionMs: Long = 0L,
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -48,6 +53,7 @@ data class TvBoxUiState(
 
 class TvBoxViewModel(
     private val repository: MovieRepository = DefaultMovieRepository(),
+    private val historyRepository: HistoryRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(TvBoxUiState())
     val state: StateFlow<TvBoxUiState> = _state.asStateFlow()
@@ -55,8 +61,10 @@ class TvBoxViewModel(
     private var homeJob: Job? = null
     private var searchJob: Job? = null
     private var detailJob: Job? = null
+    private var historyResumeJob: Job? = null
 
     init {
+        loadHistory()
         refreshHome()
     }
 
@@ -78,6 +86,11 @@ class TvBoxViewModel(
 
     fun openSearch() {
         _state.update { it.copy(screen = TvScreen.Search, searchError = null) }
+    }
+
+    fun openHistory() {
+        loadHistory()
+        _state.update { it.copy(screen = TvScreen.History) }
     }
 
     fun updateSearchQuery(query: String) {
@@ -150,7 +163,7 @@ class TvBoxViewModel(
         }
     }
 
-    fun openPlayer(sourceIndex: Int, episodeIndex: Int) {
+    fun openPlayer(sourceIndex: Int, episodeIndex: Int, startPositionMs: Long = 0L) {
         _state.update { state ->
             val source = state.detailMovie?.playSources?.getOrNull(sourceIndex)
             val boundedEpisodeIndex = episodeIndex.coerceIn(0, (source?.episodes?.lastIndex ?: 0).coerceAtLeast(0))
@@ -158,7 +171,50 @@ class TvBoxViewModel(
                 screen = TvScreen.Player,
                 playerSourceIndex = sourceIndex,
                 playerEpisodeIndex = boundedEpisodeIndex,
+                playerStartPositionMs = startPositionMs.coerceAtLeast(0L),
             )
+        }
+    }
+
+    fun resumeHistory(item: WatchHistoryItem) {
+        historyResumeJob?.cancel()
+        _state.update {
+            it.copy(
+                screen = TvScreen.Detail,
+                detailMovie = null,
+                detailLoading = true,
+                detailError = null,
+                selectedSourceIndex = item.sourceIndex,
+            )
+        }
+        historyResumeJob = viewModelScope.launch {
+            runCatching { repository.getDetail(item.movieId) }
+                .onSuccess { movie ->
+                    if (movie == null) {
+                        _state.update {
+                            it.copy(detailLoading = false, detailError = "影片详情不存在")
+                        }
+                        return@onSuccess
+                    }
+                    val (sourceIndex, episodeIndex) = resolveHistoryPosition(movie, item)
+                    _state.update {
+                        it.copy(
+                            detailMovie = movie,
+                            detailLoading = false,
+                            detailError = null,
+                            selectedSourceIndex = sourceIndex,
+                            playerSourceIndex = sourceIndex,
+                            playerEpisodeIndex = episodeIndex,
+                            playerStartPositionMs = item.positionMs.coerceAtLeast(0L),
+                            screen = TvScreen.Player,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(detailLoading = false, detailError = error.userMessage())
+                    }
+                }
         }
     }
 
@@ -170,19 +226,60 @@ class TvBoxViewModel(
             ?.episodes
             .orEmpty()
         if (current.playerEpisodeIndex < episodes.lastIndex) {
-            _state.update { it.copy(playerEpisodeIndex = it.playerEpisodeIndex + 1) }
+            _state.update {
+                it.copy(
+                    playerEpisodeIndex = it.playerEpisodeIndex + 1,
+                    playerStartPositionMs = 0L,
+                )
+            }
         }
     }
 
     fun playPreviousEpisode() {
         if (_state.value.playerEpisodeIndex > 0) {
-            _state.update { it.copy(playerEpisodeIndex = it.playerEpisodeIndex - 1) }
+            _state.update {
+                it.copy(
+                    playerEpisodeIndex = it.playerEpisodeIndex - 1,
+                    playerStartPositionMs = 0L,
+                )
+            }
+        }
+    }
+
+    fun savePlaybackProgress(positionMs: Long, durationMs: Long) {
+        val current = _state.value
+        val movie = current.detailMovie ?: return
+        val source = movie.playSources.getOrNull(current.playerSourceIndex) ?: return
+        val episode = source.episodes.getOrNull(current.playerEpisodeIndex) ?: return
+        if (episode.url.isBlank()) return
+
+        val item = WatchHistoryItem(
+            movieId = movie.id,
+            movieName = movie.name,
+            posterUrl = movie.posterUrl,
+            typeName = movie.typeName,
+            remarks = movie.remarks,
+            sourceIndex = current.playerSourceIndex,
+            sourceName = source.name,
+            episodeIndex = current.playerEpisodeIndex,
+            episodeTitle = episode.title,
+            episodeUrl = episode.url,
+            positionMs = positionMs.coerceAtLeast(0L),
+            durationMs = durationMs.coerceAtLeast(0L),
+            updatedAtEpochMs = System.currentTimeMillis(),
+        )
+        viewModelScope.launch {
+            runCatching { historyRepository.saveProgress(item) }
+                .onSuccess { history ->
+                    _state.update { it.copy(historyItems = history) }
+                }
         }
     }
 
     fun retryCurrent() {
         when (_state.value.screen) {
             TvScreen.Home -> refreshHome()
+            TvScreen.History -> loadHistory()
             TvScreen.Search -> submitSearch()
             TvScreen.Detail -> _state.value.detailMovie?.let { openDetail(it.id) }
             TvScreen.Player -> Unit
@@ -196,7 +293,7 @@ class TvBoxViewModel(
                 _state.update { it.copy(screen = TvScreen.Detail) }
                 true
             }
-            TvScreen.Detail, TvScreen.Search -> {
+            TvScreen.Detail, TvScreen.Search, TvScreen.History -> {
                 _state.update { it.copy(screen = TvScreen.Home) }
                 true
             }
@@ -255,9 +352,38 @@ class TvBoxViewModel(
                 }
         }
     }
+
+    private fun loadHistory() {
+        viewModelScope.launch {
+            runCatching { historyRepository.getHistory() }
+                .onSuccess { history ->
+                    _state.update { it.copy(historyItems = history) }
+                }
+        }
+    }
+
+    private fun resolveHistoryPosition(movie: Movie, item: WatchHistoryItem): Pair<Int, Int> {
+        val sourceIndexByUrl = movie.playSources.indexOfFirst { source ->
+            source.episodes.any { episode -> episode.url == item.episodeUrl }
+        }
+        val sourceIndex = when {
+            sourceIndexByUrl >= 0 -> sourceIndexByUrl
+            item.sourceIndex in movie.playSources.indices -> item.sourceIndex
+            else -> movie.preferredSourceIndex()
+        }.coerceAtLeast(0)
+
+        val episodes = movie.playSources.getOrNull(sourceIndex)?.episodes.orEmpty()
+        val episodeIndexByUrl = episodes.indexOfFirst { it.url == item.episodeUrl }
+        val episodeIndex = when {
+            episodeIndexByUrl >= 0 -> episodeIndexByUrl
+            item.episodeIndex in episodes.indices -> item.episodeIndex
+            else -> 0
+        }.coerceAtLeast(0)
+
+        return sourceIndex to episodeIndex
+    }
 }
 
 private fun Throwable.userMessage(): String {
     return localizedMessage?.takeIf { it.isNotBlank() } ?: "网络请求失败，请稍后重试"
 }
-

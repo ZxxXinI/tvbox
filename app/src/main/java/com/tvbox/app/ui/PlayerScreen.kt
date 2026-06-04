@@ -43,6 +43,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.tvbox.app.ui.components.ErrorState
+import kotlinx.coroutines.delay
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -80,6 +81,10 @@ fun PlayerScreen(
         }
         player.addListener(listener)
         onDispose {
+            actions.savePlaybackProgress(
+                positionMs = player.currentPosition,
+                durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+            )
             player.removeListener(listener)
             player.release()
         }
@@ -87,9 +92,23 @@ fun PlayerScreen(
 
     LaunchedEffect(episode.url, reloadNonce) {
         playbackError = null
-        player.setMediaItem(MediaItem.fromUri(episode.url))
+        player.setMediaItem(MediaItem.fromUri(episode.url), state.playerStartPositionMs)
         player.prepare()
         player.play()
+        actions.savePlaybackProgress(
+            positionMs = state.playerStartPositionMs,
+            durationMs = 0L,
+        )
+    }
+
+    LaunchedEffect(player, episode.url) {
+        while (true) {
+            delay(5_000L)
+            actions.savePlaybackProgress(
+                positionMs = player.currentPosition,
+                durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+            )
+        }
     }
 
     Box(
@@ -216,4 +235,3 @@ private fun PlayerChrome(
         }
     }
 }
-
