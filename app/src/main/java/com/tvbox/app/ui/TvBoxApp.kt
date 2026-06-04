@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -15,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.CategoryPill
 import com.tvbox.app.ui.components.ErrorState
+import com.tvbox.app.ui.components.HistoryItemCard
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.MoviePosterCard
 import com.tvbox.app.ui.components.PageSurface
@@ -36,6 +40,7 @@ fun TvBoxApp(
 ) {
     when (state.screen) {
         TvScreen.Home -> HomeScreen(state = state, actions = actions)
+        TvScreen.History -> HistoryScreen(state = state, actions = actions)
         TvScreen.Search -> SearchScreen(state = state, actions = actions)
         TvScreen.Detail -> DetailScreen(state = state, actions = actions)
         TvScreen.Player -> PlayerScreen(state = state, actions = actions)
@@ -56,10 +61,17 @@ private fun HomeScreen(
             AppHeader(
                 title = "TVBox",
                 subtitle = "共 ${state.total} 部影片，支持 Android TV 遥控浏览",
+                onHistory = actions::openHistory,
                 onSearch = actions::openSearch,
                 onRefresh = actions::refreshHome,
             )
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(18.dp))
+            HistoryQuickRow(
+                state = state,
+                onOpenHistory = actions::openHistory,
+                onResume = actions::resumeHistory,
+            )
+            Spacer(modifier = Modifier.height(18.dp))
             CategoryRow(state = state, onCategory = actions::selectCategory)
             Spacer(modifier = Modifier.height(20.dp))
             when {
@@ -70,6 +82,99 @@ private fun HomeScreen(
                     onMovieClick = actions::openDetail,
                     onLoadMore = actions::loadNextPage,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryQuickRow(
+    state: TvBoxUiState,
+    onOpenHistory: () -> Unit,
+    onResume: (com.tvbox.app.domain.WatchHistoryItem) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "观看历史",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Button(onClick = onOpenHistory) {
+            Text(if (state.historyItems.isEmpty()) "查看历史" else "全部历史")
+        }
+    }
+    if (state.historyItems.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(10.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            items(state.historyItems.take(8), key = { "${it.movieId}-${it.updatedAtEpochMs}" }) { item ->
+                HistoryItemCard(
+                    item = item,
+                    onClick = { onResume(item) },
+                    modifier = Modifier.width(220.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryScreen(
+    state: TvBoxUiState,
+    actions: TvBoxViewModel,
+) {
+    PageSurface { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "观看历史",
+                        style = MaterialTheme.typography.headlineLarge,
+                    )
+                    Text(
+                        text = "继续上次的线路、集数和播放进度",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Button(onClick = actions::goBack) {
+                    Text("返回")
+                }
+            }
+            Spacer(modifier = Modifier.height(22.dp))
+            if (state.historyItems.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text("暂无观看历史", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Button(onClick = actions::goBack) {
+                        Text("去看影片")
+                    }
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 230.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(22.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(state.historyItems, key = { "${it.movieId}-${it.updatedAtEpochMs}" }) { item ->
+                        HistoryItemCard(item = item, onClick = { actions.resumeHistory(item) })
+                    }
+                }
             }
         }
     }
@@ -141,4 +246,3 @@ private fun MovieGrid(
         }
     }
 }
-

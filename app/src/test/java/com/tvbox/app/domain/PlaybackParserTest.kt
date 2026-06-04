@@ -87,4 +87,25 @@ class PlaybackParserTest {
         assertEquals("简介", decodedMovie.description)
         assertEquals("https://video.test/index.m3u8", decodedMovie.playSources.single().episodes.single().url)
     }
+
+    @Test
+    fun calculatesHistoryProgressPercent() {
+        val item = WatchHistoryItem(
+            movieId = 1,
+            movieName = "测试",
+            posterUrl = "",
+            typeName = "电影",
+            remarks = "",
+            sourceIndex = 0,
+            sourceName = "rym3u8",
+            episodeIndex = 0,
+            episodeTitle = "第01集",
+            episodeUrl = "https://video.test/index.m3u8",
+            positionMs = 30_000,
+            durationMs = 120_000,
+            updatedAtEpochMs = 1,
+        )
+
+        assertEquals(25, item.progressPercent)
+    }
 }

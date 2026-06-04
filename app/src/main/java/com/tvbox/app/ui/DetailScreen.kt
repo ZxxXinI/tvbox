@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -65,19 +67,33 @@ fun DetailScreen(
             )
             else -> {
                 val movie = state.detailMovie
-                Column(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
                 ) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    val compact = maxHeight < 560.dp
+                    val posterWidth = if (compact) 118.dp else 210.dp
+                    val horizontalGap = if (compact) 16.dp else 28.dp
+                    val headerMaxHeight = if (compact) 190.dp else 320.dp
+                    val descriptionLines = if (compact) 2 else 5
+                    val sectionGap = if (compact) 12.dp else 24.dp
+                    val selectedSource = movie.playSources.getOrNull(state.selectedSourceIndex)
+                    val canPlay = selectedSource?.episodes?.isNotEmpty() == true
+
+                    Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = headerMaxHeight),
+                    ) {
                         PosterImage(
                             movie = movie,
                             modifier = Modifier
-                                .width(210.dp)
+                                .width(posterWidth)
                                 .aspectRatio(2f / 3f),
                         )
-                        Spacer(modifier = Modifier.width(28.dp))
+                        Spacer(modifier = Modifier.width(horizontalGap))
                         Column(
                             modifier = Modifier
                                 .weight(1f)
@@ -103,36 +119,53 @@ fun DetailScreen(
                                         SmallMeta(movie.remarks)
                                     }
                                 }
-                                Button(onClick = actions::goBack) {
-                                    Text("返回")
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Button(
+                                        onClick = { actions.openPlayer(state.selectedSourceIndex, 0) },
+                                        enabled = canPlay,
+                                    ) {
+                                        Text("立即播放")
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(onClick = actions::goBack) {
+                                        Text("返回")
+                                    }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(18.dp))
+                            Spacer(modifier = Modifier.height(if (compact) 10.dp else 18.dp))
                             InfoLine(label = "主演", value = movie.actor)
                             InfoLine(label = "导演", value = movie.director)
                             InfoLine(label = "地区", value = movie.area)
                             InfoLine(label = "语言", value = movie.language)
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(if (compact) 8.dp else 12.dp))
                             Text(
                                 text = movie.description.ifBlank { "暂无简介" },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 5,
+                                maxLines = descriptionLines,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(sectionGap))
+                    Text(
+                        text = "播放源",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
                     PlaySourceTabs(
                         sources = movie.playSources,
                         selectedIndex = state.selectedSourceIndex,
                         onSelect = actions::selectPlaySource,
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(if (compact) 10.dp else 16.dp))
                     EpisodeGrid(
                         source = movie.playSources.getOrNull(state.selectedSourceIndex),
                         onEpisode = { episodeIndex -> actions.openPlayer(state.selectedSourceIndex, episodeIndex) },
+                        modifier = Modifier.weight(1f),
                     )
+                    }
                 }
             }
         }
@@ -164,10 +197,11 @@ private fun PlaySourceTabs(
 private fun EpisodeGrid(
     source: PlaySource?,
     onEpisode: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val episodes = source?.episodes.orEmpty()
     if (episodes.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("当前播放源暂无剧集", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
@@ -177,7 +211,7 @@ private fun EpisodeGrid(
         contentPadding = PaddingValues(bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
     ) {
         itemsIndexed(episodes) { index, episode ->
             EpisodeButton(episode = episode, onClick = { onEpisode(index) })
@@ -210,4 +244,3 @@ private fun EpisodeButton(
         )
     }
 }
-

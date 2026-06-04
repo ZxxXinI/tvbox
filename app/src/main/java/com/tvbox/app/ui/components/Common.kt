@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,11 +35,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.tvbox.app.domain.Movie
+import com.tvbox.app.domain.WatchHistoryItem
 
 @Composable
 fun AppHeader(
     title: String,
     subtitle: String,
+    onHistory: () -> Unit,
     onSearch: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
@@ -67,6 +70,9 @@ fun AppHeader(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onRefresh) {
                 Text("刷新")
+            }
+            Button(onClick = onHistory) {
+                Text("历史")
             }
             Button(onClick = onSearch) {
                 Text("搜索")
@@ -210,6 +216,80 @@ fun MoviePosterCard(
 }
 
 @Composable
+fun HistoryItemCard(
+    item: WatchHistoryItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        modifier = modifier
+            .tvFocusScale(shape = shape)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .focusable(),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            if (item.posterUrl.isNotBlank()) {
+                AsyncImage(
+                    model = item.posterUrl,
+                    contentDescription = item.movieName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    text = "无封面",
+                    modifier = Modifier.align(Alignment.Center),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(Color(0xB0000000))
+                    .padding(8.dp),
+            ) {
+                Text(
+                    text = item.episodeTitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        LinearProgressIndicator(
+            progress = { item.progressPercent / 100f },
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        )
+        Text(
+            text = item.movieName,
+            modifier = Modifier.padding(start = 10.dp, top = 10.dp, end = 10.dp),
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = "${item.sourceName} / ${formatPlaybackPosition(item.positionMs)}",
+            modifier = Modifier.padding(start = 10.dp, top = 3.dp, end = 10.dp, bottom = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 fun PosterImage(movie: Movie, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(8.dp)
     Box(
@@ -281,3 +361,14 @@ fun TinySpacer() {
     Spacer(modifier = Modifier.size(8.dp))
 }
 
+private fun formatPlaybackPosition(positionMs: Long): String {
+    val totalSeconds = (positionMs / 1000).coerceAtLeast(0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
+    }
+}
