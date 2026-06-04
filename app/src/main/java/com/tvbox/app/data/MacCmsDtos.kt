@@ -5,6 +5,7 @@ import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.PagedMovies
 import com.tvbox.app.domain.cleanHtml
+import com.tvbox.app.domain.isBlockedContent
 import com.tvbox.app.domain.parsePlaySources
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -41,7 +42,9 @@ data class CategoryDto(
 ) {
     fun toDomainOrNull(): Category? {
         if (typeId <= 0 || typeName.isBlank()) return null
-        return Category(id = typeId, name = cleanHtml(typeName))
+        val name = cleanHtml(typeName)
+        if (isBlockedContent(name)) return null
+        return Category(id = typeId, name = name)
     }
 }
 
@@ -55,6 +58,12 @@ data class VodDto(
     val typeName: String = "",
     @SerialName("vod_name")
     val vodName: String = "",
+    @SerialName("vod_sub")
+    val vodSub: String = "",
+    @SerialName("vod_class")
+    val vodClass: String = "",
+    @SerialName("vod_tag")
+    val vodTag: String = "",
     @SerialName("vod_pic")
     val vodPic: String = "",
     @SerialName("vod_actor")
@@ -82,6 +91,20 @@ data class VodDto(
 ) {
     fun toDomainOrNull(apiLine: ApiLine): Movie? {
         if (vodId <= 0 || vodName.isBlank()) return null
+        if (
+            isBlockedContent(
+                vodName,
+                vodSub,
+                typeName,
+                vodClass,
+                vodTag,
+                vodRemarks,
+                vodContent,
+                vodBlurb,
+            )
+        ) {
+            return null
+        }
         return Movie(
             id = vodId,
             apiLineId = apiLine.id,

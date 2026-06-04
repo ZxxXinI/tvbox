@@ -2,6 +2,7 @@ package com.tvbox.app.data
 
 import android.content.Context
 import com.tvbox.app.domain.WatchHistoryItem
+import com.tvbox.app.domain.isBlockedContent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -45,6 +46,14 @@ class SharedHistoryRepository(context: Context) : HistoryRepository {
         return runCatching {
             json.decodeFromString<List<WatchHistoryItem>>(raw)
         }.getOrDefault(emptyList())
+            .filterNot {
+                isBlockedContent(
+                    it.movieName,
+                    it.typeName,
+                    it.remarks,
+                    it.episodeTitle,
+                )
+            }
             .sortedByDescending { it.updatedAtEpochMs }
     }
 
