@@ -57,21 +57,5 @@ object ApiLines {
             name = "如意",
             baseUrls = listOf("https://cj.rycjapi.com/api.php/provide/vod/"),
         ),
-        ApiLine(
-            id = "yaya",
-            name = "鸭鸭",
-            baseUrls = listOf(
-                "https://cj.yayazy.net/api.php/provide/vod/",
-                "https://cj2.yayazy.net/api.php/provide/vod/",
-            ),
-        ),
-        ApiLine(
-            id = "liangzi",
-            name = "量子",
-            baseUrls = listOf(
-                "https://cj.lziapi.com/api.php/provide/vod/",
-                "https://cj.lzcaiji.com/api.php/provide/vod/",
-            ),
-        ),
     )
 }

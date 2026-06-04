@@ -1,6 +1,6 @@
 package com.tvbox.app.domain
 
-private val blockedKeywords = listOf("伦理")
+private val blockedKeywords = listOf("伦理", "电影解说")
 
 fun isBlockedContent(vararg fields: String?): Boolean {
     return fields.any { field ->
@@ -8,4 +8,3 @@ fun isBlockedContent(vararg fields: String?): Boolean {
         blockedKeywords.any { keyword -> value.contains(keyword, ignoreCase = true) }
     }
 }
-
