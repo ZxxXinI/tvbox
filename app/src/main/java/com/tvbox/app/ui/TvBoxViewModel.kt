@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 enum class TvScreen {
     Home,
@@ -46,9 +47,11 @@ data class TvBoxUiState(
     val detailLoading: Boolean = false,
     val detailError: String? = null,
     val selectedSourceIndex: Int = 0,
+    val selectedEpisodeIndex: Int = 0,
     val playerSourceIndex: Int = 0,
     val playerEpisodeIndex: Int = 0,
     val playerStartPositionMs: Long = 0L,
+    val playerSpeed: Float = 1f,
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -168,6 +171,10 @@ class TvBoxViewModel(
                 detailLoading = true,
                 detailError = null,
                 selectedSourceIndex = 0,
+                selectedEpisodeIndex = 0,
+                playerSourceIndex = 0,
+                playerEpisodeIndex = 0,
+                playerStartPositionMs = 0L,
             )
         }
         detailJob = viewModelScope.launch {
@@ -180,6 +187,10 @@ class TvBoxViewModel(
                             detailLoading = false,
                             detailError = if (movie == null) "影片详情不存在" else null,
                             selectedSourceIndex = sourceIndex,
+                            selectedEpisodeIndex = 0,
+                            playerSourceIndex = sourceIndex,
+                            playerEpisodeIndex = 0,
+                            playerStartPositionMs = 0L,
                         )
                     }
                 }
@@ -194,17 +205,24 @@ class TvBoxViewModel(
     fun selectPlaySource(index: Int) {
         _state.update { state ->
             val maxIndex = (state.detailMovie?.playSources?.lastIndex ?: 0).coerceAtLeast(0)
-            state.copy(selectedSourceIndex = index.coerceIn(0, maxIndex))
+            state.copy(
+                selectedSourceIndex = index.coerceIn(0, maxIndex),
+                selectedEpisodeIndex = 0,
+            )
         }
     }
 
     fun openPlayer(sourceIndex: Int, episodeIndex: Int, startPositionMs: Long = 0L) {
         _state.update { state ->
-            val source = state.detailMovie?.playSources?.getOrNull(sourceIndex)
+            val maxSourceIndex = (state.detailMovie?.playSources?.lastIndex ?: 0).coerceAtLeast(0)
+            val boundedSourceIndex = sourceIndex.coerceIn(0, maxSourceIndex)
+            val source = state.detailMovie?.playSources?.getOrNull(boundedSourceIndex)
             val boundedEpisodeIndex = episodeIndex.coerceIn(0, (source?.episodes?.lastIndex ?: 0).coerceAtLeast(0))
             state.copy(
                 screen = TvScreen.Player,
-                playerSourceIndex = sourceIndex,
+                selectedSourceIndex = boundedSourceIndex,
+                selectedEpisodeIndex = boundedEpisodeIndex,
+                playerSourceIndex = boundedSourceIndex,
                 playerEpisodeIndex = boundedEpisodeIndex,
                 playerStartPositionMs = startPositionMs.coerceAtLeast(0L),
             )
@@ -220,6 +238,7 @@ class TvBoxViewModel(
                 detailLoading = true,
                 detailError = null,
                 selectedSourceIndex = item.sourceIndex,
+                selectedEpisodeIndex = item.episodeIndex,
             )
         }
         historyResumeJob = viewModelScope.launch {
@@ -238,6 +257,7 @@ class TvBoxViewModel(
                             detailLoading = false,
                             detailError = null,
                             selectedSourceIndex = sourceIndex,
+                            selectedEpisodeIndex = episodeIndex,
                             playerSourceIndex = sourceIndex,
                             playerEpisodeIndex = episodeIndex,
                             playerStartPositionMs = item.positionMs.coerceAtLeast(0L),
@@ -262,8 +282,11 @@ class TvBoxViewModel(
             .orEmpty()
         if (current.playerEpisodeIndex < episodes.lastIndex) {
             _state.update {
+                val nextEpisodeIndex = it.playerEpisodeIndex + 1
                 it.copy(
-                    playerEpisodeIndex = it.playerEpisodeIndex + 1,
+                    selectedSourceIndex = it.playerSourceIndex,
+                    selectedEpisodeIndex = nextEpisodeIndex,
+                    playerEpisodeIndex = nextEpisodeIndex,
                     playerStartPositionMs = 0L,
                 )
             }
@@ -273,12 +296,22 @@ class TvBoxViewModel(
     fun playPreviousEpisode() {
         if (_state.value.playerEpisodeIndex > 0) {
             _state.update {
+                val previousEpisodeIndex = it.playerEpisodeIndex - 1
                 it.copy(
-                    playerEpisodeIndex = it.playerEpisodeIndex - 1,
+                    selectedSourceIndex = it.playerSourceIndex,
+                    selectedEpisodeIndex = previousEpisodeIndex,
+                    playerEpisodeIndex = previousEpisodeIndex,
                     playerStartPositionMs = 0L,
                 )
             }
         }
+    }
+
+    fun cyclePlaybackSpeed() {
+        val currentSpeed = _state.value.playerSpeed
+        val currentIndex = playbackSpeeds.indexOfFirst { abs(it - currentSpeed) < 0.01f }
+        val nextSpeed = playbackSpeeds[(currentIndex + 1).coerceAtLeast(0) % playbackSpeeds.size]
+        _state.update { it.copy(playerSpeed = nextSpeed) }
     }
 
     fun savePlaybackProgress(positionMs: Long, durationMs: Long) {
@@ -327,7 +360,13 @@ class TvBoxViewModel(
         val current = _state.value
         return when (current.screen) {
             TvScreen.Player -> {
-                _state.update { it.copy(screen = TvScreen.Detail) }
+                _state.update {
+                    it.copy(
+                        screen = TvScreen.Detail,
+                        selectedSourceIndex = it.playerSourceIndex,
+                        selectedEpisodeIndex = it.playerEpisodeIndex,
+                    )
+                }
                 true
             }
             TvScreen.Detail, TvScreen.Search, TvScreen.History -> {
@@ -428,3 +467,5 @@ class TvBoxViewModel(
 private fun Throwable.userMessage(): String {
     return localizedMessage?.takeIf { it.isNotBlank() } ?: "网络请求失败，请稍后重试"
 }
+
+private val playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)

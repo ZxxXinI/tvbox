@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,9 +31,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -121,7 +127,12 @@ fun DetailScreen(
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Button(
-                                        onClick = { actions.openPlayer(state.selectedSourceIndex, 0) },
+                                        onClick = {
+                                            actions.openPlayer(
+                                                state.selectedSourceIndex,
+                                                state.selectedEpisodeIndex,
+                                            )
+                                        },
                                         enabled = canPlay,
                                     ) {
                                         Text("立即播放")
@@ -162,6 +173,7 @@ fun DetailScreen(
                     Spacer(modifier = Modifier.height(if (compact) 10.dp else 16.dp))
                     EpisodeGrid(
                         source = movie.playSources.getOrNull(state.selectedSourceIndex),
+                        selectedEpisodeIndex = state.selectedEpisodeIndex,
                         onEpisode = { episodeIndex -> actions.openPlayer(state.selectedSourceIndex, episodeIndex) },
                         modifier = Modifier.weight(1f),
                     )
@@ -196,6 +208,7 @@ private fun PlaySourceTabs(
 @Composable
 private fun EpisodeGrid(
     source: PlaySource?,
+    selectedEpisodeIndex: Int,
     onEpisode: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -206,15 +219,38 @@ private fun EpisodeGrid(
         }
         return
     }
+    val safeSelectedEpisodeIndex = selectedEpisodeIndex.coerceIn(0, episodes.lastIndex)
+    val gridState = rememberLazyGridState()
+    val focusRequesters = remember(episodes) {
+        List(episodes.size) { FocusRequester() }
+    }
+
+    LaunchedEffect(episodes, safeSelectedEpisodeIndex) {
+        gridState.scrollToItem(safeSelectedEpisodeIndex)
+        withFrameNanos { }
+        runCatching {
+            focusRequesters[safeSelectedEpisodeIndex].requestFocus()
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 132.dp),
+        state = gridState,
         contentPadding = PaddingValues(bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier.fillMaxSize(),
     ) {
-        itemsIndexed(episodes) { index, episode ->
-            EpisodeButton(episode = episode, onClick = { onEpisode(index) })
+        itemsIndexed(
+            items = episodes,
+            key = { index, episode -> "$index-${episode.url}" },
+        ) { index, episode ->
+            EpisodeButton(
+                episode = episode,
+                selected = index == safeSelectedEpisodeIndex,
+                focusRequester = focusRequesters[index],
+                onClick = { onEpisode(index) },
+            )
         }
     }
 }
@@ -222,19 +258,32 @@ private fun EpisodeGrid(
 @Composable
 private fun EpisodeButton(
     episode: PlayEpisode,
+    selected: Boolean,
+    focusRequester: FocusRequester,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(6.dp)
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
     Surface(
         modifier = Modifier
             .tvFocusScale(shape = shape)
+            .focusRequester(focusRequester)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(containerColor)
             .clickable(onClick = onClick)
             .focusable(),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        color = containerColor,
+        contentColor = contentColor,
     ) {
         Text(
             text = episode.title,

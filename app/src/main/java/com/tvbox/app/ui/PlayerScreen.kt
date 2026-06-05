@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,11 +75,35 @@ fun PlayerScreen(
     var reloadNonce by remember { mutableIntStateOf(0) }
     var controlsVisible by remember { mutableStateOf(true) }
     var controlsInteraction by remember { mutableIntStateOf(0) }
+    var autoAdvancedEpisodeUrl by remember { mutableStateOf<String?>(null) }
+    val latestState by rememberUpdatedState(state)
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 playbackError = error.localizedMessage ?: "播放失败"
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState != Player.STATE_ENDED) return
+                val currentState = latestState
+                val currentSource = currentState.detailMovie
+                    ?.playSources
+                    ?.getOrNull(currentState.playerSourceIndex)
+                val currentEpisode = currentSource
+                    ?.episodes
+                    ?.getOrNull(currentState.playerEpisodeIndex)
+                    ?: return
+                if (autoAdvancedEpisodeUrl == currentEpisode.url) return
+
+                autoAdvancedEpisodeUrl = currentEpisode.url
+                actions.savePlaybackProgress(
+                    positionMs = player.currentPosition,
+                    durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+                )
+                if (currentState.playerEpisodeIndex < currentSource.episodes.lastIndex) {
+                    actions.playNextEpisode()
+                }
             }
         }
         player.addListener(listener)
@@ -94,8 +119,10 @@ fun PlayerScreen(
 
     LaunchedEffect(episode.url, reloadNonce) {
         playbackError = null
+        autoAdvancedEpisodeUrl = null
         player.setMediaItem(MediaItem.fromUri(episode.url), state.playerStartPositionMs)
         player.prepare()
+        player.setPlaybackSpeed(state.playerSpeed)
         player.play()
         actions.savePlaybackProgress(
             positionMs = state.playerStartPositionMs,
@@ -111,6 +138,10 @@ fun PlayerScreen(
                 durationMs = player.duration.takeIf { it > 0L } ?: 0L,
             )
         }
+    }
+
+    LaunchedEffect(state.playerSpeed) {
+        player.setPlaybackSpeed(state.playerSpeed)
     }
 
     LaunchedEffect(controlsInteraction, playbackError) {
@@ -159,6 +190,10 @@ fun PlayerScreen(
                         actions.playPreviousEpisode()
                         true
                     }
+                    AndroidKeyEvent.KEYCODE_MENU -> {
+                        actions.cyclePlaybackSpeed()
+                        true
+                    }
                     else -> false
                 }
             },
@@ -181,6 +216,7 @@ fun PlayerScreen(
                 sourceName = source.name,
                 episodeTitle = episode.title,
                 playbackError = playbackError,
+                playbackSpeed = state.playerSpeed,
                 canPrevious = state.playerEpisodeIndex > 0,
                 canNext = state.playerEpisodeIndex < source.episodes.lastIndex,
                 onPrevious = {
@@ -195,6 +231,10 @@ fun PlayerScreen(
                     controlsInteraction++
                     reloadNonce++
                 },
+                onSpeed = {
+                    controlsInteraction++
+                    actions.cyclePlaybackSpeed()
+                },
                 onBack = actions::goBack,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
@@ -208,11 +248,13 @@ private fun PlayerChrome(
     sourceName: String,
     episodeTitle: String,
     playbackError: String?,
+    playbackSpeed: Float,
     canPrevious: Boolean,
     canNext: Boolean,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onRetry: () -> Unit,
+    onSpeed: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -248,6 +290,9 @@ private fun PlayerChrome(
             Button(onClick = onNext, enabled = canNext) {
                 Text("下一集")
             }
+            Button(onClick = onSpeed) {
+                Text("倍速 ${formatPlaybackSpeed(playbackSpeed)}")
+            }
             if (playbackError != null) {
                 Button(onClick = onRetry) {
                     Text("重试播放")
@@ -259,4 +304,9 @@ private fun PlayerChrome(
             }
         }
     }
+}
+
+private fun formatPlaybackSpeed(speed: Float): String {
+    val raw = speed.toString().trimEnd('0').trimEnd('.')
+    return "${raw}x"
 }
