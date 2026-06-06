@@ -230,6 +230,18 @@ fun PlayerScreen(
                         actions.playPreviousEpisode()
                         true
                     }
+                    AndroidKeyEvent.KEYCODE_1,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_1,
+                    -> {
+                        actions.playPreviousEpisode()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_3,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_3,
+                    -> {
+                        actions.playNextEpisode()
+                        true
+                    }
                     AndroidKeyEvent.KEYCODE_MENU -> {
                         showSpeedPromptAndCycle()
                         true
@@ -359,10 +371,10 @@ private fun PlayerChrome(
         Spacer(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onPrevious, enabled = canPrevious) {
-                Text("上一集")
+                Text("上一集(1)")
             }
             Button(onClick = onNext, enabled = canNext) {
-                Text("下一集")
+                Text("下一集(3)")
             }
             Button(onClick = onSpeed) {
                 Text("倍速 ${formatPlaybackSpeed(playbackSpeed)}")
