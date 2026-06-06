@@ -103,9 +103,10 @@ class PlaybackParserTest {
             {
               "code": 1,
               "class": [
-                {"type_id": 1, "type_name": "电影片"},
-                {"type_id": 2, "type_name": "伦理片"},
-                {"type_id": 3, "type_name": "电影解说"}
+                {"type_id": 1, "type_pid": 0, "type_name": "电影片"},
+                {"type_id": 7, "type_pid": 1, "type_name": "喜剧片"},
+                {"type_id": 2, "type_pid": 1, "type_name": "伦理片"},
+                {"type_id": 3, "type_pid": 0, "type_name": "电影解说"}
               ],
               "list": [
                 {
@@ -139,7 +140,8 @@ class PlaybackParserTest {
 
         val page = response.toPagedMovies(testLine)
 
-        assertEquals(listOf("电影片"), page.categories.map { it.name })
+        assertEquals(listOf("电影片", "喜剧片"), page.categories.map { it.name })
+        assertEquals(listOf(0, 1), page.categories.map { it.parentId })
         assertEquals(listOf("正常电影"), page.movies.map { it.name })
     }
 

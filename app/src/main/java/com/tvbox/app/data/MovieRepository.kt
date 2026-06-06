@@ -4,6 +4,9 @@ import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.PagedMovies
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -11,6 +14,7 @@ interface MovieRepository {
     val apiLines: List<ApiLine>
     suspend fun getCategories(apiLineId: String): List<Category>
     suspend fun getMovies(apiLineId: String, page: Int, typeId: Int? = null, keyword: String? = null): PagedMovies
+    suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies
     suspend fun getDetail(apiLineId: String, id: Int): Movie?
 }
 
@@ -34,6 +38,59 @@ class DefaultMovieRepository(
                 keyword = keyword?.takeIf { it.isNotBlank() },
             ).toPagedMovies(line)
         }
+    }
+
+    override suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies = withContext(Dispatchers.IO) {
+        val line = requireLine(apiLineId)
+        val distinctTypeIds = typeIds
+            .filter { it > 0 }
+            .distinct()
+
+        if (distinctTypeIds.isEmpty()) {
+            return@withContext getMovies(apiLineId = apiLineId, page = page)
+        }
+
+        if (distinctTypeIds.size == 1) {
+            return@withContext getMovies(apiLineId = apiLineId, page = page, typeId = distinctTypeIds.single())
+        }
+
+        val requestedPage = page.coerceAtLeast(1)
+        val results = coroutineScope {
+            distinctTypeIds.map { typeId ->
+                async {
+                    runCatching {
+                        withFallback(line) { api ->
+                            api.getVod(
+                                action = "videolist",
+                                page = requestedPage,
+                                typeId = typeId,
+                            ).toPagedMovies(line)
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+
+        val pages = results.mapNotNull { it.getOrNull() }
+        if (pages.isEmpty()) {
+            throw results.firstNotNullOfOrNull { it.exceptionOrNull() }
+                ?: IllegalStateException("分类数据加载失败")
+        }
+
+        val movies = pages
+            .flatMap { it.movies }
+            .distinctBy { "${it.apiLineId}-${it.id}" }
+
+        PagedMovies(
+            page = requestedPage,
+            pageCount = pages.maxOfOrNull { it.pageCount }?.coerceAtLeast(1) ?: 1,
+            total = pages.sumOf { it.total },
+            apiLine = line,
+            categories = pages
+                .flatMap { it.categories }
+                .distinctBy { it.id },
+            movies = movies,
+        )
     }
 
     override suspend fun getDetail(apiLineId: String, id: Int): Movie? = withContext(Dispatchers.IO) {

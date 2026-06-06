@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.tvbox.app.domain.Category
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.CategoryPill
 import com.tvbox.app.ui.components.ErrorState
@@ -64,15 +65,28 @@ private fun HomeScreen(
                 onSearch = actions::openSearch,
                 onRefresh = actions::refreshHome,
             )
-            CategoryRow(state = state, onCategory = actions::selectCategory)
+            HomeCategoryRows(
+                state = state,
+                onAll = actions::selectAllCategories,
+                onParent = actions::selectParentCategory,
+                onChild = actions::selectChildCategory,
+            )
             Spacer(modifier = Modifier.height(20.dp))
             when {
-                state.homeLoading -> LoadingState(text = "正在加载影片")
-                state.homeError != null -> ErrorState(message = state.homeError, onRetry = actions::refreshHome)
+                state.homeLoading -> LoadingState(
+                    text = "正在加载影片",
+                    modifier = Modifier.weight(1f),
+                )
+                state.homeError != null -> ErrorState(
+                    message = state.homeError,
+                    onRetry = actions::refreshHome,
+                    modifier = Modifier.weight(1f),
+                )
                 else -> MovieGrid(
                     state = state,
                     onMovieClick = actions::openDetail,
                     onLoadMore = actions::loadNextPage,
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -140,24 +154,53 @@ private fun HistoryScreen(
 }
 
 @Composable
-private fun CategoryRow(
+private fun HomeCategoryRows(
     state: TvBoxUiState,
-    onCategory: (Int?) -> Unit,
+    onAll: () -> Unit,
+    onParent: (Int) -> Unit,
+    onChild: (Int) -> Unit,
 ) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
-            CategoryPill(
-                label = "全部",
-                selected = state.selectedCategoryId == null,
-                onClick = { onCategory(null) },
-            )
+    val parentCategories = state.categories.filter { it.parentId == 0 }
+    val selectedParent = state.selectedParentCategoryId
+        ?.let { parentId -> state.categories.firstOrNull { it.id == parentId } }
+    val childCategories = selectedParent
+        ?.let { parent -> state.categories.filter { it.parentId == parent.id } }
+        .orEmpty()
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            item {
+                CategoryPill(
+                    label = "全部",
+                    selected = state.selectedParentCategoryId == null && state.selectedCategoryId == null,
+                    onClick = onAll,
+                )
+            }
+            items(parentCategories, key = { it.id }) { category ->
+                CategoryPill(
+                    label = category.name,
+                    selected = state.selectedParentCategoryId == category.id,
+                    onClick = { onParent(category.id) },
+                )
+            }
         }
-        items(state.categories, key = { it.id }) { category ->
-            CategoryPill(
-                label = category.name,
-                selected = state.selectedCategoryId == category.id,
-                onClick = { onCategory(category.id) },
-            )
+        if (selectedParent != null && childCategories.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                item {
+                    CategoryPill(
+                        label = selectedParent.allChildrenLabel(),
+                        selected = state.selectedCategoryId == null,
+                        onClick = { onParent(selectedParent.id) },
+                    )
+                }
+                items(childCategories, key = { it.id }) { category ->
+                    CategoryPill(
+                        label = category.name,
+                        selected = state.selectedCategoryId == category.id,
+                        onClick = { onChild(category.id) },
+                    )
+                }
+            }
         }
     }
 }
@@ -167,9 +210,10 @@ private fun MovieGrid(
     state: TvBoxUiState,
     onMovieClick: (Int) -> Unit,
     onLoadMore: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val gridState = rememberLazyGridState()
-    LaunchedEffect(state.selectedCategoryId) {
+    LaunchedEffect(state.selectedParentCategoryId, state.selectedCategoryId) {
         gridState.scrollToItem(0)
     }
     LazyVerticalGrid(
@@ -178,7 +222,7 @@ private fun MovieGrid(
         contentPadding = PaddingValues(bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
     ) {
         items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
             MoviePosterCard(movie = movie, onClick = { onMovieClick(movie.id) })
@@ -204,4 +248,9 @@ private fun MovieGrid(
             }
         }
     }
+}
+
+private fun Category.allChildrenLabel(): String {
+    val baseName = name.removeSuffix("片")
+    return "全部$baseName"
 }
