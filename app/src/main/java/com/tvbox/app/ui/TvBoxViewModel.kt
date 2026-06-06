@@ -460,6 +460,11 @@ class TvBoxViewModel(
                         page = nextPage,
                         typeId = latest.selectedParentCategoryId,
                     )
+                    latest.isDefaultAllCategorySelection() -> repository.getMovies(
+                        apiLineId = latest.selectedApiLineId,
+                        page = nextPage,
+                        typeId = DEFAULT_ALL_CATEGORY_TYPE_ID,
+                    )
                     else -> repository.getMovies(
                         apiLineId = latest.selectedApiLineId,
                         page = nextPage,
@@ -547,5 +552,11 @@ private fun TvBoxUiState.childCategoryIdsForSelectedParent(): List<Int> {
         .filter { it.parentId == parentId }
         .map { it.id }
 }
+
+private fun TvBoxUiState.isDefaultAllCategorySelection(): Boolean {
+    return selectedParentCategoryId == null && selectedCategoryId == null
+}
+
+private const val DEFAULT_ALL_CATEGORY_TYPE_ID = 13
 
 private val playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)

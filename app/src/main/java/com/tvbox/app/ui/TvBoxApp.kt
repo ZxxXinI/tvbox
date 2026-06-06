@@ -53,6 +53,7 @@ private fun HomeScreen(
     actions: TvBoxViewModel,
 ) {
     PageSurface { padding ->
+        val apiLineName = state.selectedApiLine?.name ?: "资源"
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -60,7 +61,7 @@ private fun HomeScreen(
         ) {
             AppHeader(
                 title = "TVBox",
-                subtitle = "如意数据 / 共 ${state.total} 部影片",
+                subtitle = "$apiLineName 数据 / 共 ${state.total} 部影片",
                 onHistory = actions::openHistory,
                 onSearch = actions::openSearch,
                 onRefresh = actions::refreshHome,
