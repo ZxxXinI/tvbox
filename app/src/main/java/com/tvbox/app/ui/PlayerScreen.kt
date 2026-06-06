@@ -1,9 +1,11 @@
 package com.tvbox.app.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
+import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +31,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -71,10 +77,13 @@ fun PlayerScreen(
             playWhenReady = true
         }
     }
+    val playerFocusRequester = remember { FocusRequester() }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var reloadNonce by remember { mutableIntStateOf(0) }
     var controlsVisible by remember { mutableStateOf(true) }
     var controlsInteraction by remember { mutableIntStateOf(0) }
+    var speedPromptVisible by remember { mutableStateOf(false) }
+    var speedPromptNonce by remember { mutableIntStateOf(0) }
     var autoAdvancedEpisodeUrl by remember { mutableStateOf<String?>(null) }
     val latestState by rememberUpdatedState(state)
 
@@ -140,6 +149,16 @@ fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        playerFocusRequester.requestFocus()
+    }
+
+    LaunchedEffect(controlsVisible) {
+        if (!controlsVisible) {
+            playerFocusRequester.requestFocus()
+        }
+    }
+
     LaunchedEffect(state.playerSpeed) {
         player.setPlaybackSpeed(state.playerSpeed)
     }
@@ -154,10 +173,23 @@ fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(speedPromptNonce) {
+        if (speedPromptNonce == 0) return@LaunchedEffect
+        speedPromptVisible = true
+        delay(1_600L)
+        speedPromptVisible = false
+    }
+
+    val showSpeedPromptAndCycle = {
+        speedPromptNonce++
+        actions.cyclePlaybackSpeed()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusRequester(playerFocusRequester)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
                 controlsVisible = true
@@ -168,6 +200,14 @@ fun PlayerScreen(
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                     -> {
                         if (player.isPlaying) player.pause() else player.play()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> {
+                        player.play()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                        player.pause()
                         true
                     }
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT,
@@ -191,17 +231,21 @@ fun PlayerScreen(
                         true
                     }
                     AndroidKeyEvent.KEYCODE_MENU -> {
-                        actions.cyclePlaybackSpeed()
+                        showSpeedPromptAndCycle()
                         true
                     }
                     else -> false
                 }
-            },
+            }
+            .focusable(),
     ) {
         AndroidView(
             factory = { viewContext ->
                 PlayerView(viewContext).apply {
                     this.player = player
+                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    isFocusable = false
+                    isFocusableInTouchMode = false
                     useController = true
                     controllerAutoShow = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
@@ -233,12 +277,42 @@ fun PlayerScreen(
                 },
                 onSpeed = {
                     controlsInteraction++
-                    actions.cyclePlaybackSpeed()
+                    showSpeedPromptAndCycle()
                 },
                 onBack = actions::goBack,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
+        if (speedPromptVisible) {
+            PlaybackSpeedPrompt(
+                playbackSpeed = state.playerSpeed,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 148.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackSpeedPrompt(
+    playbackSpeed: Float,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(Color(0xB8000000))
+            .padding(horizontal = 28.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "当前倍速 ${formatPlaybackSpeed(playbackSpeed)}",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+        )
     }
 }
 
