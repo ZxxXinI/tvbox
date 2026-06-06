@@ -9,23 +9,26 @@ import com.tvbox.app.domain.isBlockedContent
 import com.tvbox.app.domain.parsePlaySources
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 data class MacCmsResponse(
     val code: Int = 0,
     val msg: String = "",
-    val page: Int = 1,
-    val pagecount: Int = 1,
-    val total: Int = 0,
+    val page: JsonElement? = null,
+    val pagecount: JsonElement? = null,
+    val total: JsonElement? = null,
     @SerialName("class")
     val categories: List<CategoryDto> = emptyList(),
     val list: List<VodDto> = emptyList(),
 ) {
     fun toPagedMovies(apiLine: ApiLine): PagedMovies {
         return PagedMovies(
-            page = page.coerceAtLeast(1),
-            pageCount = pagecount.coerceAtLeast(1),
-            total = total.coerceAtLeast(0),
+            page = page.asInt(defaultValue = 1).coerceAtLeast(1),
+            pageCount = pagecount.asInt(defaultValue = 1).coerceAtLeast(1),
+            total = total.asInt(defaultValue = 0).coerceAtLeast(0),
             apiLine = apiLine,
             categories = categories.mapNotNull { it.toDomainOrNull() },
             movies = list.mapNotNull { it.toDomainOrNull(apiLine) },
@@ -44,6 +47,7 @@ data class CategoryDto(
 ) {
     fun toDomainOrNull(): Category? {
         if (typeId <= 0 || typeName.isBlank()) return null
+        if (typeId in hiddenCategoryIds) return null
         val name = cleanHtml(typeName)
         if (isBlockedContent(name)) return null
         return Category(id = typeId, parentId = typePid.coerceAtLeast(0), name = name)
@@ -129,8 +133,16 @@ data class VodDto(
 }
 
 private fun normalizePosterUrl(raw: String): String {
-    return raw.trim()
+    val normalized = raw.trim()
         .removePrefix("[")
         .substringBefore("]")
         .ifBlank { raw.trim() }
+    return if (normalized.startsWith("//")) "https:$normalized" else normalized
 }
+
+private fun JsonElement?.asInt(defaultValue: Int): Int {
+    val primitive = this?.jsonPrimitive ?: return defaultValue
+    return primitive.intOrNull ?: primitive.content.toIntOrNull() ?: defaultValue
+}
+
+private val hiddenCategoryIds = setOf(41, 42, 43, 44)

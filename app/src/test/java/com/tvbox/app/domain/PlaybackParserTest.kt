@@ -65,8 +65,8 @@ class PlaybackParserTest {
             {
               "code": 1,
               "msg": "数据列表",
-              "page": 1,
-              "pagecount": 2,
+              "page": "1",
+              "pagecount": "2",
               "total": 1,
               "class": [{"type_id": 1, "type_name": "电影片"}],
               "list": [{
@@ -106,7 +106,11 @@ class PlaybackParserTest {
                 {"type_id": 1, "type_pid": 0, "type_name": "电影片"},
                 {"type_id": 7, "type_pid": 1, "type_name": "喜剧片"},
                 {"type_id": 2, "type_pid": 1, "type_name": "伦理片"},
-                {"type_id": 3, "type_pid": 0, "type_name": "电影解说"}
+                {"type_id": 3, "type_pid": 0, "type_name": "电影解说"},
+                {"type_id": 41, "type_pid": 0, "type_name": "演员"},
+                {"type_id": 42, "type_pid": 0, "type_name": "新闻资讯"},
+                {"type_id": 43, "type_pid": 42, "type_name": "电影资讯"},
+                {"type_id": 44, "type_pid": 42, "type_name": "娱乐新闻"}
               ],
               "list": [
                 {

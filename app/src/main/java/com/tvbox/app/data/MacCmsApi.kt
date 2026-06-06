@@ -53,6 +53,11 @@ object MacCmsNetwork {
 object ApiLines {
     val defaults = listOf(
         ApiLine(
+            id = "liangzi",
+            name = "量子",
+            baseUrls = listOf("https://cj.lziapi.com/api.php/provide/vod/"),
+        ),
+        ApiLine(
             id = "ruyi",
             name = "如意",
             baseUrls = listOf("https://cj.rycjapi.com/api.php/provide/vod/"),
