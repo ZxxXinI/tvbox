@@ -1,8 +1,35 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun releaseProperty(name: String): String {
+    return providers.gradleProperty(name).orNull
+        ?: localProperties.getProperty(name)
+        ?: providers.environmentVariable(name).orNull
+        ?: ""
+}
+
+val releaseStoreFile = releaseProperty("TVBOX_RELEASE_STORE_FILE")
+val releaseStorePassword = releaseProperty("TVBOX_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = releaseProperty("TVBOX_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = releaseProperty("TVBOX_RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it.isNotBlank() }
 
 android {
     namespace = "com.tvbox.app"
@@ -12,8 +39,29 @@ android {
         applicationId = "com.tvbox.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 10000
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
     }
 
     buildFeatures {
