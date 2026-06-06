@@ -37,6 +37,8 @@ data class MacCmsResponse(
 data class CategoryDto(
     @SerialName("type_id")
     val typeId: Int = 0,
+    @SerialName("type_pid")
+    val typePid: Int = 0,
     @SerialName("type_name")
     val typeName: String = "",
 ) {
@@ -44,7 +46,7 @@ data class CategoryDto(
         if (typeId <= 0 || typeName.isBlank()) return null
         val name = cleanHtml(typeName)
         if (isBlockedContent(name)) return null
-        return Category(id = typeId, name = name)
+        return Category(id = typeId, parentId = typePid.coerceAtLeast(0), name = name)
     }
 }
 

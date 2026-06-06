@@ -30,6 +30,7 @@ data class TvBoxUiState(
     val apiLines: List<ApiLine> = emptyList(),
     val selectedApiLineId: String = "",
     val categories: List<Category> = emptyList(),
+    val selectedParentCategoryId: Int? = null,
     val selectedCategoryId: Int? = null,
     val movies: List<Movie> = emptyList(),
     val page: Int = 1,
@@ -84,12 +85,60 @@ class TvBoxViewModel(
     }
 
     fun refreshHome() {
+        loadCategoriesOnly()
         loadHomePage(reset = true)
     }
 
-    fun selectCategory(categoryId: Int?) {
-        if (_state.value.selectedCategoryId == categoryId) return
-        _state.update { it.copy(selectedCategoryId = categoryId, movies = emptyList(), page = 1) }
+    fun selectAllCategories() {
+        val current = _state.value
+        if (current.selectedParentCategoryId == null && current.selectedCategoryId == null) return
+        _state.update {
+            it.copy(
+                selectedParentCategoryId = null,
+                selectedCategoryId = null,
+                movies = emptyList(),
+                page = 1,
+                pageCount = 1,
+                total = 0,
+            )
+        }
+        refreshHome()
+    }
+
+    fun selectParentCategory(parentCategoryId: Int) {
+        val current = _state.value
+        if (current.selectedParentCategoryId == parentCategoryId && current.selectedCategoryId == null) return
+        _state.update {
+            it.copy(
+                selectedParentCategoryId = parentCategoryId,
+                selectedCategoryId = null,
+                movies = emptyList(),
+                page = 1,
+                pageCount = 1,
+                total = 0,
+            )
+        }
+        loadHomePage(reset = true)
+    }
+
+    fun selectChildCategory(categoryId: Int) {
+        val current = _state.value
+        if (current.selectedCategoryId == categoryId) return
+        val parentCategoryId = current.categories
+            .firstOrNull { it.id == categoryId }
+            ?.parentId
+            ?.takeIf { it > 0 }
+            ?: current.selectedParentCategoryId
+        _state.update {
+            it.copy(
+                selectedParentCategoryId = parentCategoryId,
+                selectedCategoryId = categoryId,
+                movies = emptyList(),
+                page = 1,
+                pageCount = 1,
+                total = 0,
+            )
+        }
         loadHomePage(reset = true)
     }
 
@@ -98,6 +147,7 @@ class TvBoxViewModel(
         _state.update {
             it.copy(
                 selectedApiLineId = apiLineId,
+                selectedParentCategoryId = null,
                 selectedCategoryId = null,
                 categories = emptyList(),
                 movies = emptyList(),
@@ -107,7 +157,7 @@ class TvBoxViewModel(
                 homeError = null,
             )
         }
-        loadHomePage(reset = true)
+        refreshHome()
     }
 
     fun loadNextPage() {
@@ -391,16 +441,39 @@ class TvBoxViewModel(
                 )
             }
             runCatching {
-                repository.getMovies(
-                    apiLineId = _state.value.selectedApiLineId,
-                    page = nextPage,
-                    typeId = _state.value.selectedCategoryId,
-                )
+                val latest = _state.value
+                val selectedTypeId = latest.selectedCategoryId
+                val parentTypeIds = latest.childCategoryIdsForSelectedParent()
+                when {
+                    selectedTypeId != null -> repository.getMovies(
+                        apiLineId = latest.selectedApiLineId,
+                        page = nextPage,
+                        typeId = selectedTypeId,
+                    )
+                    parentTypeIds.isNotEmpty() -> repository.getMoviesByTypeIds(
+                        apiLineId = latest.selectedApiLineId,
+                        page = nextPage,
+                        typeIds = parentTypeIds,
+                    )
+                    latest.selectedParentCategoryId != null -> repository.getMovies(
+                        apiLineId = latest.selectedApiLineId,
+                        page = nextPage,
+                        typeId = latest.selectedParentCategoryId,
+                    )
+                    else -> repository.getMovies(
+                        apiLineId = latest.selectedApiLineId,
+                        page = nextPage,
+                    )
+                }
             }.onSuccess { result ->
                 _state.update {
                     it.copy(
                         categories = if (result.categories.isNotEmpty()) result.categories else it.categories,
-                        movies = if (reset) result.movies else it.movies + result.movies,
+                        movies = if (reset) {
+                            result.movies
+                        } else {
+                            (it.movies + result.movies).distinctBy { movie -> "${movie.apiLineId}-${movie.id}" }
+                        },
                         page = result.page,
                         pageCount = result.pageCount,
                         total = result.total,
@@ -466,6 +539,13 @@ class TvBoxViewModel(
 
 private fun Throwable.userMessage(): String {
     return localizedMessage?.takeIf { it.isNotBlank() } ?: "网络请求失败，请稍后重试"
+}
+
+private fun TvBoxUiState.childCategoryIdsForSelectedParent(): List<Int> {
+    val parentId = selectedParentCategoryId ?: return emptyList()
+    return categories
+        .filter { it.parentId == parentId }
+        .map { it.id }
 }
 
 private val playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)

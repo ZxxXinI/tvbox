@@ -2,6 +2,7 @@ package com.tvbox.app.domain
 
 data class Category(
     val id: Int,
+    val parentId: Int,
     val name: String,
 )
 
