@@ -1,5 +1,6 @@
 package com.tvbox.app.ui
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,7 +23,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.Category
 import com.tvbox.app.ui.components.AppHeader
@@ -54,9 +61,37 @@ private fun HomeScreen(
 ) {
     PageSurface { padding ->
         val apiLineName = state.selectedApiLine?.name ?: "资源"
+        val allCategoryFocusRequester = remember { FocusRequester() }
+        LaunchedEffect(Unit) {
+            runCatching { allCategoryFocusRequester.requestFocus() }
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
+                    when (event.nativeKeyEvent.keyCode) {
+                        AndroidKeyEvent.KEYCODE_1,
+                        AndroidKeyEvent.KEYCODE_NUMPAD_1,
+                        -> {
+                            actions.refreshHome()
+                            true
+                        }
+                        AndroidKeyEvent.KEYCODE_2,
+                        AndroidKeyEvent.KEYCODE_NUMPAD_2,
+                        -> {
+                            actions.openHistory()
+                            true
+                        }
+                        AndroidKeyEvent.KEYCODE_3,
+                        AndroidKeyEvent.KEYCODE_NUMPAD_3,
+                        -> {
+                            actions.openSearch()
+                            true
+                        }
+                        else -> false
+                    }
+                }
                 .padding(padding),
         ) {
             AppHeader(
@@ -71,6 +106,7 @@ private fun HomeScreen(
                 onAll = actions::selectAllCategories,
                 onParent = actions::selectParentCategory,
                 onChild = actions::selectChildCategory,
+                allCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
             )
             Spacer(modifier = Modifier.height(20.dp))
             when {
@@ -160,6 +196,7 @@ private fun HomeCategoryRows(
     onAll: () -> Unit,
     onParent: (Int) -> Unit,
     onChild: (Int) -> Unit,
+    allCategoryModifier: Modifier = Modifier,
 ) {
     val parentCategories = state.categories.filter { it.parentId == 0 }
     val selectedParent = state.selectedParentCategoryId
@@ -175,6 +212,7 @@ private fun HomeCategoryRows(
                     label = "全部",
                     selected = state.selectedParentCategoryId == null && state.selectedCategoryId == null,
                     onClick = onAll,
+                    modifier = allCategoryModifier,
                 )
             }
             items(parentCategories, key = { it.id }) { category ->

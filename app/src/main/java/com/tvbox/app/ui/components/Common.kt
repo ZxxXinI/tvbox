@@ -69,13 +69,13 @@ fun AppHeader(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onRefresh) {
-                Text("刷新")
+                Text("刷新(1)")
             }
             Button(onClick = onHistory) {
-                Text("历史")
+                Text("历史(2)")
             }
             Button(onClick = onSearch) {
-                Text("搜索")
+                Text("搜索(3)")
             }
         }
     }
