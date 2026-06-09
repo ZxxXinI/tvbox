@@ -51,6 +51,7 @@ fun TvBoxApp(
         TvScreen.Search -> SearchScreen(state = state, actions = actions)
         TvScreen.Detail -> DetailScreen(state = state, actions = actions)
         TvScreen.Player -> PlayerScreen(state = state, actions = actions)
+        TvScreen.Live -> LiveScreen(state = state, actions = actions)
     }
 }
 
@@ -89,6 +90,12 @@ private fun HomeScreen(
                             actions.openSearch()
                             true
                         }
+                        AndroidKeyEvent.KEYCODE_4,
+                        AndroidKeyEvent.KEYCODE_NUMPAD_4,
+                        -> {
+                            actions.openLive()
+                            true
+                        }
                         else -> false
                     }
                 }
@@ -99,6 +106,7 @@ private fun HomeScreen(
                 subtitle = "$apiLineName 数据 / 共 ${state.total} 部影片",
                 onHistory = actions::openHistory,
                 onSearch = actions::openSearch,
+                onLive = actions::openLive,
                 onRefresh = actions::refreshHome,
             )
             HomeCategoryRows(
