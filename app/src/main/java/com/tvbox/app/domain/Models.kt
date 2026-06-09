@@ -66,3 +66,9 @@ data class PagedMovies(
     val categories: List<Category>,
     val movies: List<Movie>,
 )
+
+data class LiveChannel(
+    val number: Int,
+    val name: String,
+    val url: String,
+)

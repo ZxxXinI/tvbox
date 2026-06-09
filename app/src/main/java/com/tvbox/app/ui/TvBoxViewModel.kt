@@ -3,10 +3,13 @@ package com.tvbox.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tvbox.app.data.DefaultMovieRepository
+import com.tvbox.app.data.DefaultLiveRepository
 import com.tvbox.app.data.HistoryRepository
+import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
+import com.tvbox.app.domain.LiveChannel
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.WatchHistoryItem
 import kotlinx.coroutines.Job
@@ -23,6 +26,7 @@ enum class TvScreen {
     Search,
     Detail,
     Player,
+    Live,
 }
 
 data class TvBoxUiState(
@@ -53,6 +57,10 @@ data class TvBoxUiState(
     val playerEpisodeIndex: Int = 0,
     val playerStartPositionMs: Long = 0L,
     val playerSpeed: Float = 1f,
+    val liveChannels: List<LiveChannel> = emptyList(),
+    val liveChannelIndex: Int = 0,
+    val liveLoading: Boolean = false,
+    val liveError: String? = null,
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -63,6 +71,7 @@ data class TvBoxUiState(
 
 class TvBoxViewModel(
     private val repository: MovieRepository = DefaultMovieRepository(),
+    private val liveRepository: LiveRepository = DefaultLiveRepository(),
     private val historyRepository: HistoryRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(TvBoxUiState())
@@ -72,6 +81,7 @@ class TvBoxViewModel(
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var historyResumeJob: Job? = null
+    private var liveJob: Job? = null
 
     init {
         _state.update {
@@ -168,6 +178,17 @@ class TvBoxViewModel(
 
     fun openSearch() {
         _state.update { it.copy(screen = TvScreen.Search, searchError = null) }
+    }
+
+    fun openLive() {
+        _state.update { it.copy(screen = TvScreen.Live, liveError = null) }
+        if (_state.value.liveChannels.isEmpty()) {
+            loadLiveChannels()
+        }
+    }
+
+    fun refreshLive() {
+        loadLiveChannels()
     }
 
     fun openHistory() {
@@ -357,6 +378,39 @@ class TvBoxViewModel(
         }
     }
 
+    fun playNextLiveChannel() {
+        _state.update { state ->
+            val channels = state.liveChannels
+            if (channels.isEmpty()) return@update state
+            state.copy(liveChannelIndex = (state.liveChannelIndex + 1) % channels.size)
+        }
+    }
+
+    fun playPreviousLiveChannel() {
+        _state.update { state ->
+            val channels = state.liveChannels
+            if (channels.isEmpty()) return@update state
+            val previousIndex = if (state.liveChannelIndex <= 0) channels.lastIndex else state.liveChannelIndex - 1
+            state.copy(liveChannelIndex = previousIndex)
+        }
+    }
+
+    fun selectLiveChannel(index: Int) {
+        _state.update { state ->
+            val channels = state.liveChannels
+            if (channels.isEmpty()) return@update state
+            state.copy(liveChannelIndex = index.coerceIn(0, channels.lastIndex))
+        }
+    }
+
+    fun selectLiveChannelNumber(number: Int): Boolean {
+        val index = number - 1
+        val channels = _state.value.liveChannels
+        if (index !in channels.indices) return false
+        selectLiveChannel(index)
+        return true
+    }
+
     fun cyclePlaybackSpeed() {
         val currentSpeed = _state.value.playerSpeed
         val currentIndex = playbackSpeeds.indexOfFirst { abs(it - currentSpeed) < 0.01f }
@@ -403,6 +457,7 @@ class TvBoxViewModel(
             TvScreen.Search -> submitSearch()
             TvScreen.Detail -> _state.value.detailMovie?.let { openDetail(it.id) }
             TvScreen.Player -> Unit
+            TvScreen.Live -> refreshLive()
         }
     }
 
@@ -420,6 +475,10 @@ class TvBoxViewModel(
                 true
             }
             TvScreen.Detail, TvScreen.Search, TvScreen.History -> {
+                _state.update { it.copy(screen = TvScreen.Home) }
+                true
+            }
+            TvScreen.Live -> {
                 _state.update { it.copy(screen = TvScreen.Home) }
                 true
             }
@@ -516,6 +575,38 @@ class TvBoxViewModel(
             runCatching { historyRepository.getHistory() }
                 .onSuccess { history ->
                     _state.update { it.copy(historyItems = history) }
+                }
+        }
+    }
+
+    private fun loadLiveChannels() {
+        liveJob?.cancel()
+        liveJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    screen = TvScreen.Live,
+                    liveLoading = true,
+                    liveError = null,
+                )
+            }
+            runCatching { liveRepository.getChannels() }
+                .onSuccess { channels ->
+                    _state.update {
+                        it.copy(
+                            liveChannels = channels,
+                            liveChannelIndex = it.liveChannelIndex.coerceIn(0, (channels.lastIndex).coerceAtLeast(0)),
+                            liveLoading = false,
+                            liveError = if (channels.isEmpty()) "没有可用直播频道" else null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            liveLoading = false,
+                            liveError = error.userMessage(),
+                        )
+                    }
                 }
         }
     }

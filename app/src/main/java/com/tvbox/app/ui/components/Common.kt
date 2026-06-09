@@ -43,6 +43,7 @@ fun AppHeader(
     subtitle: String,
     onHistory: () -> Unit,
     onSearch: () -> Unit,
+    onLive: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -76,6 +77,9 @@ fun AppHeader(
             }
             Button(onClick = onSearch) {
                 Text("搜索(3)")
+            }
+            Button(onClick = onLive) {
+                Text("直播(4)")
             }
         }
     }

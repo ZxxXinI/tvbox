@@ -59,6 +59,27 @@ class PlaybackParserTest {
     }
 
     @Test
+    fun parsesLiveChannels() {
+        val channels = parseLiveChannels(
+            """
+            1CCTV-1,http://video.test/1/index.m3u8
+            CCTV-2,https://video.test/2/index.m3u8
+            无效频道,
+            没有逗号
+            CCTV-3,http://video.test/3/index.m3u8,extra
+            CCTV-1,http://video.test/1/index.m3u8
+            """.trimIndent(),
+        )
+
+        assertEquals(3, channels.size)
+        assertEquals(1, channels[0].number)
+        assertEquals("CCTV-1", channels[0].name)
+        assertEquals("http://video.test/1/index.m3u8", channels[0].url)
+        assertEquals(3, channels[2].number)
+        assertEquals("http://video.test/3/index.m3u8,extra", channels[2].url)
+    }
+
+    @Test
     fun decodesMacCmsResponse() {
         val response = json.decodeFromString<MacCmsResponse>(
             """
