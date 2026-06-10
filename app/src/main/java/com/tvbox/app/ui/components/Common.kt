@@ -24,9 +24,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -69,19 +74,46 @@ fun AppHeader(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onRefresh) {
-                Text("刷新(1)")
-            }
-            Button(onClick = onHistory) {
-                Text("历史(2)")
-            }
-            Button(onClick = onSearch) {
-                Text("搜索(3)")
-            }
-            Button(onClick = onLive) {
-                Text("直播(4)")
-            }
+            HeaderActionButton(text = "刷新(1)", onClick = onRefresh)
+            HeaderActionButton(text = "历史(2)", onClick = onHistory)
+            HeaderActionButton(text = "搜索(3)", onClick = onSearch)
+            HeaderActionButton(text = "直播(4)", onClick = onLive)
         }
+    }
+}
+
+@Composable
+private fun HeaderActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .tvFocusScale(
+                shape = shape,
+                focusedBorder = Color.White,
+                idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+            )
+            .clip(shape)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .clickable(onClick = onClick)
+            .focusable(),
+        shape = shape,
+        color = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        tonalElevation = if (focused) 8.dp else 0.dp,
+        shadowElevation = if (focused) 10.dp else 0.dp,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+        )
     }
 }
 
