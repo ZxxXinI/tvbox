@@ -27,10 +27,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -361,8 +365,10 @@ private fun MovieGrid(
     modifier: Modifier = Modifier,
 ) {
     val gridState = rememberLazyGridState()
+    var loadMoreFocused by remember { mutableStateOf(false) }
     LaunchedEffect(state.selectedParentCategoryId, state.selectedCategoryId) {
         gridState.scrollToItem(0)
+        loadMoreFocused = false
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 148.dp),
@@ -381,7 +387,23 @@ private fun MovieGrid(
                     modifier = Modifier.padding(vertical = 10.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    Button(onClick = onLoadMore, enabled = !state.loadingMore) {
+                    Button(
+                        onClick = {
+                            if (!state.loadingMore) {
+                                onLoadMore()
+                            }
+                        },
+                        modifier = Modifier.onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                if (!loadMoreFocused && !state.loadingMore) {
+                                    onLoadMore()
+                                }
+                                loadMoreFocused = true
+                            } else {
+                                loadMoreFocused = false
+                            }
+                        },
+                    ) {
                         Text(if (state.loadingMore) "加载中..." else "加载更多")
                     }
                 }
