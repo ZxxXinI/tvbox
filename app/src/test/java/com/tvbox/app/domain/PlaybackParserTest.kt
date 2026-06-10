@@ -1,9 +1,11 @@
 package com.tvbox.app.domain
 
 import com.tvbox.app.data.MacCmsResponse
+import com.tvbox.app.data.parseAppUpdateManifest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -77,6 +79,49 @@ class PlaybackParserTest {
         assertEquals("http://video.test/1/index.m3u8", channels[0].url)
         assertEquals(3, channels[2].number)
         assertEquals("http://video.test/3/index.m3u8,extra", channels[2].url)
+    }
+
+    @Test
+    fun parsesAvailableAppUpdate() {
+        val update = parseAppUpdateManifest(
+            raw = """
+            {
+              "versionCode": 10200,
+              "versionName": "1.2.0",
+              "apkUrl": "https://github.com/example/TVBox-v1.2.0.apk",
+              "apkSha256": "abc123",
+              "apkSize": 4454653,
+              "force": false,
+              "changelog": ["新增 OTA 更新", "优化首页焦点"]
+            }
+            """.trimIndent(),
+            currentVersionCode = 10100,
+        )
+
+        assertNotNull(update)
+        val parsedUpdate = update!!
+        assertEquals(10200, parsedUpdate.versionCode)
+        assertEquals("1.2.0", parsedUpdate.versionName)
+        assertEquals("https://github.com/example/TVBox-v1.2.0.apk", parsedUpdate.apkUrl)
+        assertEquals("abc123", parsedUpdate.apkSha256)
+        assertEquals(4454653, parsedUpdate.apkSize)
+        assertEquals(listOf("新增 OTA 更新", "优化首页焦点"), parsedUpdate.changelog)
+    }
+
+    @Test
+    fun ignoresCurrentAppUpdateVersion() {
+        val update = parseAppUpdateManifest(
+            raw = """
+            {
+              "versionCode": 10200,
+              "versionName": "1.2.0",
+              "apkUrl": "https://github.com/example/TVBox-v1.2.0.apk"
+            }
+            """.trimIndent(),
+            currentVersionCode = 10200,
+        )
+
+        assertNull(update)
     }
 
     @Test

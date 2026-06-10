@@ -2,12 +2,15 @@ package com.tvbox.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tvbox.app.BuildConfig
+import com.tvbox.app.data.AppUpdateRepository
 import com.tvbox.app.data.DefaultMovieRepository
 import com.tvbox.app.data.DefaultLiveRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.domain.ApiLine
+import com.tvbox.app.domain.AppUpdate
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.LiveChannel
 import com.tvbox.app.domain.Movie
@@ -61,6 +64,13 @@ data class TvBoxUiState(
     val liveChannelIndex: Int = 0,
     val liveLoading: Boolean = false,
     val liveError: String? = null,
+    val availableUpdate: AppUpdate? = null,
+    val updateDialogVisible: Boolean = false,
+    val updateChecking: Boolean = false,
+    val updateDownloading: Boolean = false,
+    val updateDownloadProgress: Int? = null,
+    val updateDownloadedApkPath: String? = null,
+    val updateError: String? = null,
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -72,6 +82,7 @@ data class TvBoxUiState(
 class TvBoxViewModel(
     private val repository: MovieRepository = DefaultMovieRepository(),
     private val liveRepository: LiveRepository = DefaultLiveRepository(),
+    private val appUpdateRepository: AppUpdateRepository = DefaultAppUpdateRepositoryPlaceholder(),
     private val historyRepository: HistoryRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(TvBoxUiState())
@@ -82,6 +93,8 @@ class TvBoxViewModel(
     private var detailJob: Job? = null
     private var historyResumeJob: Job? = null
     private var liveJob: Job? = null
+    private var updateJob: Job? = null
+    private var updateDownloadJob: Job? = null
 
     init {
         _state.update {
@@ -92,6 +105,7 @@ class TvBoxViewModel(
         }
         loadHistory()
         refreshHome()
+        checkForAppUpdate()
     }
 
     fun refreshHome() {
@@ -189,6 +203,86 @@ class TvBoxViewModel(
 
     fun refreshLive() {
         loadLiveChannels()
+    }
+
+    fun checkForAppUpdate(showError: Boolean = false) {
+        updateJob?.cancel()
+        updateJob = viewModelScope.launch {
+            _state.update { it.copy(updateChecking = true, updateError = null) }
+            runCatching { appUpdateRepository.checkForUpdate(BuildConfig.VERSION_CODE.toLong()) }
+                .onSuccess { update ->
+                    _state.update {
+                        if (update == null) {
+                            it.copy(updateChecking = false)
+                        } else {
+                            it.copy(
+                                availableUpdate = update,
+                                updateDialogVisible = true,
+                                updateChecking = false,
+                                updateDownloading = false,
+                                updateDownloadProgress = null,
+                                updateDownloadedApkPath = null,
+                                updateError = null,
+                            )
+                        }
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            updateChecking = false,
+                            updateDialogVisible = showError && it.availableUpdate != null,
+                            updateError = if (showError) error.userMessage() else null,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        if (_state.value.availableUpdate?.force == true) return
+        _state.update { it.copy(updateDialogVisible = false, updateError = null) }
+    }
+
+    fun startUpdateDownload() {
+        val update = _state.value.availableUpdate ?: return
+        if (_state.value.updateDownloading) return
+        updateDownloadJob?.cancel()
+        updateDownloadJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    updateDownloading = true,
+                    updateDownloadProgress = 0,
+                    updateDownloadedApkPath = null,
+                    updateError = null,
+                )
+            }
+            runCatching {
+                appUpdateRepository.downloadUpdate(update) { progress ->
+                    _state.update { it.copy(updateDownloadProgress = progress) }
+                }
+            }
+                .onSuccess { apkFile ->
+                    _state.update {
+                        it.copy(
+                            updateDownloading = false,
+                            updateDownloadProgress = 100,
+                            updateDownloadedApkPath = apkFile.absolutePath,
+                            updateError = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            updateDownloading = false,
+                            updateDownloadProgress = null,
+                            updateDownloadedApkPath = null,
+                            updateError = error.userMessage(),
+                        )
+                    }
+                }
+        }
     }
 
     fun openHistory() {
@@ -651,3 +745,10 @@ private fun TvBoxUiState.isDefaultAllCategorySelection(): Boolean {
 private const val DEFAULT_ALL_CATEGORY_TYPE_ID = 13
 
 private val playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+
+private class DefaultAppUpdateRepositoryPlaceholder : AppUpdateRepository {
+    override suspend fun checkForUpdate(currentVersionCode: Long): AppUpdate? = null
+    override suspend fun downloadUpdate(update: AppUpdate, onProgress: (Int) -> Unit): java.io.File {
+        error("AppUpdateRepository is not configured")
+    }
+}

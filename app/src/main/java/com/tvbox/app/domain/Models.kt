@@ -72,3 +72,13 @@ data class LiveChannel(
     val name: String,
     val url: String,
 )
+
+data class AppUpdate(
+    val versionCode: Long,
+    val versionName: String,
+    val apkUrl: String,
+    val apkSha256: String,
+    val apkSize: Long,
+    val force: Boolean,
+    val changelog: List<String>,
+)

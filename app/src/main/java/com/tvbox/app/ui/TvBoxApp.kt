@@ -1,6 +1,7 @@
 package com.tvbox.app.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,9 +19,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -44,15 +48,112 @@ import com.tvbox.app.ui.components.PageSurface
 fun TvBoxApp(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
+    onInstallUpdate: (String) -> Unit = {},
 ) {
-    when (state.screen) {
-        TvScreen.Home -> HomeScreen(state = state, actions = actions)
-        TvScreen.History -> HistoryScreen(state = state, actions = actions)
-        TvScreen.Search -> SearchScreen(state = state, actions = actions)
-        TvScreen.Detail -> DetailScreen(state = state, actions = actions)
-        TvScreen.Player -> PlayerScreen(state = state, actions = actions)
-        TvScreen.Live -> LiveScreen(state = state, actions = actions)
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (state.screen) {
+            TvScreen.Home -> HomeScreen(state = state, actions = actions)
+            TvScreen.History -> HistoryScreen(state = state, actions = actions)
+            TvScreen.Search -> SearchScreen(state = state, actions = actions)
+            TvScreen.Detail -> DetailScreen(state = state, actions = actions)
+            TvScreen.Player -> PlayerScreen(state = state, actions = actions)
+            TvScreen.Live -> LiveScreen(state = state, actions = actions)
+        }
+        AppUpdateDialog(
+            state = state,
+            actions = actions,
+            onInstallUpdate = onInstallUpdate,
+        )
     }
+}
+
+@Composable
+private fun AppUpdateDialog(
+    state: TvBoxUiState,
+    actions: TvBoxViewModel,
+    onInstallUpdate: (String) -> Unit,
+) {
+    val update = state.availableUpdate ?: return
+    if (!state.updateDialogVisible) return
+    val downloadedApkPath = state.updateDownloadedApkPath
+    AlertDialog(
+        onDismissRequest = actions::dismissUpdateDialog,
+        title = {
+            Text("发现新版本 ${update.versionName}")
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "当前版本可更新到 ${update.versionName}，请选择是否现在更新。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (update.changelog.isNotEmpty()) {
+                    Text(
+                        text = update.changelog.joinToString(separator = "\n") { "- $it" },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (state.updateDownloading) {
+                    val progress = state.updateDownloadProgress
+                    if (progress == null) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { progress / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text("下载进度 $progress%")
+                    }
+                }
+                if (downloadedApkPath != null) {
+                    Text(
+                        text = "安装包已下载完成，请选择安装更新。",
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                if (state.updateError != null) {
+                    Text(
+                        text = state.updateError,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !state.updateDownloading,
+                onClick = {
+                    if (downloadedApkPath != null) {
+                        onInstallUpdate(downloadedApkPath)
+                    } else {
+                        actions.startUpdateDownload()
+                    }
+                },
+            ) {
+                Text(
+                    when {
+                        state.updateDownloading -> "下载中"
+                        downloadedApkPath != null -> "安装更新"
+                        state.updateError != null -> "重新下载"
+                        else -> "立即更新"
+                    },
+                )
+            }
+        },
+        dismissButton = if (!update.force) {
+            {
+                TextButton(
+                    enabled = !state.updateDownloading,
+                    onClick = actions::dismissUpdateDialog,
+                ) {
+                    Text("稍后再说")
+                }
+            }
+        } else {
+            null
+        },
+    )
 }
 
 @Composable
