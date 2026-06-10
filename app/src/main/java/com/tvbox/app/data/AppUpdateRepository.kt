@@ -113,7 +113,7 @@ internal fun parseAppUpdateManifest(
     currentVersionCode: Long,
     json: Json = Json { ignoreUnknownKeys = true },
 ): AppUpdate? {
-    val dto = json.decodeFromString<UpdateManifestDto>(raw)
+    val dto = json.decodeFromString<UpdateManifestDto>(raw.trimStart('\uFEFF'))
     if (dto.versionCode <= currentVersionCode) return null
     return AppUpdate(
         versionCode = dto.versionCode,

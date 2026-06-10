@@ -125,6 +125,23 @@ class PlaybackParserTest {
     }
 
     @Test
+    fun parsesAppUpdateManifestWithUtf8Bom() {
+        val update = parseAppUpdateManifest(
+            raw = "\uFEFF" + """
+            {
+              "versionCode": 10201,
+              "versionName": "1.2.1",
+              "apkUrl": "https://github.com/example/TVBox-v1.2.1.apk"
+            }
+            """.trimIndent(),
+            currentVersionCode = 10200,
+        )
+
+        assertNotNull(update)
+        assertEquals(10201, update!!.versionCode)
+    }
+
+    @Test
     fun decodesMacCmsResponse() {
         val response = json.decodeFromString<MacCmsResponse>(
             """

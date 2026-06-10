@@ -1,5 +1,9 @@
 # 更新记录
 
+## v1.2.1 - 2026-06-10
+
+- 强化 OTA 更新解析：兼容带 UTF-8 BOM 的 `update.json`，避免部分 CDN 或上传工具添加 BOM 后导致更新检查失败。
+
 ## v1.2.0 - 2026-06-10
 
 - 新增 OTA 更新第一版：启动后读取 GitHub Release 附件 `update.json`，发现更高 `versionCode` 时提示“有新版本”。
