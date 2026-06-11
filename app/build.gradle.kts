@@ -39,8 +39,8 @@ android {
         applicationId = "com.tvbox.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10202
-        versionName = "1.2.2"
+        versionCode = 10203
+        versionName = "1.2.3"
     }
 
     signingConfigs {

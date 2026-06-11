@@ -1,5 +1,10 @@
 # 更新记录
 
+## v1.2.3 - 2026-06-11
+
+- 调整 OTA 更新地址：更新检测接口改为通过 `https://ghfast.top/` 代理访问 GitHub Release 的 `update.json`。
+- 调整 OTA 安装包地址：发布用 `update.json` 中的 `apkUrl` 同样使用 `https://ghfast.top/` 代理头。
+
 ## v1.2.2 - 2026-06-10
 
 - 优化首页分页体验：遥控器向下移动到“加载更多”按钮时自动加载下一页，无需再按确认键。
