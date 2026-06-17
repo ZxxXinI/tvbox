@@ -49,6 +49,7 @@ fun AppHeader(
     onHistory: () -> Unit,
     onSearch: () -> Unit,
     onLive: () -> Unit,
+    onSettings: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -78,6 +79,7 @@ fun AppHeader(
             HeaderActionButton(text = "历史(2)", onClick = onHistory)
             HeaderActionButton(text = "搜索(3)", onClick = onSearch)
             HeaderActionButton(text = "直播(4)", onClick = onLive)
+            HeaderActionButton(text = "设置(5)", onClick = onSettings)
         }
     }
 }

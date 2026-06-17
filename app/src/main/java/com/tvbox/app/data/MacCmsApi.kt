@@ -62,5 +62,35 @@ object ApiLines {
             name = "如意",
             baseUrls = listOf("https://cj.rycjapi.com/api.php/provide/vod/"),
         ),
+        ApiLine(
+            id = "360",
+            name = "360",
+            baseUrls = listOf("https://360zyzz.com/api.php/provide/vod/"),
+        ),
+        ApiLine(
+            id = "niuniu",
+            name = "牛牛",
+            baseUrls = listOf("https://api.niuniuzy.me/api.php/provide/vod/"),
+        ),
+        ApiLine(
+            id = "yaya",
+            name = "鸭鸭",
+            baseUrls = listOf("https://cj.yayazy.net/api.php/provide/vod/"),
+        ),
+        ApiLine(
+            id = "hongniu",
+            name = "红牛",
+            baseUrls = listOf("https://www.hongniuzy2.com/api.php/provide/vod/"),
+        ),
+        ApiLine(
+            id = "suoni",
+            name = "索尼",
+            baseUrls = listOf("https://suoniapi.com/api.php/provide/vod/"),
+        ),
+        ApiLine(
+            id = "ffzy",
+            name = "非凡",
+            baseUrls = listOf("http://api.ffzyapi.com/api.php/provide/vod/"),
+        ),
     )
 }

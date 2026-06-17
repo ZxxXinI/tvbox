@@ -23,6 +23,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +63,7 @@ fun TvBoxApp(
             TvScreen.Detail -> DetailScreen(state = state, actions = actions)
             TvScreen.Player -> PlayerScreen(state = state, actions = actions)
             TvScreen.Live -> LiveScreen(state = state, actions = actions)
+            TvScreen.Settings -> SettingsScreen(state = state, actions = actions)
         }
         AppUpdateDialog(
             state = state,
@@ -201,6 +203,12 @@ private fun HomeScreen(
                             actions.openLive()
                             true
                         }
+                        AndroidKeyEvent.KEYCODE_5,
+                        AndroidKeyEvent.KEYCODE_NUMPAD_5,
+                        -> {
+                            actions.openSettings()
+                            true
+                        }
                         else -> false
                     }
                 }
@@ -212,6 +220,7 @@ private fun HomeScreen(
                 onHistory = actions::openHistory,
                 onSearch = actions::openSearch,
                 onLive = actions::openLive,
+                onSettings = actions::openSettings,
                 onRefresh = actions::refreshHome,
             )
             HomeCategoryRows(
@@ -249,6 +258,29 @@ private fun HistoryScreen(
     actions: TvBoxViewModel,
 ) {
     PageSurface { padding ->
+        var confirmClearHistory by remember { mutableStateOf(false) }
+        if (confirmClearHistory) {
+            AlertDialog(
+                onDismissRequest = { confirmClearHistory = false },
+                title = { Text("清空历史") },
+                text = { Text("确定要清空全部观看历史吗？清空后无法从历史页继续播放。") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            confirmClearHistory = false
+                            actions.clearHistory()
+                        },
+                    ) {
+                        Text("清空")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmClearHistory = false }) {
+                        Text("取消")
+                    }
+                },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -269,8 +301,16 @@ private fun HistoryScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Button(onClick = actions::goBack) {
-                    Text("返回")
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        enabled = state.historyItems.isNotEmpty(),
+                        onClick = { confirmClearHistory = true },
+                    ) {
+                        Text("清空历史")
+                    }
+                    Button(onClick = actions::goBack) {
+                        Text("返回")
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(22.dp))
@@ -300,6 +340,109 @@ private fun HistoryScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    state: TvBoxUiState,
+    actions: TvBoxViewModel,
+) {
+    PageSurface { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "设置",
+                        style = MaterialTheme.typography.headlineLarge,
+                    )
+                    Text(
+                        text = "启动更新检查",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Button(onClick = actions::goBack) {
+                    Text("返回")
+                }
+            }
+            Spacer(modifier = Modifier.height(22.dp))
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 176.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsSectionTitle(
+                        title = "更新",
+                        subtitle = "控制应用启动时是否自动检查 GitHub Release 更新。",
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "启动时检查更新",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = if (state.appSettings.checkUpdatesOnStartup) "已开启" else "已关闭",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (state.updateError != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = state.updateError,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Button(
+                                enabled = !state.updateChecking,
+                                onClick = { actions.checkForAppUpdate(showError = true) },
+                            ) {
+                                Text(if (state.updateChecking) "检查中" else "立即检查")
+                            }
+                            Switch(
+                                checked = state.appSettings.checkUpdatesOnStartup,
+                                onCheckedChange = actions::updateStartupUpdateCheck,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionTitle(
+    title: String,
+    subtitle: String,
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(
+            text = subtitle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

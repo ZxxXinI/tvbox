@@ -2,6 +2,7 @@ package com.tvbox.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tvbox.app.data.AppSettingsRepository
 import com.tvbox.app.BuildConfig
 import com.tvbox.app.data.AppUpdateRepository
 import com.tvbox.app.data.DefaultMovieRepository
@@ -9,6 +10,7 @@ import com.tvbox.app.data.DefaultLiveRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
+import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppUpdate
 import com.tvbox.app.domain.Category
@@ -30,6 +32,7 @@ enum class TvScreen {
     Detail,
     Player,
     Live,
+    Settings,
 }
 
 data class TvBoxUiState(
@@ -71,6 +74,7 @@ data class TvBoxUiState(
     val updateDownloadProgress: Int? = null,
     val updateDownloadedApkPath: String? = null,
     val updateError: String? = null,
+    val appSettings: AppSettings = AppSettings(),
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -83,6 +87,7 @@ class TvBoxViewModel(
     private val repository: MovieRepository = DefaultMovieRepository(),
     private val liveRepository: LiveRepository = DefaultLiveRepository(),
     private val appUpdateRepository: AppUpdateRepository = DefaultAppUpdateRepositoryPlaceholder(),
+    private val appSettingsRepository: AppSettingsRepository = DefaultAppSettingsRepositoryPlaceholder(),
     private val historyRepository: HistoryRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(TvBoxUiState())
@@ -103,9 +108,20 @@ class TvBoxViewModel(
                 selectedApiLineId = repository.apiLines.firstOrNull()?.id.orEmpty(),
             )
         }
-        loadHistory()
-        refreshHome()
-        checkForAppUpdate()
+        viewModelScope.launch {
+            val settings = runCatching { appSettingsRepository.getSettings() }
+                .getOrDefault(AppSettings())
+            _state.update {
+                it.copy(
+                    appSettings = settings,
+                )
+            }
+            loadHistory()
+            refreshHome()
+            if (settings.checkUpdatesOnStartup) {
+                checkForAppUpdate()
+            }
+        }
     }
 
     fun refreshHome() {
@@ -201,6 +217,10 @@ class TvBoxViewModel(
         }
     }
 
+    fun openSettings() {
+        _state.update { it.copy(screen = TvScreen.Settings, updateError = null) }
+    }
+
     fun refreshLive() {
         loadLiveChannels()
     }
@@ -288,6 +308,21 @@ class TvBoxViewModel(
     fun openHistory() {
         loadHistory()
         _state.update { it.copy(screen = TvScreen.History) }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            runCatching { historyRepository.clearHistory() }
+                .onSuccess { history ->
+                    _state.update { it.copy(historyItems = history) }
+                }
+        }
+    }
+
+    fun updateStartupUpdateCheck(enabled: Boolean) {
+        val settings = _state.value.appSettings.copy(checkUpdatesOnStartup = enabled)
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings) }
     }
 
     fun updateSearchQuery(query: String) {
@@ -472,6 +507,33 @@ class TvBoxViewModel(
         }
     }
 
+    fun switchToNextPlayableSource(failedSourceIndexes: Set<Int>): Boolean {
+        val current = _state.value
+        val sources = current.detailMovie?.playSources.orEmpty()
+        if (sources.size <= 1) return false
+
+        val nextSourceIndex = (1..sources.size)
+            .map { offset -> (current.playerSourceIndex + offset) % sources.size }
+            .firstOrNull { sourceIndex ->
+                sourceIndex !in failedSourceIndexes &&
+                    sources[sourceIndex].episodes
+                        .getOrNull(current.playerEpisodeIndex)
+                        ?.url
+                        ?.isNotBlank() == true
+            }
+            ?: return false
+
+        _state.update {
+            it.copy(
+                selectedSourceIndex = nextSourceIndex,
+                selectedEpisodeIndex = it.playerEpisodeIndex,
+                playerSourceIndex = nextSourceIndex,
+                playerStartPositionMs = 0L,
+            )
+        }
+        return true
+    }
+
     fun playNextLiveChannel() {
         _state.update { state ->
             val channels = state.liveChannels
@@ -552,6 +614,7 @@ class TvBoxViewModel(
             TvScreen.Detail -> _state.value.detailMovie?.let { openDetail(it.id) }
             TvScreen.Player -> Unit
             TvScreen.Live -> refreshLive()
+            TvScreen.Settings -> checkForAppUpdate(showError = true)
         }
     }
 
@@ -568,7 +631,7 @@ class TvBoxViewModel(
                 }
                 true
             }
-            TvScreen.Detail, TvScreen.Search, TvScreen.History -> {
+            TvScreen.Detail, TvScreen.Search, TvScreen.History, TvScreen.Settings -> {
                 _state.update { it.copy(screen = TvScreen.Home) }
                 true
             }
@@ -673,6 +736,12 @@ class TvBoxViewModel(
         }
     }
 
+    private fun saveSettings(settings: AppSettings) {
+        viewModelScope.launch {
+            runCatching { appSettingsRepository.saveSettings(settings) }
+        }
+    }
+
     private fun loadLiveChannels() {
         liveJob?.cancel()
         liveJob = viewModelScope.launch {
@@ -751,4 +820,9 @@ private class DefaultAppUpdateRepositoryPlaceholder : AppUpdateRepository {
     override suspend fun downloadUpdate(update: AppUpdate, onProgress: (Int) -> Unit): java.io.File {
         error("AppUpdateRepository is not configured")
     }
+}
+
+private class DefaultAppSettingsRepositoryPlaceholder : AppSettingsRepository {
+    override suspend fun getSettings(): AppSettings = AppSettings()
+    override suspend fun saveSettings(settings: AppSettings): AppSettings = settings
 }
