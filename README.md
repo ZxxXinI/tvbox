@@ -58,8 +58,8 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 
 从 GitHub Release 下载最新 APK：
 
-- [Latest Release](https://github.com/xin577934014/tvbox/releases/latest)
-- OTA 更新清单：`https://ghfast.top/https://github.com/xin577934014/tvbox/releases/latest/download/update.json`
+- [Latest Release](https://github.com/ZxxXinI/tvbox/releases/latest)
+- OTA 更新清单：`https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/update.json`
 
 通过 ADB 安装：
 
@@ -70,7 +70,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.3.apk
+adb install -r TVBox-v1.2.4.apk
 ```
 
 ## OTA 更新机制
@@ -78,22 +78,22 @@ adb install -r TVBox-v1.2.3.apk
 应用启动后会请求：
 
 ```text
-https://ghfast.top/https://github.com/xin577934014/tvbox/releases/latest/download/update.json
+https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/update.json
 ```
 
 `update.json` 示例：
 
 ```json
 {
-  "versionCode": 10203,
-  "versionName": "1.2.3",
-  "apkUrl": "https://ghfast.top/https://github.com/xin577934014/tvbox/releases/download/v1.2.3/TVBox-v1.2.3.apk",
-  "apkSha256": "a2a52427f547b162ff363997b6561140f9a71ca1f1793d5555aee4953845d951",
-  "apkSize": 4507909,
+  "versionCode": 10204,
+  "versionName": "1.2.4",
+  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.4/TVBox-v1.2.4.apk",
+  "apkSha256": "c292298530a017e981b91bf44d5a60667e227c7f4709eae462bdfbcb40cdba87",
+  "apkSize": 4524289,
   "force": false,
   "changelog": [
-    "OTA 更新检测地址改为 ghfast.top 代理",
-    "OTA 安装包下载地址改为 ghfast.top 代理"
+    "新增设置页：可配置是否启动时自动检查更新，并支持手动立即检查。",
+    "播放失败时自动尝试同一集的下一条可用线路。"
   ]
 }
 ```
