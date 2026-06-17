@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 interface HistoryRepository {
     suspend fun getHistory(): List<WatchHistoryItem>
     suspend fun saveProgress(item: WatchHistoryItem): List<WatchHistoryItem>
+    suspend fun clearHistory(): List<WatchHistoryItem>
 }
 
 class SharedHistoryRepository(context: Context) : HistoryRepository {
@@ -39,6 +40,13 @@ class SharedHistoryRepository(context: Context) : HistoryRepository {
             .apply()
 
         updated
+    }
+
+    override suspend fun clearHistory(): List<WatchHistoryItem> = withContext(Dispatchers.IO) {
+        prefs.edit()
+            .remove(KEY_ITEMS)
+            .apply()
+        emptyList()
     }
 
     private fun readHistory(): List<WatchHistoryItem> {

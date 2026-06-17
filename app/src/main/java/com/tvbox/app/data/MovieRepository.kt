@@ -125,16 +125,22 @@ class DefaultMovieRepository(
     }
 
     private suspend fun loadLinePlaySources(primary: Movie): List<com.tvbox.app.domain.PlaySource> {
-        val sources = buildList {
-            primary.toLinePlaySource()?.let(::add)
+        val otherSources = coroutineScope {
             apiLines
                 .filterNot { it.id == primary.apiLineId }
-                .forEach { line ->
-                    runCatching { findSameMovie(line, primary.name) }
-                        .getOrNull()
-                        ?.toLinePlaySource()
-                        ?.let(::add)
+                .map { line ->
+                    async {
+                        runCatching { findSameMovie(line, primary.name) }
+                            .getOrNull()
+                            ?.toLinePlaySource()
+                    }
                 }
+                .awaitAll()
+                .filterNotNull()
+        }
+        val sources = buildList {
+            primary.toLinePlaySource()?.let(::add)
+            addAll(otherSources)
         }
         return sources.ifEmpty { primary.playSources }
     }

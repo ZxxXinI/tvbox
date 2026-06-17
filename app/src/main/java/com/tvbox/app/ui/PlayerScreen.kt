@@ -85,12 +85,34 @@ fun PlayerScreen(
     var speedPromptVisible by remember { mutableStateOf(false) }
     var speedPromptNonce by remember { mutableIntStateOf(0) }
     var autoAdvancedEpisodeUrl by remember { mutableStateOf<String?>(null) }
+    var playbackNotice by remember { mutableStateOf<String?>(null) }
+    var failedSourceIndexes by remember(movie.id, state.playerEpisodeIndex) {
+        mutableStateOf(emptySet<Int>())
+    }
     val latestState by rememberUpdatedState(state)
+    val latestFailedSourceIndexes by rememberUpdatedState(failedSourceIndexes)
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                playbackError = error.localizedMessage ?: "播放失败"
+                val currentState = latestState
+                val failedSources = latestFailedSourceIndexes + currentState.playerSourceIndex
+                failedSourceIndexes = failedSources
+                val switched = actions.switchToNextPlayableSource(failedSources)
+                controlsVisible = true
+                controlsInteraction++
+                if (switched) {
+                    playbackError = null
+                    playbackNotice = "当前线路播放失败，正在自动切换下一条线路"
+                } else {
+                    playbackNotice = null
+                    val message = error.localizedMessage ?: "播放失败"
+                    playbackError = if (currentState.detailMovie?.playSources.orEmpty().size > 1) {
+                        "播放失败，已尝试所有可用线路：$message"
+                    } else {
+                        message
+                    }
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -137,6 +159,12 @@ fun PlayerScreen(
             positionMs = state.playerStartPositionMs,
             durationMs = 0L,
         )
+    }
+
+    LaunchedEffect(playbackNotice) {
+        if (playbackNotice == null) return@LaunchedEffect
+        delay(2_000L)
+        playbackNotice = null
     }
 
     LaunchedEffect(player, episode.url) {
@@ -272,6 +300,7 @@ fun PlayerScreen(
                 sourceName = source.name,
                 episodeTitle = episode.title,
                 playbackError = playbackError,
+                playbackNotice = playbackNotice,
                 playbackSpeed = state.playerSpeed,
                 canPrevious = state.playerEpisodeIndex > 0,
                 canNext = state.playerEpisodeIndex < source.episodes.lastIndex,
@@ -285,6 +314,7 @@ fun PlayerScreen(
                 },
                 onRetry = {
                     controlsInteraction++
+                    failedSourceIndexes = emptySet()
                     reloadNonce++
                 },
                 onSpeed = {
@@ -334,6 +364,7 @@ private fun PlayerChrome(
     sourceName: String,
     episodeTitle: String,
     playbackError: String?,
+    playbackNotice: String?,
     playbackSpeed: Float,
     canPrevious: Boolean,
     canNext: Boolean,
@@ -367,6 +398,10 @@ private fun PlayerChrome(
         if (playbackError != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = playbackError, color = MaterialTheme.colorScheme.tertiary)
+        }
+        if (playbackNotice != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = playbackNotice, color = MaterialTheme.colorScheme.secondary)
         }
         Spacer(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
