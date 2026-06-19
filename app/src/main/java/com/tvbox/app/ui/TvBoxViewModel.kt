@@ -337,6 +337,12 @@ class TvBoxViewModel(
         _state.update { it.copy(appSettings = settings) }
     }
 
+    fun updatePlaybackAgentAutoSwitch(enabled: Boolean) {
+        val settings = _state.value.appSettings.copy(playbackAgentAutoSwitchEnabled = enabled)
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings) }
+    }
+
     fun updateSearchQuery(query: String) {
         _state.update { it.copy(searchQuery = query) }
     }
@@ -521,10 +527,16 @@ class TvBoxViewModel(
 
     fun switchToNextPlayableSource(
         blockedSourceIndexes: Set<Int>,
-        issueType: PlaybackIssueType,
+        issueType: PlaybackIssueType? = null,
+        autoTriggered: Boolean = true,
     ): PlaybackAgentDecision {
         val current = _state.value
-        recordPlaybackIssue(current, issueType)
+        if (issueType != null) {
+            recordPlaybackIssue(current, issueType)
+        }
+        if (autoTriggered && !current.appSettings.playbackAgentAutoSwitchEnabled) {
+            return PlaybackAgentDecision(nextSourceIndex = null)
+        }
         val movie = current.detailMovie ?: return PlaybackAgentDecision(nextSourceIndex = null)
         val decision = playbackAgent.selectNextSource(
             movie = movie,

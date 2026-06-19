@@ -1,5 +1,68 @@
 # 播放管家 Agent - 2026-06-19
 
+## 2026-06-19 18:18 - 第二阶段：可控与可见
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`
+  - Reason: 播放管家自动换线需要用户可控开关。
+  - Purpose: 增加 `playbackAgentAutoSwitchEnabled` 设置项，默认开启。
+
+- File path: `app/src/main/java/com/tvbox/app/data/AppSettingsRepository.kt`
+  - Reason: 新增设置项需要持久化。
+  - Purpose: 使用 SharedPreferences 保存“播放管家自动换线”开关。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 设置页需要暴露播放管家的可控入口。
+  - Purpose: 新增“播放管家 / 自动换线”设置项，关闭后提示仍可手动换线。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 自动换线和手动换线需要不同执行规则。
+  - Purpose: 自动触发时尊重设置开关；手动换线不受开关影响；继续复用播放管家决策器。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: 用户需要在播放器内主动切换线路，并理解自动换线是否关闭。
+  - Purpose: 新增“手动换线”按钮；自动换线关闭时播放失败只提示，不自动切线。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/DetailScreen.kt`
+  - Reason: 播放管家的线路判断需要在详情页可见。
+  - Purpose: 在线路标签中显示“推荐 / 近期失败 / 较慢”状态。
+
+- File path: `app/src/main/java/com/tvbox/app/domain/PlaybackAgent.kt`
+  - Reason: 详情页需要复用近期失败/卡顿判断。
+  - Purpose: 暴露播放健康冷却时间和 `recentIssueType`，供 UI 显示状态。
+
+- File path: `app/src/test/java/com/tvbox/app/domain/PlaybackAgentTest.kt`
+  - Reason: 新增可见状态依赖近期问题类型判断。
+  - Purpose: 增加近期失败和较慢状态判断测试。
+
+- File path: `CHANGELOG.md`
+  - Reason: 需要记录本次未发布功能，便于后续发布版本整理。
+  - Purpose: 增加播放管家第二阶段说明。
+
+## Bug Record
+
+- Time: 2026-06-19 18:18
+- Symptoms: 无新增缺陷；实现过程中未发现编译或测试失败。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `.\gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+- `.\gradlew.bat assembleDebug --console=plain`
+  - Result: passed.
+- `git diff --check`
+  - Result: passed, only existing Windows line-ending warnings.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/playback-agent.md`
+
+## 2026-06-19 10:13 - 播放管家第一阶段
+
 ## File Changes
 
 - File path: `app/src/main/java/com/tvbox/app/domain/PlaybackAgent.kt`

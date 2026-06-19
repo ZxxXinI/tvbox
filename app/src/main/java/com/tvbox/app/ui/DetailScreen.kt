@@ -43,7 +43,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.PlayEpisode
+import com.tvbox.app.domain.PlaybackHealthSnapshot
+import com.tvbox.app.domain.PlaybackIssueType
 import com.tvbox.app.domain.PlaySource
+import com.tvbox.app.domain.playbackHealthKey
 import com.tvbox.app.ui.components.CategoryPill
 import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.InfoLine
@@ -166,8 +169,11 @@ fun DetailScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     PlaySourceTabs(
+                        movieId = movie.id,
                         sources = movie.playSources,
                         selectedIndex = state.selectedSourceIndex,
+                        selectedEpisodeIndex = state.selectedEpisodeIndex,
+                        playbackHealth = state.playbackHealth,
                         onSelect = actions::selectPlaySource,
                     )
                     Spacer(modifier = Modifier.height(if (compact) 10.dp else 16.dp))
@@ -186,18 +192,38 @@ fun DetailScreen(
 
 @Composable
 private fun PlaySourceTabs(
+    movieId: Int,
     sources: List<PlaySource>,
     selectedIndex: Int,
+    selectedEpisodeIndex: Int,
+    playbackHealth: PlaybackHealthSnapshot,
     onSelect: (Int) -> Unit,
 ) {
     if (sources.isEmpty()) {
         Text("暂无可播放源", color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
+    val nowMs = System.currentTimeMillis()
+    val recommendedIndex = recommendedPlaySourceIndex(
+        movieId = movieId,
+        sources = sources,
+        episodeIndex = selectedEpisodeIndex,
+        playbackHealth = playbackHealth,
+        nowMs = nowMs,
+    )
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         itemsIndexed(sources) { index, source ->
+            val statusLabel = playSourceStatusLabel(
+                movieId = movieId,
+                source = source,
+                sourceIndex = index,
+                episodeIndex = selectedEpisodeIndex,
+                playbackHealth = playbackHealth,
+                recommendedIndex = recommendedIndex,
+                nowMs = nowMs,
+            )
             CategoryPill(
-                label = source.name,
+                label = listOfNotNull(source.name, statusLabel).joinToString(" · "),
                 selected = index == selectedIndex,
                 onClick = { onSelect(index) },
             )
@@ -291,5 +317,38 @@ private fun EpisodeButton(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+private fun recommendedPlaySourceIndex(
+    movieId: Int,
+    sources: List<PlaySource>,
+    episodeIndex: Int,
+    playbackHealth: PlaybackHealthSnapshot,
+    nowMs: Long,
+): Int? {
+    val playableIndexes = sources.indices.filter { index ->
+        sources[index].episodes.getOrNull(episodeIndex)?.url?.isNotBlank() == true
+    }
+    return playableIndexes.firstOrNull { index ->
+        val key = playbackHealthKey(movieId, episodeIndex, sources[index])
+        playbackHealth.entryFor(key)?.recentIssueType(nowMs) == null
+    } ?: playableIndexes.firstOrNull()
+}
+
+private fun playSourceStatusLabel(
+    movieId: Int,
+    source: PlaySource,
+    sourceIndex: Int,
+    episodeIndex: Int,
+    playbackHealth: PlaybackHealthSnapshot,
+    recommendedIndex: Int?,
+    nowMs: Long,
+): String? {
+    val key = playbackHealthKey(movieId, episodeIndex, source)
+    return when (playbackHealth.entryFor(key)?.recentIssueType(nowMs)) {
+        PlaybackIssueType.Error -> "近期失败"
+        PlaybackIssueType.SlowBuffer -> "较慢"
+        null -> if (sourceIndex == recommendedIndex) "推荐" else null
     }
 }
