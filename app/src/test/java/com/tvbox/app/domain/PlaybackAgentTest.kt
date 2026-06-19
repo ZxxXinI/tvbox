@@ -82,6 +82,76 @@ class PlaybackAgentTest {
     }
 
     @Test
+    fun prePlaybackSelectionKeepsRequestedSourceWhenNoHealthSignalExists() {
+        val movie = movieWithSources("Line A", "Line B", "Line C")
+
+        val selection = agent.selectBestSource(
+            movie = movie,
+            requestedSourceIndex = 1,
+            episodeIndex = 0,
+            healthSnapshot = PlaybackHealthSnapshot(),
+            nowMs = 10_000L,
+        )
+
+        assertEquals(1, selection?.sourceIndex)
+        assertEquals("Line B", selection?.sourceName)
+        assertFalse(selection?.switchedFromRequested ?: true)
+    }
+
+    @Test
+    fun prePlaybackSelectionPrefersRecentlySuccessfulSource() {
+        val movie = movieWithSources("Line A", "Line B", "Line C")
+        val successfulKey = playbackHealthKey(movie.id, 0, movie.playSources[2])
+        val health = PlaybackHealthSnapshot(
+            entries = mapOf(
+                successfulKey to PlaybackHealthEntry(
+                    key = successfulKey,
+                    lastSuccessAtMs = 9_500L,
+                ),
+            ),
+        )
+
+        val selection = agent.selectBestSource(
+            movie = movie,
+            requestedSourceIndex = 0,
+            episodeIndex = 0,
+            healthSnapshot = health,
+            nowMs = 10_000L,
+        )
+
+        assertEquals(2, selection?.sourceIndex)
+        assertEquals("Line C", selection?.sourceName)
+        assertTrue(selection?.switchedFromRequested ?: false)
+    }
+
+    @Test
+    fun prePlaybackSelectionAvoidsRecentlyFailedRequestedSource() {
+        val movie = movieWithSources("Line A", "Line B", "Line C")
+        val failedKey = playbackHealthKey(movie.id, 0, movie.playSources[0])
+        val health = PlaybackHealthSnapshot(
+            entries = mapOf(
+                failedKey to PlaybackHealthEntry(
+                    key = failedKey,
+                    lastFailureAtMs = 9_500L,
+                ),
+            ),
+        )
+
+        val selection = agent.selectBestSource(
+            movie = movie,
+            requestedSourceIndex = 0,
+            episodeIndex = 0,
+            healthSnapshot = health,
+            nowMs = 10_000L,
+        )
+
+        assertEquals(1, selection?.sourceIndex)
+        assertEquals("Line B", selection?.sourceName)
+        assertTrue(selection?.switchedFromRequested ?: false)
+        assertEquals(1, selection?.skippedRecentlyUnhealthyCount)
+    }
+
+    @Test
     fun reportsRecentIssueTypeForVisibleSourceStatus() {
         val failed = PlaybackHealthEntry(
             key = "failed",

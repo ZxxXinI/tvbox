@@ -48,9 +48,67 @@ data class PlaybackAgentDecision(
         get() = nextSourceIndex != null
 }
 
+data class PlaybackAgentSourceSelection(
+    val sourceIndex: Int,
+    val sourceName: String? = null,
+    val requestedSourceIndex: Int,
+    val skippedRecentlyUnhealthyCount: Int = 0,
+) {
+    val switchedFromRequested: Boolean
+        get() = sourceIndex != requestedSourceIndex
+}
+
 class PlaybackAgent(
     private val unhealthyCooldownMs: Long = PLAYBACK_HEALTH_COOLDOWN_MS,
 ) {
+    fun selectBestSource(
+        movie: Movie,
+        requestedSourceIndex: Int,
+        episodeIndex: Int,
+        healthSnapshot: PlaybackHealthSnapshot,
+        nowMs: Long = System.currentTimeMillis(),
+    ): PlaybackAgentSourceSelection? {
+        val sources = movie.playSources
+        if (sources.isEmpty()) return null
+
+        val safeRequestedSourceIndex = requestedSourceIndex.coerceIn(0, sources.lastIndex)
+        val candidates = sources.indices.filter { sourceIndex ->
+            sources[sourceIndex].episodes.getOrNull(episodeIndex)?.url?.isNotBlank() == true
+        }
+        if (candidates.isEmpty()) return null
+
+        val skippedRecentlyUnhealthyCount = candidates.count { sourceIndex ->
+            val key = playbackHealthKey(movie.id, episodeIndex, sources[sourceIndex])
+            healthSnapshot.entryFor(key)?.isRecentlyUnhealthy(nowMs, unhealthyCooldownMs) == true
+        }
+        val selectedIndex = candidates
+            .sortedWith(
+                compareByDescending<Int> { sourceIndex ->
+                    sourceHealthScore(
+                        movie = movie,
+                        sourceIndex = sourceIndex,
+                        episodeIndex = episodeIndex,
+                        requestedSourceIndex = safeRequestedSourceIndex,
+                        healthSnapshot = healthSnapshot,
+                        nowMs = nowMs,
+                        cooldownMs = unhealthyCooldownMs,
+                    )
+                }.thenBy { sourceIndex ->
+                    sourceDistance(sourceIndex, safeRequestedSourceIndex, sources.size)
+                }.thenBy { sourceIndex ->
+                    sourceIndex
+                },
+            )
+            .first()
+
+        return PlaybackAgentSourceSelection(
+            sourceIndex = selectedIndex,
+            sourceName = sources[selectedIndex].name,
+            requestedSourceIndex = safeRequestedSourceIndex,
+            skippedRecentlyUnhealthyCount = skippedRecentlyUnhealthyCount,
+        )
+    }
+
     fun selectNextSource(
         movie: Movie,
         currentSourceIndex: Int,
@@ -75,7 +133,25 @@ class PlaybackAgent(
             val key = playbackHealthKey(movie.id, episodeIndex, sources[sourceIndex])
             healthSnapshot.entryFor(key)?.isRecentlyUnhealthy(nowMs, unhealthyCooldownMs) == true
         }
-        val selectedIndex = healthyCandidates.firstOrNull() ?: candidates.first()
+        val selectedIndex = candidates
+            .sortedWith(
+                compareByDescending<Int> { sourceIndex ->
+                    sourceHealthScore(
+                        movie = movie,
+                        sourceIndex = sourceIndex,
+                        episodeIndex = episodeIndex,
+                        requestedSourceIndex = currentSourceIndex,
+                        healthSnapshot = healthSnapshot,
+                        nowMs = nowMs,
+                        cooldownMs = unhealthyCooldownMs,
+                    )
+                }.thenBy { sourceIndex ->
+                    sourceDistance(sourceIndex, currentSourceIndex, sources.size)
+                }.thenBy { sourceIndex ->
+                    sourceIndex
+                },
+            )
+            .first()
 
         return PlaybackAgentDecision(
             nextSourceIndex = selectedIndex,
@@ -83,6 +159,46 @@ class PlaybackAgent(
             skippedRecentlyUnhealthyCount = candidates.size - healthyCandidates.size,
         )
     }
+}
+
+private fun sourceHealthScore(
+    movie: Movie,
+    sourceIndex: Int,
+    episodeIndex: Int,
+    requestedSourceIndex: Int,
+    healthSnapshot: PlaybackHealthSnapshot,
+    nowMs: Long,
+    cooldownMs: Long,
+): Int {
+    val source = movie.playSources[sourceIndex]
+    val key = playbackHealthKey(movie.id, episodeIndex, source)
+    val entry = healthSnapshot.entryFor(key)
+    val recentIssue = entry?.recentIssueType(nowMs, cooldownMs)
+    var score = if (recentIssue == null) 10_000 else -10_000
+    val lastSuccessAtMs = entry?.lastSuccessAtMs ?: 0L
+    if (recentIssue == null && lastSuccessAtMs > 0L) {
+        val successAgeMs = nowMs - lastSuccessAtMs
+        score += if (successAgeMs in 0 until cooldownMs) 2_000 else 500
+    }
+    if (sourceIndex == requestedSourceIndex) {
+        score += 100
+    }
+    return score
+}
+
+private fun sourceDistance(sourceIndex: Int, requestedSourceIndex: Int, sourceCount: Int): Int {
+    if (sourceCount <= 1) return 0
+    val forward = if (sourceIndex >= requestedSourceIndex) {
+        sourceIndex - requestedSourceIndex
+    } else {
+        sourceCount - requestedSourceIndex + sourceIndex
+    }
+    val backward = if (requestedSourceIndex >= sourceIndex) {
+        requestedSourceIndex - sourceIndex
+    } else {
+        sourceCount - sourceIndex + requestedSourceIndex
+    }
+    return minOf(forward, backward)
 }
 
 fun playbackHealthKey(movieId: Int, episodeIndex: Int, source: PlaySource): String {

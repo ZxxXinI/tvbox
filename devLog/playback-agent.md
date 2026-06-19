@@ -121,3 +121,53 @@
 
 - Master doc: `devLog/README.md`
 - Branch doc: `devLog/playback-agent.md`
+## 2026-06-19 18:42 - 第三阶段：播放前智能择线
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/domain/PlaybackAgent.kt`
+  - Reason: 第二阶段只在播放失败后切线，进入播放前仍可能先尝试近期失败线路。
+  - Purpose: 新增 `selectBestSource` 与线路健康评分，按近期成功、近期失败/缓冲和当前选择计算更稳定的播放源。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 播放入口需要在进入播放器前调用播放管家，而不是等 ExoPlayer 报错后才处理。
+  - Purpose: 详情加载和打开播放器时使用智能择线；自动换线关闭时继续尊重用户原始线路。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/DetailScreen.kt`
+  - Reason: 详情页“推荐”标签需要和实际播放前择线结果一致。
+  - Purpose: 线路标签复用 `PlaybackAgent.selectBestSource`，避免 UI 推荐和真实播放选择分叉。
+
+- File path: `app/src/test/java/com/tvbox/app/domain/PlaybackAgentTest.kt`
+  - Reason: 播放前择线会影响默认播放线路，需要用单元测试锁住核心规则。
+  - Purpose: 覆盖无健康记录时尊重当前选择、优先近期成功线路、避开近期失败线路。
+
+- File path: `CHANGELOG.md`
+  - Reason: 需要记录未发布功能，便于后续发版整理。
+  - Purpose: 增加播放管家第三阶段说明。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
+  - Purpose: 在主时间线加入第三阶段索引。
+
+- File path: `devLog/playback-agent.md`
+  - Reason: 播放管家是独立模块，需要记录分阶段设计和变更明细。
+  - Purpose: 记录第三阶段文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-06-19 18:42
+- Symptoms: 无新增缺陷；实现过程中发现评分函数需要复用实例冷却时间，避免测试或后续配置时排序规则不一致。
+- Attempted fix: 将评分函数显式接收 `cooldownMs`，由 `PlaybackAgent` 实例传入。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `.\gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+- `.\gradlew.bat assembleDebug --console=plain`
+  - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/playback-agent.md`
