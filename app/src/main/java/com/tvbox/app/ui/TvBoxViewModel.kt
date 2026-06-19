@@ -10,13 +10,19 @@ import com.tvbox.app.data.DefaultLiveRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
+import com.tvbox.app.data.PlaybackHealthRepository
 import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppUpdate
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.LiveChannel
 import com.tvbox.app.domain.Movie
+import com.tvbox.app.domain.PlaybackAgent
+import com.tvbox.app.domain.PlaybackAgentDecision
+import com.tvbox.app.domain.PlaybackHealthSnapshot
+import com.tvbox.app.domain.PlaybackIssueType
 import com.tvbox.app.domain.WatchHistoryItem
+import com.tvbox.app.domain.playbackHealthKey
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -75,6 +81,7 @@ data class TvBoxUiState(
     val updateDownloadedApkPath: String? = null,
     val updateError: String? = null,
     val appSettings: AppSettings = AppSettings(),
+    val playbackHealth: PlaybackHealthSnapshot = PlaybackHealthSnapshot(),
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -88,6 +95,7 @@ class TvBoxViewModel(
     private val liveRepository: LiveRepository = DefaultLiveRepository(),
     private val appUpdateRepository: AppUpdateRepository = DefaultAppUpdateRepositoryPlaceholder(),
     private val appSettingsRepository: AppSettingsRepository = DefaultAppSettingsRepositoryPlaceholder(),
+    private val playbackHealthRepository: PlaybackHealthRepository = DefaultPlaybackHealthRepositoryPlaceholder(),
     private val historyRepository: HistoryRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(TvBoxUiState())
@@ -100,6 +108,7 @@ class TvBoxViewModel(
     private var liveJob: Job? = null
     private var updateJob: Job? = null
     private var updateDownloadJob: Job? = null
+    private val playbackAgent = PlaybackAgent()
 
     init {
         _state.update {
@@ -111,9 +120,12 @@ class TvBoxViewModel(
         viewModelScope.launch {
             val settings = runCatching { appSettingsRepository.getSettings() }
                 .getOrDefault(AppSettings())
+            val playbackHealth = runCatching { playbackHealthRepository.getSnapshot() }
+                .getOrDefault(PlaybackHealthSnapshot())
             _state.update {
                 it.copy(
                     appSettings = settings,
+                    playbackHealth = playbackHealth,
                 )
             }
             loadHistory()
@@ -507,21 +519,21 @@ class TvBoxViewModel(
         }
     }
 
-    fun switchToNextPlayableSource(failedSourceIndexes: Set<Int>): Boolean {
+    fun switchToNextPlayableSource(
+        blockedSourceIndexes: Set<Int>,
+        issueType: PlaybackIssueType,
+    ): PlaybackAgentDecision {
         val current = _state.value
-        val sources = current.detailMovie?.playSources.orEmpty()
-        if (sources.size <= 1) return false
-
-        val nextSourceIndex = (1..sources.size)
-            .map { offset -> (current.playerSourceIndex + offset) % sources.size }
-            .firstOrNull { sourceIndex ->
-                sourceIndex !in failedSourceIndexes &&
-                    sources[sourceIndex].episodes
-                        .getOrNull(current.playerEpisodeIndex)
-                        ?.url
-                        ?.isNotBlank() == true
-            }
-            ?: return false
+        recordPlaybackIssue(current, issueType)
+        val movie = current.detailMovie ?: return PlaybackAgentDecision(nextSourceIndex = null)
+        val decision = playbackAgent.selectNextSource(
+            movie = movie,
+            currentSourceIndex = current.playerSourceIndex,
+            episodeIndex = current.playerEpisodeIndex,
+            blockedSourceIndexes = blockedSourceIndexes,
+            healthSnapshot = current.playbackHealth,
+        )
+        val nextSourceIndex = decision.nextSourceIndex ?: return decision
 
         _state.update {
             it.copy(
@@ -531,7 +543,18 @@ class TvBoxViewModel(
                 playerStartPositionMs = 0L,
             )
         }
-        return true
+        return decision
+    }
+
+    fun recordPlaybackSuccess() {
+        val current = _state.value
+        val key = current.playbackHealthKeyOrNull() ?: return
+        viewModelScope.launch {
+            runCatching { playbackHealthRepository.recordSuccess(key, System.currentTimeMillis()) }
+                .onSuccess { snapshot ->
+                    _state.update { it.copy(playbackHealth = snapshot) }
+                }
+        }
     }
 
     fun playNextLiveChannel() {
@@ -742,6 +765,21 @@ class TvBoxViewModel(
         }
     }
 
+    private fun recordPlaybackIssue(state: TvBoxUiState, issueType: PlaybackIssueType) {
+        val key = state.playbackHealthKeyOrNull() ?: return
+        viewModelScope.launch {
+            runCatching {
+                playbackHealthRepository.recordIssue(
+                    key = key,
+                    issueType = issueType,
+                    nowMs = System.currentTimeMillis(),
+                )
+            }.onSuccess { snapshot ->
+                _state.update { it.copy(playbackHealth = snapshot) }
+            }
+        }
+    }
+
     private fun loadLiveChannels() {
         liveJob?.cancel()
         liveJob = viewModelScope.launch {
@@ -811,6 +849,17 @@ private fun TvBoxUiState.isDefaultAllCategorySelection(): Boolean {
     return selectedParentCategoryId == null && selectedCategoryId == null
 }
 
+private fun TvBoxUiState.playbackHealthKeyOrNull(): String? {
+    val movie = detailMovie ?: return null
+    val source = movie.playSources.getOrNull(playerSourceIndex) ?: return null
+    if (source.episodes.getOrNull(playerEpisodeIndex)?.url.isNullOrBlank()) return null
+    return playbackHealthKey(
+        movieId = movie.id,
+        episodeIndex = playerEpisodeIndex,
+        source = source,
+    )
+}
+
 private const val DEFAULT_ALL_CATEGORY_TYPE_ID = 13
 
 private val playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
@@ -825,4 +874,15 @@ private class DefaultAppUpdateRepositoryPlaceholder : AppUpdateRepository {
 private class DefaultAppSettingsRepositoryPlaceholder : AppSettingsRepository {
     override suspend fun getSettings(): AppSettings = AppSettings()
     override suspend fun saveSettings(settings: AppSettings): AppSettings = settings
+}
+
+private class DefaultPlaybackHealthRepositoryPlaceholder : PlaybackHealthRepository {
+    override suspend fun getSnapshot(): PlaybackHealthSnapshot = PlaybackHealthSnapshot()
+    override suspend fun recordIssue(
+        key: String,
+        issueType: PlaybackIssueType,
+        nowMs: Long,
+    ): PlaybackHealthSnapshot = PlaybackHealthSnapshot()
+
+    override suspend fun recordSuccess(key: String, nowMs: Long): PlaybackHealthSnapshot = PlaybackHealthSnapshot()
 }

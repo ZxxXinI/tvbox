@@ -17,6 +17,7 @@ import com.tvbox.app.data.DefaultAppUpdateRepository
 import com.tvbox.app.data.DefaultMovieRepository
 import com.tvbox.app.data.SharedAppSettingsRepository
 import com.tvbox.app.data.SharedHistoryRepository
+import com.tvbox.app.data.SharedPlaybackHealthRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tvbox.app.ui.TvBoxApp
 import com.tvbox.app.ui.TvBoxViewModel
@@ -87,6 +88,7 @@ private class TvBoxViewModelFactory(
             repository = DefaultMovieRepository(),
             appUpdateRepository = DefaultAppUpdateRepository(activity.applicationContext),
             appSettingsRepository = SharedAppSettingsRepository(activity.applicationContext),
+            playbackHealthRepository = SharedPlaybackHealthRepository(activity.applicationContext),
             historyRepository = SharedHistoryRepository(activity.applicationContext),
         ) as T
     }
