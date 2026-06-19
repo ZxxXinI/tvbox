@@ -398,9 +398,16 @@ class TvBoxViewModel(
         detailJob = viewModelScope.launch {
             runCatching { repository.getDetail(apiLineId = _state.value.selectedApiLineId, id = movieId) }
                 .onSuccess { movie ->
-                    _state.update {
-                        val sourceIndex = movie?.preferredSourceIndex() ?: 0
-                        it.copy(
+                    _state.update { state ->
+                        val sourceIndex = movie?.let { detailMovie ->
+                            resolveBestPlaybackSourceIndex(
+                                state = state,
+                                movie = detailMovie,
+                                requestedSourceIndex = detailMovie.preferredSourceIndex(),
+                                episodeIndex = 0,
+                            )
+                        } ?: 0
+                        state.copy(
                             detailMovie = movie,
                             detailLoading = false,
                             detailError = if (movie == null) "影片详情不存在" else null,
@@ -432,16 +439,33 @@ class TvBoxViewModel(
 
     fun openPlayer(sourceIndex: Int, episodeIndex: Int, startPositionMs: Long = 0L) {
         _state.update { state ->
-            val maxSourceIndex = (state.detailMovie?.playSources?.lastIndex ?: 0).coerceAtLeast(0)
-            val boundedSourceIndex = sourceIndex.coerceIn(0, maxSourceIndex)
-            val source = state.detailMovie?.playSources?.getOrNull(boundedSourceIndex)
-            val boundedEpisodeIndex = episodeIndex.coerceIn(0, (source?.episodes?.lastIndex ?: 0).coerceAtLeast(0))
+            val movie = state.detailMovie
+            val maxSourceIndex = (movie?.playSources?.lastIndex ?: 0).coerceAtLeast(0)
+            val requestedSourceIndex = sourceIndex.coerceIn(0, maxSourceIndex)
+            val requestedSource = movie?.playSources?.getOrNull(requestedSourceIndex)
+            val requestedEpisodeIndex = episodeIndex.coerceIn(
+                0,
+                (requestedSource?.episodes?.lastIndex ?: 0).coerceAtLeast(0),
+            )
+            val selectedSourceIndex = movie?.let {
+                resolveBestPlaybackSourceIndex(
+                    state = state,
+                    movie = it,
+                    requestedSourceIndex = requestedSourceIndex,
+                    episodeIndex = requestedEpisodeIndex,
+                )
+            } ?: requestedSourceIndex
+            val selectedSource = movie?.playSources?.getOrNull(selectedSourceIndex)
+            val selectedEpisodeIndex = requestedEpisodeIndex.coerceIn(
+                0,
+                (selectedSource?.episodes?.lastIndex ?: 0).coerceAtLeast(0),
+            )
             state.copy(
                 screen = TvScreen.Player,
-                selectedSourceIndex = boundedSourceIndex,
-                selectedEpisodeIndex = boundedEpisodeIndex,
-                playerSourceIndex = boundedSourceIndex,
-                playerEpisodeIndex = boundedEpisodeIndex,
+                selectedSourceIndex = selectedSourceIndex,
+                selectedEpisodeIndex = selectedEpisodeIndex,
+                playerSourceIndex = selectedSourceIndex,
+                playerEpisodeIndex = selectedEpisodeIndex,
                 playerStartPositionMs = startPositionMs.coerceAtLeast(0L),
             )
         }
@@ -843,6 +867,27 @@ class TvBoxViewModel(
         }.coerceAtLeast(0)
 
         return sourceIndex to episodeIndex
+    }
+
+    private fun resolveBestPlaybackSourceIndex(
+        state: TvBoxUiState,
+        movie: Movie,
+        requestedSourceIndex: Int,
+        episodeIndex: Int,
+    ): Int {
+        val safeRequestedSourceIndex = requestedSourceIndex.coerceIn(
+            0,
+            movie.playSources.lastIndex.coerceAtLeast(0),
+        )
+        if (!state.appSettings.playbackAgentAutoSwitchEnabled) {
+            return safeRequestedSourceIndex
+        }
+        return playbackAgent.selectBestSource(
+            movie = movie,
+            requestedSourceIndex = safeRequestedSourceIndex,
+            episodeIndex = episodeIndex,
+            healthSnapshot = state.playbackHealth,
+        )?.sourceIndex ?: safeRequestedSourceIndex
     }
 }
 
