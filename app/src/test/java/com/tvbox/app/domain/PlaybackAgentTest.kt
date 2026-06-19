@@ -82,6 +82,21 @@ class PlaybackAgentTest {
     }
 
     @Test
+    fun reportsRecentIssueTypeForVisibleSourceStatus() {
+        val failed = PlaybackHealthEntry(
+            key = "failed",
+            lastFailureAtMs = 9_000L,
+        )
+        val slow = PlaybackHealthEntry(
+            key = "slow",
+            lastSlowBufferAtMs = 9_500L,
+        )
+
+        assertEquals(PlaybackIssueType.Error, failed.recentIssueType(nowMs = 10_000L))
+        assertEquals(PlaybackIssueType.SlowBuffer, slow.recentIssueType(nowMs = 10_000L))
+    }
+
+    @Test
     fun reportsNoSwitchWhenEveryAlternativeIsBlocked() {
         val movie = movieWithSources("量子", "如意")
 

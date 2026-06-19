@@ -1,6 +1,6 @@
 package com.tvbox.app.domain
 
-private const val DEFAULT_UNHEALTHY_COOLDOWN_MS = 30 * 60 * 1000L
+const val PLAYBACK_HEALTH_COOLDOWN_MS = 30 * 60 * 1000L
 
 enum class PlaybackIssueType {
     Error,
@@ -13,11 +13,20 @@ data class PlaybackHealthEntry(
     val lastSlowBufferAtMs: Long = 0L,
     val lastSuccessAtMs: Long = 0L,
 ) {
-    fun isRecentlyUnhealthy(nowMs: Long, cooldownMs: Long = DEFAULT_UNHEALTHY_COOLDOWN_MS): Boolean {
+    fun isRecentlyUnhealthy(nowMs: Long, cooldownMs: Long = PLAYBACK_HEALTH_COOLDOWN_MS): Boolean {
+        return recentIssueType(nowMs, cooldownMs) != null
+    }
+
+    fun recentIssueType(nowMs: Long, cooldownMs: Long = PLAYBACK_HEALTH_COOLDOWN_MS): PlaybackIssueType? {
         val lastIssueAtMs = maxOf(lastFailureAtMs, lastSlowBufferAtMs)
-        if (lastIssueAtMs <= 0L) return false
-        if (lastSuccessAtMs > lastIssueAtMs) return false
-        return nowMs - lastIssueAtMs < cooldownMs
+        if (lastIssueAtMs <= 0L) return null
+        if (lastSuccessAtMs > lastIssueAtMs) return null
+        if (nowMs - lastIssueAtMs >= cooldownMs) return null
+        return if (lastSlowBufferAtMs > lastFailureAtMs) {
+            PlaybackIssueType.SlowBuffer
+        } else {
+            PlaybackIssueType.Error
+        }
     }
 
     val latestActivityAtMs: Long
@@ -40,7 +49,7 @@ data class PlaybackAgentDecision(
 }
 
 class PlaybackAgent(
-    private val unhealthyCooldownMs: Long = DEFAULT_UNHEALTHY_COOLDOWN_MS,
+    private val unhealthyCooldownMs: Long = PLAYBACK_HEALTH_COOLDOWN_MS,
 ) {
     fun selectNextSource(
         movie: Movie,

@@ -16,17 +16,20 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
     override suspend fun getSettings(): AppSettings = withContext(Dispatchers.IO) {
         AppSettings(
             checkUpdatesOnStartup = prefs.getBoolean(KEY_CHECK_UPDATES_ON_STARTUP, true),
+            playbackAgentAutoSwitchEnabled = prefs.getBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, true),
         )
     }
 
     override suspend fun saveSettings(settings: AppSettings): AppSettings = withContext(Dispatchers.IO) {
         prefs.edit()
             .putBoolean(KEY_CHECK_UPDATES_ON_STARTUP, settings.checkUpdatesOnStartup)
+            .putBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, settings.playbackAgentAutoSwitchEnabled)
             .apply()
         settings
     }
 
     private companion object {
         const val KEY_CHECK_UPDATES_ON_STARTUP = "check_updates_on_startup"
+        const val KEY_PLAYBACK_AGENT_AUTO_SWITCH = "playback_agent_auto_switch"
     }
 }

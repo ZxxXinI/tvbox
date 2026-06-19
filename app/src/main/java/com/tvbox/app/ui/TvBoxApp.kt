@@ -383,6 +383,38 @@ private fun SettingsScreen(
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     SettingsSectionTitle(
+                        title = "播放管家",
+                        subtitle = "控制播放失败或卡顿时是否自动尝试其它线路。",
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "自动换线",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = if (state.appSettings.playbackAgentAutoSwitchEnabled) {
+                                    "播放失败或缓冲过久时自动切换线路"
+                                } else {
+                                    "已关闭，播放器仍可手动换线"
+                                },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = state.appSettings.playbackAgentAutoSwitchEnabled,
+                            onCheckedChange = actions::updatePlaybackAgentAutoSwitch,
+                        )
+                    }
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsSectionTitle(
                         title = "更新",
                         subtitle = "控制应用启动时是否自动检查 GitHub Release 更新。",
                     )

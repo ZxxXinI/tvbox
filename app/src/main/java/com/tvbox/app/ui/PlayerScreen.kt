@@ -103,6 +103,7 @@ fun PlayerScreen(
         val decision = actions.switchToNextPlayableSource(
             blockedSourceIndexes = failedSources,
             issueType = issueType,
+            autoTriggered = true,
         )
         controlsVisible = true
         controlsInteraction++
@@ -112,7 +113,9 @@ fun PlayerScreen(
             playbackNotice = decision.toPlaybackNotice(switchPrefix)
         } else {
             playbackNotice = null
-            playbackError = if (currentState.detailMovie?.playSources.orEmpty().size > 1) {
+            playbackError = if (!currentState.appSettings.playbackAgentAutoSwitchEnabled) {
+                "$message（播放管家自动换线已关闭）"
+            } else if (currentState.detailMovie?.playSources.orEmpty().size > 1) {
                 "$finalPrefix：$message"
             } else {
                 message
@@ -359,6 +362,7 @@ fun PlayerScreen(
                 playbackSpeed = state.playerSpeed,
                 canPrevious = state.playerEpisodeIndex > 0,
                 canNext = state.playerEpisodeIndex < source.episodes.lastIndex,
+                canSwitchLine = movie.playSources.size > 1,
                 onPrevious = {
                     controlsInteraction++
                     actions.playPreviousEpisode()
@@ -376,6 +380,23 @@ fun PlayerScreen(
                 onSpeed = {
                     controlsInteraction++
                     showSpeedPromptAndCycle()
+                },
+                onSwitchLine = {
+                    controlsInteraction++
+                    val currentState = latestState
+                    val decision = actions.switchToNextPlayableSource(
+                        blockedSourceIndexes = setOf(currentState.playerSourceIndex),
+                        issueType = null,
+                        autoTriggered = false,
+                    )
+                    controlsVisible = true
+                    if (decision.switched) {
+                        bufferingEpisodeUrl = null
+                        playbackError = null
+                        playbackNotice = decision.toPlaybackNotice("播放管家：手动换线")
+                    } else {
+                        playbackNotice = "没有其它可用线路"
+                    }
                 },
                 onBack = actions::goBack,
                 modifier = Modifier.align(Alignment.BottomCenter),
@@ -424,10 +445,12 @@ private fun PlayerChrome(
     playbackSpeed: Float,
     canPrevious: Boolean,
     canNext: Boolean,
+    canSwitchLine: Boolean,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onRetry: () -> Unit,
     onSpeed: () -> Unit,
+    onSwitchLine: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -469,6 +492,9 @@ private fun PlayerChrome(
             }
             Button(onClick = onSpeed) {
                 Text("倍速 ${formatPlaybackSpeed(playbackSpeed)}")
+            }
+            Button(onClick = onSwitchLine, enabled = canSwitchLine) {
+                Text("手动换线")
             }
             if (playbackError != null) {
                 Button(onClick = onRetry) {
