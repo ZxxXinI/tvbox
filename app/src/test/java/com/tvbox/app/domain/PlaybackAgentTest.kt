@@ -152,6 +152,56 @@ class PlaybackAgentTest {
     }
 
     @Test
+    fun prePlaybackSelectionLightlyPrefersSourceWithBetterLongTermStats() {
+        val movie = movieWithSources("Line A", "Line B", "Line C")
+        val stableKey = playbackHealthKey(movie.id, 0, movie.playSources[1])
+        val health = PlaybackHealthSnapshot(
+            entries = mapOf(
+                stableKey to PlaybackHealthEntry(
+                    key = stableKey,
+                    successCount = 20,
+                ),
+            ),
+        )
+
+        val selection = agent.selectBestSource(
+            movie = movie,
+            requestedSourceIndex = 0,
+            episodeIndex = 0,
+            healthSnapshot = health,
+            nowMs = 10_000L,
+        )
+
+        assertEquals(1, selection?.sourceIndex)
+        assertEquals("Line B", selection?.sourceName)
+    }
+
+    @Test
+    fun prePlaybackSelectionPenalizesSourceWithManySlowBuffers() {
+        val movie = movieWithSources("Line A", "Line B", "Line C")
+        val slowKey = playbackHealthKey(movie.id, 0, movie.playSources[0])
+        val health = PlaybackHealthSnapshot(
+            entries = mapOf(
+                slowKey to PlaybackHealthEntry(
+                    key = slowKey,
+                    slowBufferCount = 20,
+                ),
+            ),
+        )
+
+        val selection = agent.selectBestSource(
+            movie = movie,
+            requestedSourceIndex = 0,
+            episodeIndex = 0,
+            healthSnapshot = health,
+            nowMs = 10_000L,
+        )
+
+        assertEquals(1, selection?.sourceIndex)
+        assertEquals("Line B", selection?.sourceName)
+    }
+
+    @Test
     fun reportsRecentIssueTypeForVisibleSourceStatus() {
         val failed = PlaybackHealthEntry(
             key = "failed",

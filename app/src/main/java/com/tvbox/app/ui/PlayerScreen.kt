@@ -50,7 +50,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.tvbox.app.domain.PlaybackAgentDecision
+import com.tvbox.app.domain.PlaybackAttemptTracker
+import com.tvbox.app.domain.PlaybackBufferDecision
+import com.tvbox.app.domain.PlaybackBufferMonitor
 import com.tvbox.app.domain.PlaybackIssueType
+import com.tvbox.app.domain.SlowBufferReason
 import com.tvbox.app.ui.components.ErrorState
 import kotlinx.coroutines.delay
 
@@ -88,7 +92,9 @@ fun PlayerScreen(
     var speedPromptNonce by remember { mutableIntStateOf(0) }
     var autoAdvancedEpisodeUrl by remember { mutableStateOf<String?>(null) }
     var playbackNotice by remember { mutableStateOf<String?>(null) }
-    var bufferingEpisodeUrl by remember { mutableStateOf<String?>(null) }
+    val bufferMonitor = remember { PlaybackBufferMonitor() }
+    val attemptTracker = remember { PlaybackAttemptTracker() }
+    var bufferingPlaybackKey by remember { mutableStateOf<String?>(null) }
     var bufferingCheckNonce by remember { mutableIntStateOf(0) }
     var failedSourceIndexes by remember(movie.id, state.playerEpisodeIndex) {
         mutableStateOf(emptySet<Int>())
@@ -100,15 +106,20 @@ fun PlayerScreen(
         val currentState = latestState
         val failedSources = latestFailedSourceIndexes + currentState.playerSourceIndex
         failedSourceIndexes = failedSources
+        val issueToRecord = if (attemptTracker.shouldRecordIssue(currentState.currentPlaybackKey(), issueType)) {
+            issueType
+        } else {
+            null
+        }
         val decision = actions.switchToNextPlayableSource(
             blockedSourceIndexes = failedSources,
-            issueType = issueType,
+            issueType = issueToRecord,
             autoTriggered = true,
         )
         controlsVisible = true
         controlsInteraction++
         if (decision.switched) {
-            bufferingEpisodeUrl = null
+            bufferingPlaybackKey = null
             playbackError = null
             playbackNotice = decision.toPlaybackNotice(switchPrefix)
         } else {
@@ -120,6 +131,18 @@ fun PlayerScreen(
             } else {
                 message
             }
+        }
+    }
+
+    val handleBufferDecision = { decision: PlaybackBufferDecision? ->
+        if (decision != null) {
+            val messages = decision.toPlaybackIssueMessages()
+            handlePlaybackIssue(
+                PlaybackIssueType.SlowBuffer,
+                messages.switchPrefix,
+                messages.finalPrefix,
+                messages.message,
+            )
         }
     }
 
@@ -135,6 +158,24 @@ fun PlayerScreen(
                 )
             }
 
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady) {
+                    bufferMonitor.onPaused()
+                    bufferingPlaybackKey = null
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    bufferMonitor.onSeekStarted(System.currentTimeMillis())
+                    bufferingPlaybackKey = null
+                }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val currentState = latestState
                 val currentSource = currentState.detailMovie
@@ -146,17 +187,34 @@ fun PlayerScreen(
                     ?: return
                 when (playbackState) {
                     Player.STATE_BUFFERING -> {
-                        if (bufferingEpisodeUrl != currentEpisode.url) {
-                            bufferingEpisodeUrl = currentEpisode.url
+                        val decision = bufferMonitor.onBuffering(
+                            playWhenReady = player.playWhenReady,
+                            nowMs = System.currentTimeMillis(),
+                        )
+                        val playbackKey = currentState.currentPlaybackKey()
+                        if (player.playWhenReady && playbackKey != null && bufferingPlaybackKey != playbackKey) {
+                            bufferingPlaybackKey = playbackKey
                             bufferingCheckNonce++
                         }
+                        handleBufferDecision(decision)
                     }
                     Player.STATE_READY -> {
-                        bufferingEpisodeUrl = null
-                        actions.recordPlaybackSuccess()
+                        bufferingPlaybackKey = null
+                        val result = bufferMonitor.onReady(
+                            playWhenReady = player.playWhenReady,
+                            nowMs = System.currentTimeMillis(),
+                        )
+                        if (result.decision != null) {
+                            handleBufferDecision(result.decision)
+                        } else if (
+                            result.shouldRecordPlaybackSuccess &&
+                            attemptTracker.shouldRecordSuccess(currentState.currentPlaybackKey())
+                        ) {
+                            actions.recordPlaybackSuccess()
+                        }
                     }
                     Player.STATE_ENDED -> {
-                        bufferingEpisodeUrl = null
+                        bufferingPlaybackKey = null
                         if (autoAdvancedEpisodeUrl == currentEpisode.url) return
 
                         autoAdvancedEpisodeUrl = currentEpisode.url
@@ -182,10 +240,12 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(episode.url, reloadNonce) {
+    LaunchedEffect(state.playerSourceIndex, state.playerEpisodeIndex, episode.url, reloadNonce) {
         playbackError = null
         autoAdvancedEpisodeUrl = null
-        bufferingEpisodeUrl = null
+        bufferingPlaybackKey = null
+        bufferMonitor.onMediaChanged()
+        attemptTracker.onPlaybackChanged(state.currentPlaybackKey())
         player.setMediaItem(MediaItem.fromUri(episode.url), state.playerStartPositionMs)
         player.prepare()
         player.setPlaybackSpeed(state.playerSpeed)
@@ -202,26 +262,19 @@ fun PlayerScreen(
         playbackNotice = null
     }
 
-    LaunchedEffect(bufferingCheckNonce, bufferingEpisodeUrl) {
-        val watchedEpisodeUrl = bufferingEpisodeUrl ?: return@LaunchedEffect
-        delay(15_000L)
-        val currentEpisodeUrl = latestState.detailMovie
-            ?.playSources
-            ?.getOrNull(latestState.playerSourceIndex)
-            ?.episodes
-            ?.getOrNull(latestState.playerEpisodeIndex)
-            ?.url
+    LaunchedEffect(bufferingCheckNonce, bufferingPlaybackKey) {
+        val watchedPlaybackKey = bufferingPlaybackKey ?: return@LaunchedEffect
+        delay(PlaybackBufferMonitor.DEFAULT_CONTINUOUS_BUFFER_THRESHOLD_MS)
         if (
-            bufferingEpisodeUrl == watchedEpisodeUrl &&
-            currentEpisodeUrl == watchedEpisodeUrl &&
+            bufferingPlaybackKey == watchedPlaybackKey &&
+            latestState.currentPlaybackKey() == watchedPlaybackKey &&
             player.playbackState == Player.STATE_BUFFERING
         ) {
-            handlePlaybackIssue(
-                PlaybackIssueType.SlowBuffer,
-                "播放管家：当前线路缓冲过久",
-                "当前线路缓冲过久，播放管家已尝试所有可用线路",
-                "当前线路缓冲过久",
+            val decision = bufferMonitor.onBuffering(
+                playWhenReady = player.playWhenReady,
+                nowMs = System.currentTimeMillis(),
             )
+            handleBufferDecision(decision)
         }
     }
 
@@ -285,7 +338,12 @@ fun PlayerScreen(
                     AndroidKeyEvent.KEYCODE_ENTER,
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                     -> {
-                        if (player.isPlaying) player.pause() else player.play()
+                        if (player.isPlaying) {
+                            bufferMonitor.onPaused()
+                            player.pause()
+                        } else {
+                            player.play()
+                        }
                         true
                     }
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> {
@@ -293,18 +351,21 @@ fun PlayerScreen(
                         true
                     }
                     AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                        bufferMonitor.onPaused()
                         player.pause()
                         true
                     }
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT,
                     AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
                     -> {
+                        bufferMonitor.onSeekStarted(System.currentTimeMillis())
                         player.seekBack()
                         true
                     }
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
                     AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
                     -> {
+                        bufferMonitor.onSeekStarted(System.currentTimeMillis())
                         player.seekForward()
                         true
                     }
@@ -375,6 +436,9 @@ fun PlayerScreen(
                     controlsInteraction++
                     failedSourceIndexes = emptySet()
                     playbackNotice = null
+                    bufferingPlaybackKey = null
+                    bufferMonitor.onMediaChanged()
+                    attemptTracker.reset()
                     reloadNonce++
                 },
                 onSpeed = {
@@ -391,7 +455,9 @@ fun PlayerScreen(
                     )
                     controlsVisible = true
                     if (decision.switched) {
-                        bufferingEpisodeUrl = null
+                        bufferingPlaybackKey = null
+                        bufferMonitor.onMediaChanged()
+                        attemptTracker.reset()
                         playbackError = null
                         playbackNotice = decision.toPlaybackNotice("播放管家：手动换线")
                     } else {
@@ -506,6 +572,41 @@ private fun PlayerChrome(
                 Text("返回详情")
             }
         }
+    }
+}
+
+private data class PlaybackIssueMessages(
+    val switchPrefix: String,
+    val finalPrefix: String,
+    val message: String,
+)
+
+private fun TvBoxUiState.currentPlaybackKey(): String? {
+    val movie = detailMovie ?: return null
+    val source = movie.playSources.getOrNull(playerSourceIndex) ?: return null
+    val episode = source.episodes.getOrNull(playerEpisodeIndex) ?: return null
+    return listOf(movie.id, playerSourceIndex, playerEpisodeIndex, episode.url).joinToString("|")
+}
+
+private fun PlaybackBufferDecision.toPlaybackIssueMessages(): PlaybackIssueMessages {
+    return when (reason) {
+        SlowBufferReason.StartupTooLong,
+        SlowBufferReason.ContinuousBufferTooLong,
+        -> PlaybackIssueMessages(
+            switchPrefix = "播放管家：当前线路缓冲超过 5 秒",
+            finalPrefix = "当前线路缓冲超过 5 秒，播放管家已尝试所有可用线路",
+            message = "当前线路缓冲超过 5 秒",
+        )
+        SlowBufferReason.FrequentBuffering -> PlaybackIssueMessages(
+            switchPrefix = "播放管家：当前线路频繁卡顿",
+            finalPrefix = "当前线路频繁卡顿，播放管家已尝试所有可用线路",
+            message = "当前线路频繁卡顿",
+        )
+        SlowBufferReason.CumulativeBufferTooLong -> PlaybackIssueMessages(
+            switchPrefix = "播放管家：当前线路累计缓冲过久",
+            finalPrefix = "当前线路累计缓冲过久，播放管家已尝试所有可用线路",
+            message = "当前线路累计缓冲过久",
+        )
     }
 }
 

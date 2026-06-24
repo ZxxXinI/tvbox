@@ -2,6 +2,31 @@
 
 ## Timeline
 
+### 2026-06-24 18:57 - 播放管家 seek 误判修复
+
+- Branch doc: `devLog/playback-agent.md`
+- Summary:
+  - 手动快进/快退或拖动进度后进入 seek cooling。
+  - seek 后直到下一次 READY 前不触发 5 秒缓冲换源，也不计入频繁/累计卡顿。
+  - 增加 Media3 `DISCONTINUITY_REASON_SEEK` 监听，覆盖手机进度条拖动。
+
+### 2026-06-24 09:12 - 播放管家第五阶段
+
+- Branch doc: `devLog/playback-agent.md`
+- Summary:
+  - 线路健康记录新增成功、失败、卡顿次数统计。
+  - 新增播放尝试去重，避免同一次播放反复进入 READY 导致成功次数虚高。
+  - 设置页展示整体线路质量统计；详情页不新增次数展示。
+  - 播放管家择线评分轻度参考长期成功/失败/卡顿表现。
+
+### 2026-06-24 08:53 - 播放管家第四阶段
+
+- Branch doc: `devLog/playback-agent.md`
+- Summary:
+  - 新增 `PlaybackBufferMonitor`，把卡顿识别从播放器 UI 中抽离为可测试规则。
+  - 连续缓冲超过 5 秒、60 秒内频繁短缓冲、60 秒内累计缓冲过久都会记为 `SlowBuffer`。
+  - 首屏短加载、快进快退后的短暂缓冲、暂停状态不会被误判为线路不稳定。
+
 ### 2026-06-19 18:42 - 播放管家第三阶段
 
 - Branch doc: `devLog/playback-agent.md`

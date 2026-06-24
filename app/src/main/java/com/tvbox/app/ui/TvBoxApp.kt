@@ -41,6 +41,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.Category
+import com.tvbox.app.domain.PlaybackHealthSnapshot
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.CategoryPill
 import com.tvbox.app.ui.components.ErrorState
@@ -414,6 +415,18 @@ private fun SettingsScreen(
                     }
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "线路质量统计",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = state.playbackHealth.qualitySummaryText(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     SettingsSectionTitle(
                         title = "更新",
                         subtitle = "控制应用启动时是否自动检查 GitHub Release 更新。",
@@ -598,4 +611,9 @@ private fun MovieGrid(
 private fun Category.allChildrenLabel(): String {
     val baseName = name.removeSuffix("片")
     return "全部$baseName"
+}
+
+private fun PlaybackHealthSnapshot.qualitySummaryText(): String {
+    if (entryCount <= 0) return "暂无线路质量记录"
+    return "已记录 $entryCount 条线路表现｜成功 $successCount｜失败 $failureCount｜卡顿 $slowBufferCount"
 }

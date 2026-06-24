@@ -35,8 +35,14 @@ class SharedPlaybackHealthRepository(context: Context) : PlaybackHealthRepositor
         val current = readEntries().toMutableMap()
         val entry = current[key]?.toDomain() ?: PlaybackHealthEntry(key = key)
         current[key] = when (issueType) {
-            PlaybackIssueType.Error -> entry.copy(lastFailureAtMs = nowMs).toStored()
-            PlaybackIssueType.SlowBuffer -> entry.copy(lastSlowBufferAtMs = nowMs).toStored()
+            PlaybackIssueType.Error -> entry.copy(
+                lastFailureAtMs = nowMs,
+                failureCount = entry.failureCount + 1,
+            ).toStored()
+            PlaybackIssueType.SlowBuffer -> entry.copy(
+                lastSlowBufferAtMs = nowMs,
+                slowBufferCount = entry.slowBufferCount + 1,
+            ).toStored()
         }
         writeEntries(current.values)
         current.toSnapshot()
@@ -45,7 +51,10 @@ class SharedPlaybackHealthRepository(context: Context) : PlaybackHealthRepositor
     override suspend fun recordSuccess(key: String, nowMs: Long): PlaybackHealthSnapshot = withContext(Dispatchers.IO) {
         val current = readEntries().toMutableMap()
         val entry = current[key]?.toDomain() ?: PlaybackHealthEntry(key = key)
-        current[key] = entry.copy(lastSuccessAtMs = nowMs).toStored()
+        current[key] = entry.copy(
+            lastSuccessAtMs = nowMs,
+            successCount = entry.successCount + 1,
+        ).toStored()
         writeEntries(current.values)
         current.toSnapshot()
     }
@@ -80,6 +89,9 @@ class SharedPlaybackHealthRepository(context: Context) : PlaybackHealthRepositor
             lastFailureAtMs = lastFailureAtMs,
             lastSlowBufferAtMs = lastSlowBufferAtMs,
             lastSuccessAtMs = lastSuccessAtMs,
+            failureCount = failureCount,
+            slowBufferCount = slowBufferCount,
+            successCount = successCount,
         )
     }
 
@@ -89,6 +101,9 @@ class SharedPlaybackHealthRepository(context: Context) : PlaybackHealthRepositor
             lastFailureAtMs = lastFailureAtMs,
             lastSlowBufferAtMs = lastSlowBufferAtMs,
             lastSuccessAtMs = lastSuccessAtMs,
+            failureCount = failureCount,
+            slowBufferCount = slowBufferCount,
+            successCount = successCount,
         )
     }
 
@@ -104,6 +119,9 @@ private data class StoredPlaybackHealthEntry(
     val lastFailureAtMs: Long = 0L,
     val lastSlowBufferAtMs: Long = 0L,
     val lastSuccessAtMs: Long = 0L,
+    val failureCount: Int = 0,
+    val slowBufferCount: Int = 0,
+    val successCount: Int = 0,
 ) {
     val latestActivityAtMs: Long
         get() = maxOf(lastFailureAtMs, lastSlowBufferAtMs, lastSuccessAtMs)
