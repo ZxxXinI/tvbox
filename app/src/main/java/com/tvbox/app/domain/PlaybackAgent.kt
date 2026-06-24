@@ -12,6 +12,9 @@ data class PlaybackHealthEntry(
     val lastFailureAtMs: Long = 0L,
     val lastSlowBufferAtMs: Long = 0L,
     val lastSuccessAtMs: Long = 0L,
+    val failureCount: Int = 0,
+    val slowBufferCount: Int = 0,
+    val successCount: Int = 0,
 ) {
     fun isRecentlyUnhealthy(nowMs: Long, cooldownMs: Long = PLAYBACK_HEALTH_COOLDOWN_MS): Boolean {
         return recentIssueType(nowMs, cooldownMs) != null
@@ -31,12 +34,27 @@ data class PlaybackHealthEntry(
 
     val latestActivityAtMs: Long
         get() = maxOf(lastFailureAtMs, lastSlowBufferAtMs, lastSuccessAtMs)
+
+    val issueCount: Int
+        get() = failureCount + slowBufferCount
 }
 
 data class PlaybackHealthSnapshot(
     val entries: Map<String, PlaybackHealthEntry> = emptyMap(),
 ) {
     fun entryFor(key: String): PlaybackHealthEntry? = entries[key]
+
+    val entryCount: Int
+        get() = entries.size
+
+    val successCount: Int
+        get() = entries.values.sumOf { it.successCount }
+
+    val failureCount: Int
+        get() = entries.values.sumOf { it.failureCount }
+
+    val slowBufferCount: Int
+        get() = entries.values.sumOf { it.slowBufferCount }
 }
 
 data class PlaybackAgentDecision(
@@ -180,6 +198,9 @@ private fun sourceHealthScore(
         val successAgeMs = nowMs - lastSuccessAtMs
         score += if (successAgeMs in 0 until cooldownMs) 2_000 else 500
     }
+    score += ((entry?.successCount ?: 0) * 60).coerceAtMost(1_000)
+    score -= ((entry?.failureCount ?: 0) * 80).coerceAtMost(1_000)
+    score -= ((entry?.slowBufferCount ?: 0) * 120).coerceAtMost(1_500)
     if (sourceIndex == requestedSourceIndex) {
         score += 100
     }
