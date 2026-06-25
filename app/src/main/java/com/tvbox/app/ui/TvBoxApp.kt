@@ -54,6 +54,7 @@ import com.tvbox.app.ui.components.PageSurface
 fun TvBoxApp(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
+    onStartUpdateDownload: () -> Unit = actions::startUpdateDownload,
     onInstallUpdate: (String) -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -69,6 +70,7 @@ fun TvBoxApp(
         AppUpdateDialog(
             state = state,
             actions = actions,
+            onStartUpdateDownload = onStartUpdateDownload,
             onInstallUpdate = onInstallUpdate,
         )
     }
@@ -78,6 +80,7 @@ fun TvBoxApp(
 private fun AppUpdateDialog(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
+    onStartUpdateDownload: () -> Unit,
     onInstallUpdate: (String) -> Unit,
 ) {
     val update = state.availableUpdate ?: return
@@ -134,7 +137,7 @@ private fun AppUpdateDialog(
                     if (downloadedApkPath != null) {
                         onInstallUpdate(downloadedApkPath)
                     } else {
-                        actions.startUpdateDownload()
+                        onStartUpdateDownload()
                     }
                 },
             ) {
@@ -350,6 +353,29 @@ private fun SettingsScreen(
     actions: TvBoxViewModel,
 ) {
     PageSurface { padding ->
+        var confirmClearPlaybackStats by remember { mutableStateOf(false) }
+        if (confirmClearPlaybackStats) {
+            AlertDialog(
+                onDismissRequest = { confirmClearPlaybackStats = false },
+                title = { Text("清空线路统计") },
+                text = { Text("确定要清空线路质量统计吗？清空后播放管家会重新学习线路表现。") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            confirmClearPlaybackStats = false
+                            actions.clearPlaybackStats()
+                        },
+                    ) {
+                        Text("清空")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmClearPlaybackStats = false }) {
+                        Text("取消")
+                    }
+                },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -415,15 +441,27 @@ private fun SettingsScreen(
                     }
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "线路质量统计",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            text = state.playbackHealth.qualitySummaryText(),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "线路质量统计",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = state.playbackHealth.qualitySummaryText(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Button(
+                            enabled = state.playbackHealth.entryCount > 0,
+                            onClick = { confirmClearPlaybackStats = true },
+                        ) {
+                            Text("清空统计")
+                        }
                     }
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -615,5 +653,5 @@ private fun Category.allChildrenLabel(): String {
 
 private fun PlaybackHealthSnapshot.qualitySummaryText(): String {
     if (entryCount <= 0) return "暂无线路质量记录"
-    return "已记录 $entryCount 条线路表现｜成功 $successCount｜失败 $failureCount｜卡顿 $slowBufferCount"
+    return "已记录 $entryCount 条线路表现｜成功 $successCount｜失败 $failureCount｜卡顿 $slowBufferCount｜保留最近 30 天"
 }

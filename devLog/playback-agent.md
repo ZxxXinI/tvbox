@@ -1,5 +1,60 @@
 # 播放管家 Agent - 2026-06-19
 
+## 2026-06-24 19:24 - 播放管家统计维护
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/domain/PlaybackAgent.kt`
+  - Reason: 线路质量统计需要有统一的保留策略，避免长期陈旧数据影响播放管家判断。
+  - Purpose: 新增 30 天保留时间、最多 300 条记录常量，以及可测试的 `prunePlaybackHealthEntries`。
+
+- File path: `app/src/main/java/com/tvbox/app/data/PlaybackHealthRepository.kt`
+  - Reason: 健康记录需要支持清空，并在读取/写入时自动清理过期记录。
+  - Purpose: 增加 `clear()` 接口；读取、记录成功、记录失败/卡顿时被动清理 30 天前数据并写回。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 设置页需要触发清空线路质量统计，并在打开设置时刷新统计。
+  - Purpose: 新增 `clearPlaybackStats()` 和设置页打开时的统计刷新。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 用户需要手动清空线路统计，但不希望详情页显示次数。
+  - Purpose: 在设置页播放管家区域新增“清空统计”按钮和确认弹窗；统计摘要注明保留最近 30 天；详情页不改。
+
+- File path: `app/src/test/java/com/tvbox/app/domain/PlaybackAgentTest.kt`
+  - Reason: 自动清理策略会影响播放管家的历史数据输入。
+  - Purpose: 覆盖过期记录清理和最多记录数限制。
+
+- File path: `CHANGELOG.md`
+  - Reason: 需要记录未发布功能，便于后续发版整理。
+  - Purpose: 增加播放管家统计维护说明。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
+  - Purpose: 在主时间线加入统计维护索引。
+
+- File path: `devLog/playback-agent.md`
+  - Reason: 播放管家是独立模块，需要记录分阶段设计和维护行为。
+  - Purpose: 记录统计维护的文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-06-24 19:24
+- Symptoms: 无新增缺陷；本次为统计维护功能。潜在风险是旧线路统计长期累积或过期数据长期影响评分。
+- Attempted fix: 增加 30 天被动清理、最多 300 条记录和手动清空统计入口。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `.\gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+- `.\gradlew.bat assembleDebug --console=plain`
+  - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/playback-agent.md`
+
 ## 2026-06-24 18:57 - Bug 修复：seek 后卡顿误判
 
 ## File Changes

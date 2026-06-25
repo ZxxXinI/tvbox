@@ -70,7 +70,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.4.apk
+adb install -r TVBox-v1.2.5.apk
 ```
 
 ## OTA 更新机制
@@ -85,15 +85,15 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 
 ```json
 {
-  "versionCode": 10204,
-  "versionName": "1.2.4",
-  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.4/TVBox-v1.2.4.apk",
-  "apkSha256": "c292298530a017e981b91bf44d5a60667e227c7f4709eae462bdfbcb40cdba87",
-  "apkSize": 4524289,
+  "versionCode": 10205,
+  "versionName": "1.2.5",
+  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.5/TVBox-v1.2.5.apk",
+  "apkSha256": "54a1d50f713d9b1d8dac2383d493c5f2b767dbc90980ae0e6f841d61a9c844ef",
+  "apkSize": 4573449,
   "force": false,
   "changelog": [
-    "新增设置页：可配置是否启动时自动检查更新，并支持手动立即检查。",
-    "播放失败时自动尝试同一集的下一条可用线路。"
+    "优化 OTA 更新权限：首次启动会引导安装未知应用权限。",
+    "新增播放管家统计维护，并增强卡顿识别和智能择线。"
   ]
 }
 ```
@@ -163,8 +163,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10204
-versionName = "1.2.4"
+versionCode = 10205
+versionName = "1.2.5"
 ```
 
 2. 构建 release APK：
@@ -180,8 +180,8 @@ versionName = "1.2.4"
 
 ```powershell
 git add CHANGELOG.md app\build.gradle.kts app\src
-git commit -m "Release v1.2.4"
-git tag -a v1.2.4 -m "TVBox v1.2.4"
+git commit -m "Release v1.2.5"
+git tag -a v1.2.5 -m "TVBox v1.2.5"
 git push origin main
 git push origin v1.2.4
 ```
@@ -189,7 +189,7 @@ git push origin v1.2.4
 5. 在 GitHub Release 上传：
 
 ```text
-TVBox-v1.2.4.apk
+TVBox-v1.2.5.apk
 update.json
 ```
 

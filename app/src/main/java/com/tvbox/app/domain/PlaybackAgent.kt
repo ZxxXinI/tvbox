@@ -1,6 +1,8 @@
 package com.tvbox.app.domain
 
 const val PLAYBACK_HEALTH_COOLDOWN_MS = 30 * 60 * 1000L
+const val PLAYBACK_HEALTH_RETENTION_MS = 30L * 24 * 60 * 60 * 1000L
+const val PLAYBACK_HEALTH_MAX_ENTRIES = 300
 
 enum class PlaybackIssueType {
     Error,
@@ -55,6 +57,23 @@ data class PlaybackHealthSnapshot(
 
     val slowBufferCount: Int
         get() = entries.values.sumOf { it.slowBufferCount }
+}
+
+fun prunePlaybackHealthEntries(
+    entries: Collection<PlaybackHealthEntry>,
+    nowMs: Long,
+    retentionMs: Long = PLAYBACK_HEALTH_RETENTION_MS,
+    maxEntries: Int = PLAYBACK_HEALTH_MAX_ENTRIES,
+): List<PlaybackHealthEntry> {
+    val cutoffMs = nowMs - retentionMs
+    return entries
+        .filter { entry ->
+            entry.key.isNotBlank() &&
+                entry.latestActivityAtMs > 0L &&
+                entry.latestActivityAtMs >= cutoffMs
+        }
+        .sortedByDescending { it.latestActivityAtMs }
+        .take(maxEntries.coerceAtLeast(0))
 }
 
 data class PlaybackAgentDecision(

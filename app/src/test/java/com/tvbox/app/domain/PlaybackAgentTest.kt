@@ -217,6 +217,44 @@ class PlaybackAgentTest {
     }
 
     @Test
+    fun prunesPlaybackHealthEntriesOutsideRetentionWindow() {
+        val nowMs = 100_000L
+        val entries = listOf(
+            PlaybackHealthEntry(key = "recent", lastSuccessAtMs = 95_000L),
+            PlaybackHealthEntry(key = "old", lastFailureAtMs = 80_000L),
+            PlaybackHealthEntry(key = "empty"),
+        )
+
+        val pruned = prunePlaybackHealthEntries(
+            entries = entries,
+            nowMs = nowMs,
+            retentionMs = 10_000L,
+            maxEntries = 10,
+        )
+
+        assertEquals(listOf("recent"), pruned.map { it.key })
+    }
+
+    @Test
+    fun prunesPlaybackHealthEntriesToMaxCountByLatestActivity() {
+        val entries = (1..5).map { index ->
+            PlaybackHealthEntry(
+                key = "line-$index",
+                lastSuccessAtMs = index * 1_000L,
+            )
+        }
+
+        val pruned = prunePlaybackHealthEntries(
+            entries = entries,
+            nowMs = 10_000L,
+            retentionMs = 10_000L,
+            maxEntries = 3,
+        )
+
+        assertEquals(listOf("line-5", "line-4", "line-3"), pruned.map { it.key })
+    }
+
+    @Test
     fun reportsNoSwitchWhenEveryAlternativeIsBlocked() {
         val movie = movieWithSources("量子", "如意")
 
