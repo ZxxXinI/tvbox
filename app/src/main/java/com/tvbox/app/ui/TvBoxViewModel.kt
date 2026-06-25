@@ -231,6 +231,7 @@ class TvBoxViewModel(
 
     fun openSettings() {
         _state.update { it.copy(screen = TvScreen.Settings, updateError = null) }
+        refreshPlaybackHealth()
     }
 
     fun refreshLive() {
@@ -468,6 +469,15 @@ class TvBoxViewModel(
                 playerEpisodeIndex = selectedEpisodeIndex,
                 playerStartPositionMs = startPositionMs.coerceAtLeast(0L),
             )
+        }
+    }
+
+    fun clearPlaybackStats() {
+        viewModelScope.launch {
+            runCatching { playbackHealthRepository.clear() }
+                .onSuccess { snapshot ->
+                    _state.update { it.copy(playbackHealth = snapshot) }
+                }
         }
     }
 
@@ -795,6 +805,15 @@ class TvBoxViewModel(
         }
     }
 
+    private fun refreshPlaybackHealth() {
+        viewModelScope.launch {
+            runCatching { playbackHealthRepository.getSnapshot() }
+                .onSuccess { snapshot ->
+                    _state.update { it.copy(playbackHealth = snapshot) }
+                }
+        }
+    }
+
     private fun saveSettings(settings: AppSettings) {
         viewModelScope.launch {
             runCatching { appSettingsRepository.saveSettings(settings) }
@@ -942,4 +961,6 @@ private class DefaultPlaybackHealthRepositoryPlaceholder : PlaybackHealthReposit
     ): PlaybackHealthSnapshot = PlaybackHealthSnapshot()
 
     override suspend fun recordSuccess(key: String, nowMs: Long): PlaybackHealthSnapshot = PlaybackHealthSnapshot()
+
+    override suspend fun clear(): PlaybackHealthSnapshot = PlaybackHealthSnapshot()
 }

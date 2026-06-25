@@ -2,6 +2,30 @@
 
 ## Timeline
 
+### 2026-06-25 08:22 - 发布 v1.2.5
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用版本升级到 `1.2.5`，版本码升级到 `10205`。
+  - 将播放管家阶段性能力、统计维护和 OTA 权限前置整理为 v1.2.5 发布记录。
+  - 准备 release APK 与 `update.json`，用于 GitHub Release 和 OTA 更新。
+
+### 2026-06-25 08:07 - OTA 安装权限前置
+
+- Branch doc: `devLog/ota-update.md`
+- Summary:
+  - 首次启动应用时引导一次“安装未知应用”权限，用户可拒绝。
+  - 检测到新版本后，点击更新会先获取安装权限，允许后再继续下载。
+  - 已下载 APK 安装前仍保留权限检查，允许后继续调起系统安装器。
+
+### 2026-06-24 19:24 - 播放管家统计维护
+
+- Branch doc: `devLog/playback-agent.md`
+- Summary:
+  - 设置页新增“清空统计”按钮和确认弹窗。
+  - 线路健康记录读取、记录成功、记录失败/卡顿时会被动清理 30 天前数据。
+  - 线路健康记录继续保留最多 300 条，避免长期堆积。
+
 ### 2026-06-24 18:57 - 播放管家 seek 误判修复
 
 - Branch doc: `devLog/playback-agent.md`
@@ -56,3 +80,5 @@
 ## Navigation
 
 - Playback Agent: `devLog/playback-agent.md`
+- OTA Update: `devLog/ota-update.md`
+- Release: `devLog/release.md`
