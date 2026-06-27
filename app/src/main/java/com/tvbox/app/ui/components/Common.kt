@@ -48,9 +48,9 @@ fun AppHeader(
     subtitle: String,
     onHistory: () -> Unit,
     onSearch: () -> Unit,
+    onAiRecommend: () -> Unit,
     onLive: () -> Unit,
     onSettings: () -> Unit,
-    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -75,9 +75,9 @@ fun AppHeader(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HeaderActionButton(text = "刷新(1)", onClick = onRefresh)
-            HeaderActionButton(text = "历史(2)", onClick = onHistory)
-            HeaderActionButton(text = "搜索(3)", onClick = onSearch)
+            HeaderActionButton(text = "历史(1)", onClick = onHistory)
+            HeaderActionButton(text = "搜索(2)", onClick = onSearch)
+            HeaderActionButton(text = "AI找片(3)", onClick = onAiRecommend)
             HeaderActionButton(text = "直播(4)", onClick = onLive)
             HeaderActionButton(text = "设置(5)", onClick = onSettings)
         }

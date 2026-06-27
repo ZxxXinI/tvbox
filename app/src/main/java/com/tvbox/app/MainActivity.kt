@@ -1,10 +1,12 @@
 package com.tvbox.app
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -37,6 +39,20 @@ class MainActivity : ComponentActivity() {
         pendingInstallPermissionAction = null
         handleInstallPermissionResult(action)
     }
+    private val speechInputLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val text = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+            .orEmpty()
+        if (text.isNotBlank()) {
+            viewModel.updateAiQuery(text)
+            viewModel.submitAiRecommendation()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +65,7 @@ class MainActivity : ComponentActivity() {
                 TvBoxApp(
                     state = state,
                     actions = viewModel,
+                    onStartAiVoiceInput = ::startAiVoiceInput,
                     onStartUpdateDownload = ::startUpdateDownloadWithPermission,
                     onInstallUpdate = ::installUpdateApk,
                 )
@@ -57,6 +74,18 @@ class MainActivity : ComponentActivity() {
         window.decorView.post {
             requestInstallPermissionOnFirstLaunch()
         }
+    }
+
+    private fun startAiVoiceInput() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "说出你的找片需求")
+        }
+        runCatching { speechInputLauncher.launch(intent) }
+            .onFailure {
+                Toast.makeText(this, "当前设备不支持语音输入，请使用文字输入", Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun requestInstallPermissionOnFirstLaunch() {
