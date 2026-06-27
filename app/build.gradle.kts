@@ -13,17 +13,23 @@ val localProperties = Properties().apply {
     }
 }
 
-fun releaseProperty(name: String): String {
+fun configProperty(name: String): String {
     return providers.gradleProperty(name).orNull
         ?: localProperties.getProperty(name)
         ?: providers.environmentVariable(name).orNull
         ?: ""
 }
 
-val releaseStoreFile = releaseProperty("TVBOX_RELEASE_STORE_FILE")
-val releaseStorePassword = releaseProperty("TVBOX_RELEASE_STORE_PASSWORD")
-val releaseKeyAlias = releaseProperty("TVBOX_RELEASE_KEY_ALIAS")
-val releaseKeyPassword = releaseProperty("TVBOX_RELEASE_KEY_PASSWORD")
+fun String.toBuildConfigString(): String {
+    val escaped = replace("\\", "\\\\").replace("\"", "\\\"")
+    return "\"$escaped\""
+}
+
+val releaseStoreFile = configProperty("TVBOX_RELEASE_STORE_FILE")
+val releaseStorePassword = configProperty("TVBOX_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = configProperty("TVBOX_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = configProperty("TVBOX_RELEASE_KEY_PASSWORD")
+val aiApiKey = configProperty("TVBOX_AI_API_KEY")
 val hasReleaseSigning = listOf(
     releaseStoreFile,
     releaseStorePassword,
@@ -41,6 +47,7 @@ android {
         targetSdk = 36
         versionCode = 10205
         versionName = "1.2.5"
+        buildConfigField("String", "AI_API_KEY", aiApiKey.toBuildConfigString())
     }
 
     signingConfigs {

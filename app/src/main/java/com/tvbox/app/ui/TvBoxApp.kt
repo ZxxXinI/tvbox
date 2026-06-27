@@ -54,6 +54,7 @@ import com.tvbox.app.ui.components.PageSurface
 fun TvBoxApp(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
+    onStartAiVoiceInput: () -> Unit = {},
     onStartUpdateDownload: () -> Unit = actions::startUpdateDownload,
     onInstallUpdate: (String) -> Unit = {},
 ) {
@@ -66,6 +67,11 @@ fun TvBoxApp(
             TvScreen.Player -> PlayerScreen(state = state, actions = actions)
             TvScreen.Live -> LiveScreen(state = state, actions = actions)
             TvScreen.Settings -> SettingsScreen(state = state, actions = actions)
+            TvScreen.AiRecommend -> AiRecommendScreen(
+                state = state,
+                actions = actions,
+                onStartVoiceInput = onStartAiVoiceInput,
+            )
         }
         AppUpdateDialog(
             state = state,
@@ -186,19 +192,19 @@ private fun HomeScreen(
                         AndroidKeyEvent.KEYCODE_1,
                         AndroidKeyEvent.KEYCODE_NUMPAD_1,
                         -> {
-                            actions.refreshHome()
+                            actions.openHistory()
                             true
                         }
                         AndroidKeyEvent.KEYCODE_2,
                         AndroidKeyEvent.KEYCODE_NUMPAD_2,
                         -> {
-                            actions.openHistory()
+                            actions.openSearch()
                             true
                         }
                         AndroidKeyEvent.KEYCODE_3,
                         AndroidKeyEvent.KEYCODE_NUMPAD_3,
                         -> {
-                            actions.openSearch()
+                            actions.openAiRecommend()
                             true
                         }
                         AndroidKeyEvent.KEYCODE_4,
@@ -223,9 +229,9 @@ private fun HomeScreen(
                 subtitle = "$apiLineName 数据 / 共 ${state.total} 部影片",
                 onHistory = actions::openHistory,
                 onSearch = actions::openSearch,
+                onAiRecommend = actions::openAiRecommend,
                 onLive = actions::openLive,
                 onSettings = actions::openSettings,
-                onRefresh = actions::refreshHome,
             )
             HomeCategoryRows(
                 state = state,

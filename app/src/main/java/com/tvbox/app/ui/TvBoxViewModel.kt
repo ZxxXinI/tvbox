@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tvbox.app.data.AppSettingsRepository
 import com.tvbox.app.BuildConfig
+import com.tvbox.app.data.AiRecommendationRepository
 import com.tvbox.app.data.AppUpdateRepository
+import com.tvbox.app.data.DefaultAiRecommendationRepository
 import com.tvbox.app.data.DefaultMovieRepository
 import com.tvbox.app.data.DefaultLiveRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.data.PlaybackHealthRepository
+import com.tvbox.app.domain.AiRecommendationItem
 import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppUpdate
@@ -39,7 +42,12 @@ enum class TvScreen {
     Player,
     Live,
     Settings,
+    AiRecommend,
 }
+
+data class AiRecommendationUiItem(
+    val recommendation: AiRecommendationItem,
+)
 
 data class TvBoxUiState(
     val screen: TvScreen = TvScreen.Home,
@@ -63,6 +71,7 @@ data class TvBoxUiState(
     val detailMovie: Movie? = null,
     val detailLoading: Boolean = false,
     val detailError: String? = null,
+    val detailReturnScreen: TvScreen = TvScreen.Home,
     val selectedSourceIndex: Int = 0,
     val selectedEpisodeIndex: Int = 0,
     val playerSourceIndex: Int = 0,
@@ -82,6 +91,12 @@ data class TvBoxUiState(
     val updateError: String? = null,
     val appSettings: AppSettings = AppSettings(),
     val playbackHealth: PlaybackHealthSnapshot = PlaybackHealthSnapshot(),
+    val aiQuery: String = "",
+    val aiTitle: String = "AI 找片",
+    val aiResults: List<AiRecommendationUiItem> = emptyList(),
+    val aiLoading: Boolean = false,
+    val aiError: String? = null,
+    val aiResolvingKeyword: String? = null,
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -93,6 +108,7 @@ data class TvBoxUiState(
 class TvBoxViewModel(
     private val repository: MovieRepository = DefaultMovieRepository(),
     private val liveRepository: LiveRepository = DefaultLiveRepository(),
+    private val aiRecommendationRepository: AiRecommendationRepository = DefaultAiRecommendationRepository(BuildConfig.AI_API_KEY),
     private val appUpdateRepository: AppUpdateRepository = DefaultAppUpdateRepositoryPlaceholder(),
     private val appSettingsRepository: AppSettingsRepository = DefaultAppSettingsRepositoryPlaceholder(),
     private val playbackHealthRepository: PlaybackHealthRepository = DefaultPlaybackHealthRepositoryPlaceholder(),
@@ -106,6 +122,7 @@ class TvBoxViewModel(
     private var detailJob: Job? = null
     private var historyResumeJob: Job? = null
     private var liveJob: Job? = null
+    private var aiJob: Job? = null
     private var updateJob: Job? = null
     private var updateDownloadJob: Job? = null
     private val playbackAgent = PlaybackAgent()
@@ -220,6 +237,10 @@ class TvBoxViewModel(
 
     fun openSearch() {
         _state.update { it.copy(screen = TvScreen.Search, searchError = null) }
+    }
+
+    fun openAiRecommend() {
+        _state.update { it.copy(screen = TvScreen.AiRecommend, aiError = null) }
     }
 
     fun openLive() {
@@ -348,6 +369,93 @@ class TvBoxViewModel(
         _state.update { it.copy(searchQuery = query) }
     }
 
+    fun updateAiQuery(query: String) {
+        _state.update { it.copy(aiQuery = query) }
+    }
+
+    fun submitAiRecommendation() {
+        val query = _state.value.aiQuery.trim()
+        if (query.isBlank()) {
+            _state.update { it.copy(aiResults = emptyList(), aiError = "请输入找片需求") }
+            return
+        }
+        aiJob?.cancel()
+        aiJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    aiLoading = true,
+                    aiError = null,
+                    aiResults = emptyList(),
+                    aiResolvingKeyword = null,
+                    aiTitle = "AI 正在找片",
+                )
+            }
+            runCatching {
+                val recommendations = aiRecommendationRepository.getRecommendations(query)
+                recommendations.title to recommendations.items.map { AiRecommendationUiItem(recommendation = it) }
+            }.onSuccess { (title, items) ->
+                _state.update {
+                    it.copy(
+                        aiLoading = false,
+                        aiTitle = title.ifBlank { "AI 推荐" },
+                        aiResults = items,
+                        aiError = if (items.isEmpty()) "AI 没有返回可展示的推荐" else null,
+                    )
+                }
+            }.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        aiLoading = false,
+                        aiResults = emptyList(),
+                        aiResolvingKeyword = null,
+                        aiError = error.userMessage(),
+                    )
+                }
+            }
+        }
+    }
+
+    fun openAiRecommendation(item: AiRecommendationItem) {
+        val keyword = item.searchKeyword.ifBlank { item.name }.trim()
+        if (keyword.isBlank()) {
+            _state.update { it.copy(aiError = "暂无该视频资源") }
+            return
+        }
+        aiJob?.cancel()
+        aiJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    aiError = null,
+                    aiResolvingKeyword = keyword,
+                )
+            }
+            runCatching { findPlayableMovie(item) }
+                .onSuccess { movie ->
+                    if (movie == null) {
+                        _state.update {
+                            it.copy(
+                                screen = TvScreen.AiRecommend,
+                                aiResolvingKeyword = null,
+                                aiError = "暂无该视频资源",
+                            )
+                        }
+                    } else {
+                        _state.update { it.copy(aiResolvingKeyword = null, aiError = null) }
+                        openDetail(movie.id)
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            screen = TvScreen.AiRecommend,
+                            aiResolvingKeyword = null,
+                            aiError = error.userMessage(),
+                        )
+                    }
+                }
+        }
+    }
+
     fun submitSearch() {
         val query = _state.value.searchQuery.trim()
         if (query.isBlank()) {
@@ -383,9 +491,16 @@ class TvBoxViewModel(
 
     fun openDetail(movieId: Int) {
         detailJob?.cancel()
+        val current = _state.value
+        val returnScreen = when (current.screen) {
+            TvScreen.AiRecommend -> TvScreen.AiRecommend
+            TvScreen.Detail -> current.detailReturnScreen
+            else -> TvScreen.Home
+        }
         _state.update {
             it.copy(
                 screen = TvScreen.Detail,
+                detailReturnScreen = returnScreen,
                 detailMovie = null,
                 detailLoading = true,
                 detailError = null,
@@ -486,6 +601,7 @@ class TvBoxViewModel(
         _state.update {
             it.copy(
                 screen = TvScreen.Detail,
+                detailReturnScreen = TvScreen.Home,
                 detailMovie = null,
                 detailLoading = true,
                 detailError = null,
@@ -684,6 +800,7 @@ class TvBoxViewModel(
             TvScreen.Player -> Unit
             TvScreen.Live -> refreshLive()
             TvScreen.Settings -> checkForAppUpdate(showError = true)
+            TvScreen.AiRecommend -> submitAiRecommendation()
         }
     }
 
@@ -700,7 +817,11 @@ class TvBoxViewModel(
                 }
                 true
             }
-            TvScreen.Detail, TvScreen.Search, TvScreen.History, TvScreen.Settings -> {
+            TvScreen.Detail -> {
+                _state.update { it.copy(screen = it.detailReturnScreen) }
+                true
+            }
+            TvScreen.Search, TvScreen.History, TvScreen.Settings, TvScreen.AiRecommend -> {
                 _state.update { it.copy(screen = TvScreen.Home) }
                 true
             }
@@ -794,6 +915,28 @@ class TvBoxViewModel(
                     _state.update { it.copy(categories = categories) }
                 }
         }
+    }
+
+    private suspend fun findPlayableMovie(item: AiRecommendationItem): Movie? {
+        val keyword = item.searchKeyword.ifBlank { item.name }.trim()
+        if (keyword.isBlank()) return null
+        val movies = repository.getMovies(
+            apiLineId = _state.value.selectedApiLineId,
+            page = 1,
+            keyword = keyword,
+        ).movies
+        if (movies.isEmpty()) return null
+
+        val normalizedKeyword = keyword.normalizeAiMatchText()
+        val normalizedName = item.name.normalizeAiMatchText()
+        return movies.firstOrNull { movie ->
+            val candidate = movie.name.normalizeAiMatchText()
+            candidate == normalizedKeyword || candidate == normalizedName
+        } ?: movies.firstOrNull { movie ->
+            val candidate = movie.name.normalizeAiMatchText()
+            candidate.isNotBlank() &&
+                (candidate.contains(normalizedKeyword) || normalizedKeyword.contains(candidate))
+        } ?: movies.first()
     }
 
     private fun loadHistory() {
@@ -934,6 +1077,10 @@ private fun TvBoxUiState.playbackHealthKeyOrNull(): String? {
         episodeIndex = playerEpisodeIndex,
         source = source,
     )
+}
+
+private fun String.normalizeAiMatchText(): String {
+    return lowercase().filter { it.isLetterOrDigit() }
 }
 
 private const val DEFAULT_ALL_CATEGORY_TYPE_ID = 13

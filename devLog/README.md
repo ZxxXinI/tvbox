@@ -2,6 +2,31 @@
 
 ## Timeline
 
+### 2026-06-27 20:19 - AI 推荐延迟资源匹配
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - AI 推荐页不再生成结果后立即逐条搜索资源站，改为先展示模型 JSON 内容。
+  - 用户点击推荐卡片时才搜索当前影视数据源；无资源时停留在 AI 找片页提示“暂无该视频资源”。
+  - 从 AI 推荐进入详情页后，遥控器返回会回到 AI 找片页。
+  - 首页顶部入口移除“刷新(1)”，快捷键调整为历史(1)、搜索(2)、AI找片(3)、直播(4)、设置(5)。
+
+### 2026-06-27 19:05 - AI 推荐卡片尺寸调整
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - AI 推荐页卡片宽度从 `260.dp` 调整为与首页一致的 `148.dp`。
+  - 电视横屏下推荐页从偏大的两列卡片恢复为更接近首页的多列展示。
+
+### 2026-06-26 22:08 - AI 找片实验入口
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - 首页新增“AI找片(6)”入口，支持文字输入和系统语音输入。
+  - 新增 Agnes Chat Completions 接入，按“角色 + 任务 + 上下文 + 要求 + 输出格式”组织提示词。
+  - AI 返回推荐 JSON 后，应用会用 `searchKeyword` 搜索当前影视数据源并生成可点击推荐卡片。
+  - API Key 通过本地 `TVBOX_AI_API_KEY` 配置注入，不写入仓库。
+
 ### 2026-06-25 08:22 - 发布 v1.2.5
 
 - Branch doc: `devLog/release.md`
@@ -80,5 +105,6 @@
 ## Navigation
 
 - Playback Agent: `devLog/playback-agent.md`
+- AI Recommend: `devLog/ai-recommend.md`
 - OTA Update: `devLog/ota-update.md`
 - Release: `devLog/release.md`
