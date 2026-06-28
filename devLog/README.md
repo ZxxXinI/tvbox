@@ -1,6 +1,22 @@
-# TVBox AI Dev Log
+﻿# TVBox AI Dev Log
 
 ## Timeline
+
+### 2026-06-28 17:35 - 覆盖发布 v1.2.6
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 用户要求本次更新仍作为 `v1.2.6` 发布，不新增版本号。
+  - 重新构建 release APK，并同步 `README.md` 的 `update.json` 示例 SHA-256 与大小。
+  - 后续通过覆盖 GitHub Release 的 `TVBox-v1.2.6.apk` 和 `update.json` 完成同版本发布。
+
+### 2026-06-28 17:22 - 设置首页资源与 AI 按钮焦点优化
+
+- Branch docs: `devLog/settings.md`, `devLog/ai-recommend-focus.md`
+- Summary:
+  - 设置页新增“首页资源 / 首页渲染数据”下拉选择，可在量子、如意、360 等资源站之间切换首页默认数据。
+  - 首页数据源选择会保存到本地设置，重启后继续使用上次选择。
+  - AI 找片页顶部按钮和快捷推荐词按钮改为电视焦点样式：未选中为空底描边，选中时绿色填充并显示白色高亮边框。
 
 ### 2026-06-28 17:01 - 发布 v1.2.6
 
@@ -131,5 +147,7 @@
 
 - Playback Agent: `devLog/playback-agent.md`
 - AI Recommend: `devLog/ai-recommend.md`
+- AI Recommend Focus: `devLog/ai-recommend-focus.md`
+- Settings: `devLog/settings.md`
 - OTA Update: `devLog/ota-update.md`
 - Release: `devLog/release.md`

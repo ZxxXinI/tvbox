@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -40,6 +42,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.PlaybackHealthSnapshot
 import com.tvbox.app.ui.components.AppHeader
@@ -416,6 +419,19 @@ private fun SettingsScreen(
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     SettingsSectionTitle(
+                        title = "首页资源",
+                        subtitle = "选择首页、搜索和 AI 找片默认查询的影视资源站。",
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    HomeApiLineSetting(
+                        apiLines = state.apiLines,
+                        selectedApiLine = state.selectedApiLine,
+                        onSelect = actions::updateHomeApiLine,
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsSectionTitle(
                         title = "播放管家",
                         subtitle = "控制播放失败或卡顿时是否自动尝试其它线路。",
                     )
@@ -512,6 +528,56 @@ private fun SettingsScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeApiLineSetting(
+    apiLines: List<ApiLine>,
+    selectedApiLine: ApiLine?,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "首页渲染数据",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = selectedApiLine?.let { "当前使用：${it.name}" } ?: "请选择首页资源站",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box {
+            Button(
+                enabled = apiLines.isNotEmpty(),
+                onClick = { expanded = true },
+            ) {
+                Text("${selectedApiLine?.name ?: "选择资源"} ▾")
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                apiLines.forEach { line ->
+                    val selected = line.id == selectedApiLine?.id
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (selected) "已选 · ${line.name}" else line.name)
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelect(line.id)
+                        },
+                    )
                 }
             }
         }
