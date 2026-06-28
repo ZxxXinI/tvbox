@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tvbox.app.data.AppSettingsRepository
 import com.tvbox.app.BuildConfig
+import com.tvbox.app.data.AiConfigServer
+import com.tvbox.app.data.AiRequestConfig
 import com.tvbox.app.data.AiRecommendationRepository
 import com.tvbox.app.data.AppUpdateRepository
 import com.tvbox.app.data.DefaultAiRecommendationRepository
@@ -15,6 +17,7 @@ import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.data.PlaybackHealthRepository
 import com.tvbox.app.domain.AiRecommendationItem
 import com.tvbox.app.domain.AppSettings
+import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppUpdate
 import com.tvbox.app.domain.Category
@@ -98,6 +101,10 @@ data class TvBoxUiState(
     val aiVoiceListening: Boolean = false,
     val aiError: String? = null,
     val aiResolvingKeyword: String? = null,
+    val aiConfigDialogVisible: Boolean = false,
+    val aiConfigServerUrl: String? = null,
+    val aiConfigServerError: String? = null,
+    val aiConfigSavedMessage: String? = null,
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -126,6 +133,7 @@ class TvBoxViewModel(
     private var aiJob: Job? = null
     private var updateJob: Job? = null
     private var updateDownloadJob: Job? = null
+    private var aiConfigServer: AiConfigServer? = null
     private val playbackAgent = PlaybackAgent()
 
     init {
@@ -380,6 +388,106 @@ class TvBoxViewModel(
         _state.update { it.copy(appSettings = settings) }
     }
 
+    fun updateAiProvider(providerId: String) {
+        val provider = AiProviders.find(providerId)
+        val settings = _state.value.appSettings.copy(
+            aiProviderId = provider.id,
+            aiModelName = provider.defaultModel,
+        )
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings, aiError = null) }
+    }
+
+    fun updateAiModelName(modelName: String) {
+        val settings = _state.value.appSettings.copy(aiModelName = modelName)
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings, aiError = null) }
+    }
+
+    fun updateAiApiKey(apiKey: String) {
+        val settings = _state.value.appSettings.copy(aiApiKey = apiKey)
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings, aiError = null) }
+    }
+
+    fun openAiConfigDialog() {
+        closeAiConfigDialog(stopOnly = true)
+        val current = _state.value
+        val provider = AiProviders.find(current.appSettings.aiProviderId)
+        val modelName = current.appSettings.aiModelName.ifBlank { provider.defaultModel }
+        val server = AiConfigServer(viewModelScope) { submittedModelName, submittedApiKey ->
+            applyAiConfigFromPhone(
+                modelName = submittedModelName,
+                apiKey = submittedApiKey,
+            )
+        }
+        aiConfigServer = server
+        _state.update {
+            it.copy(
+                aiConfigDialogVisible = true,
+                aiConfigServerUrl = null,
+                aiConfigServerError = null,
+                aiConfigSavedMessage = null,
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                server.start(
+                    provider = provider,
+                    modelName = modelName,
+                )
+            }.onSuccess { session ->
+                _state.update {
+                    it.copy(
+                        aiConfigServerUrl = session.url,
+                        aiConfigServerError = null,
+                    )
+                }
+            }.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        aiConfigServerUrl = null,
+                        aiConfigServerError = "启动手机配置服务失败：${error.userMessage()}",
+                    )
+                }
+            }
+        }
+    }
+
+    fun closeAiConfigDialog() {
+        closeAiConfigDialog(stopOnly = false)
+    }
+
+    private fun closeAiConfigDialog(stopOnly: Boolean) {
+        aiConfigServer?.stop()
+        aiConfigServer = null
+        if (!stopOnly) {
+            _state.update {
+                it.copy(
+                    aiConfigDialogVisible = false,
+                    aiConfigServerUrl = null,
+                    aiConfigServerError = null,
+                    aiConfigSavedMessage = null,
+                )
+            }
+        }
+    }
+
+    private fun applyAiConfigFromPhone(modelName: String, apiKey: String) {
+        val settings = _state.value.appSettings.copy(
+            aiModelName = modelName.trim(),
+            aiApiKey = apiKey.trim(),
+        )
+        saveSettings(settings)
+        _state.update {
+            it.copy(
+                appSettings = settings,
+                aiConfigServerError = null,
+                aiConfigSavedMessage = "已收到手机配置，模型和 API Key 已保存。",
+            )
+        }
+    }
+
     fun updateSearchQuery(query: String) {
         _state.update { it.copy(searchQuery = query) }
     }
@@ -450,7 +558,10 @@ class TvBoxViewModel(
                 )
             }
             runCatching {
-                val recommendations = aiRecommendationRepository.getRecommendations(requestQuery)
+                val recommendations = aiRecommendationRepository.getRecommendations(
+                    query = requestQuery,
+                    userConfig = _state.value.appSettings.userAiRequestConfigOrNull(),
+                )
                 recommendations.title to recommendations.items.map { AiRecommendationUiItem(recommendation = it) }
             }.onSuccess { (title, items) ->
                 _state.update {
@@ -1127,6 +1238,12 @@ class TvBoxViewModel(
             healthSnapshot = state.playbackHealth,
         )?.sourceIndex ?: safeRequestedSourceIndex
     }
+
+    override fun onCleared() {
+        aiConfigServer?.stop()
+        aiConfigServer = null
+        super.onCleared()
+    }
 }
 
 private fun Throwable.userMessage(): String {
@@ -1152,6 +1269,17 @@ private fun TvBoxUiState.playbackHealthKeyOrNull(): String? {
         movieId = movie.id,
         episodeIndex = playerEpisodeIndex,
         source = source,
+    )
+}
+
+private fun AppSettings.userAiRequestConfigOrNull(): AiRequestConfig? {
+    val apiKey = aiApiKey.trim()
+    if (apiKey.isBlank()) return null
+    val provider = AiProviders.find(aiProviderId)
+    return AiRequestConfig(
+        chatCompletionsUrl = provider.chatCompletionsUrl,
+        model = aiModelName.trim().ifBlank { provider.defaultModel },
+        apiKey = apiKey,
     )
 }
 

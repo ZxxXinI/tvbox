@@ -45,8 +45,8 @@ android {
         applicationId = "com.tvbox.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10206
-        versionName = "1.2.6"
+        versionCode = 10207
+        versionName = "1.2.7"
         buildConfigField("String", "AI_API_KEY", aiApiKey.toBuildConfigString())
     }
 
@@ -119,6 +119,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
+    implementation(libs.zxing.core)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)
