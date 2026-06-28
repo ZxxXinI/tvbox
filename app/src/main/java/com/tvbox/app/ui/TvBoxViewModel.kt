@@ -95,6 +95,7 @@ data class TvBoxUiState(
     val aiTitle: String = "AI 找片",
     val aiResults: List<AiRecommendationUiItem> = emptyList(),
     val aiLoading: Boolean = false,
+    val aiVoiceListening: Boolean = false,
     val aiError: String? = null,
     val aiResolvingKeyword: String? = null,
 ) {
@@ -240,7 +241,7 @@ class TvBoxViewModel(
     }
 
     fun openAiRecommend() {
-        _state.update { it.copy(screen = TvScreen.AiRecommend, aiError = null) }
+        _state.update { it.copy(screen = TvScreen.AiRecommend, aiVoiceListening = false, aiError = null) }
     }
 
     fun openLive() {
@@ -370,33 +371,78 @@ class TvBoxViewModel(
     }
 
     fun updateAiQuery(query: String) {
-        _state.update { it.copy(aiQuery = query) }
+        _state.update { it.copy(aiQuery = query, aiVoiceListening = false, aiError = null) }
     }
 
     fun submitAiRecommendation() {
-        val query = _state.value.aiQuery.trim()
-        if (query.isBlank()) {
-            _state.update { it.copy(aiResults = emptyList(), aiError = "请输入找片需求") }
+        submitAiRecommendation(query = _state.value.aiQuery)
+    }
+
+    fun submitAiRecommendation(query: String) {
+        submitAiRecommendationInternal(query = query, refreshBatch = false)
+    }
+
+    fun refreshAiRecommendationBatch() {
+        submitAiRecommendationInternal(query = _state.value.aiQuery, refreshBatch = true)
+    }
+
+    fun showAiMessage(message: String) {
+        _state.update {
+            it.copy(
+                screen = TvScreen.AiRecommend,
+                aiLoading = false,
+                aiVoiceListening = false,
+                aiResolvingKeyword = null,
+                aiError = message,
+            )
+        }
+    }
+
+    fun startAiVoiceListening() {
+        _state.update {
+            it.copy(
+                screen = TvScreen.AiRecommend,
+                aiLoading = false,
+                aiVoiceListening = true,
+                aiResolvingKeyword = null,
+                aiError = null,
+            )
+        }
+    }
+
+    private fun submitAiRecommendationInternal(query: String, refreshBatch: Boolean) {
+        val trimmedQuery = query.trim()
+        if (trimmedQuery.isBlank()) {
+            _state.update { it.copy(aiVoiceListening = false, aiResults = emptyList(), aiError = "请输入找片需求") }
             return
         }
+        val excludedNames = if (refreshBatch) {
+            _state.value.aiResults.map { it.recommendation.name }
+        } else {
+            emptyList()
+        }
+        val requestQuery = buildAiRecommendationRequest(trimmedQuery, excludedNames)
         aiJob?.cancel()
         aiJob = viewModelScope.launch {
             _state.update {
                 it.copy(
+                    aiQuery = trimmedQuery,
                     aiLoading = true,
+                    aiVoiceListening = false,
                     aiError = null,
                     aiResults = emptyList(),
                     aiResolvingKeyword = null,
-                    aiTitle = "AI 正在找片",
+                    aiTitle = if (refreshBatch) "AI 正在换一批" else "AI 正在找片",
                 )
             }
             runCatching {
-                val recommendations = aiRecommendationRepository.getRecommendations(query)
+                val recommendations = aiRecommendationRepository.getRecommendations(requestQuery)
                 recommendations.title to recommendations.items.map { AiRecommendationUiItem(recommendation = it) }
             }.onSuccess { (title, items) ->
                 _state.update {
                     it.copy(
                         aiLoading = false,
+                        aiVoiceListening = false,
                         aiTitle = title.ifBlank { "AI 推荐" },
                         aiResults = items,
                         aiError = if (items.isEmpty()) "AI 没有返回可展示的推荐" else null,
@@ -406,6 +452,7 @@ class TvBoxViewModel(
                 _state.update {
                     it.copy(
                         aiLoading = false,
+                        aiVoiceListening = false,
                         aiResults = emptyList(),
                         aiResolvingKeyword = null,
                         aiError = error.userMessage(),
@@ -937,6 +984,21 @@ class TvBoxViewModel(
             candidate.isNotBlank() &&
                 (candidate.contains(normalizedKeyword) || normalizedKeyword.contains(candidate))
         } ?: movies.first()
+    }
+
+    private fun buildAiRecommendationRequest(query: String, excludedNames: List<String>): String {
+        val distinctNames = excludedNames
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(12)
+        if (distinctNames.isEmpty()) return query
+        return buildString {
+            append(query)
+            append("\n请换一批推荐，不要重复这些作品：")
+            append(distinctNames.joinToString("、"))
+            append("。")
+        }
     }
 
     private fun loadHistory() {

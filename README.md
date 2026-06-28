@@ -14,7 +14,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 遥控器友好：方向键、确认键、返回键、菜单键和数字键均有对应交互。
 - 首页影视列表：支持一级/二级分类、分页加载、焦点高亮和遥控快捷键。
 - 搜索与详情：支持关键词搜索、影片详情、简介、封面、播放源和选集。
-- AI 找片：支持文字或系统语音输入找片需求，由大模型生成推荐列表，并自动匹配可播放资源。
+- AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，由大模型生成推荐列表，点击卡片后再匹配可播放资源。
 - 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换和自动跳下一集。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间，可从历史继续播放。
 - 电视直播：从 IPTV 文本接口加载频道，支持左右切台、频道列表、数字选台。
@@ -72,7 +72,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.5.apk
+adb install -r TVBox-v1.2.6.apk
 ```
 
 ## OTA 更新机制
@@ -87,15 +87,15 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 
 ```json
 {
-  "versionCode": 10205,
-  "versionName": "1.2.5",
-  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.5/TVBox-v1.2.5.apk",
-  "apkSha256": "54a1d50f713d9b1d8dac2383d493c5f2b767dbc90980ae0e6f841d61a9c844ef",
-  "apkSize": 4573449,
+  "versionCode": 10206,
+  "versionName": "1.2.6",
+  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.6/TVBox-v1.2.6.apk",
+  "apkSha256": "3a375705659488a45e40dd20d9abb986b84c457518168351b6f29c5b2e762937",
+  "apkSize": 4606325,
   "force": false,
   "changelog": [
-    "优化 OTA 更新权限：首次启动会引导安装未知应用权限。",
-    "新增播放管家统计维护，并增强卡顿识别和智能择线。"
+    "新增 AI 找片：首页新增 AI找片(3)，支持文字、语音、快捷推荐词和换一批。",
+    "修复部分手机语音找片空结果或权限误判问题，支持引导系统语音服务麦克风授权。"
   ]
 }
 ```
@@ -173,8 +173,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10205
-versionName = "1.2.5"
+versionCode = 10206
+versionName = "1.2.6"
 ```
 
 2. 构建 release APK：
@@ -190,16 +190,16 @@ versionName = "1.2.5"
 
 ```powershell
 git add CHANGELOG.md app\build.gradle.kts app\src
-git commit -m "Release v1.2.5"
-git tag -a v1.2.5 -m "TVBox v1.2.5"
-git push origin main
-git push origin v1.2.4
+git commit -m "Release v1.2.6"
+git tag -a v1.2.6 -m "TVBox v1.2.6"
+git push origin agent
+git push origin v1.2.6
 ```
 
 5. 在 GitHub Release 上传：
 
 ```text
-TVBox-v1.2.5.apk
+TVBox-v1.2.6.apk
 update.json
 ```
 
