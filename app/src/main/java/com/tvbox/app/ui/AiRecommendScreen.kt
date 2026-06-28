@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -26,9 +28,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +50,13 @@ fun AiRecommendScreen(
     actions: TvBoxViewModel,
     onStartVoiceInput: () -> Unit,
 ) {
+    val voiceFocusRequester = remember { FocusRequester() }
+    val inputEnabled = !state.aiLoading && !state.aiVoiceListening && state.aiResolvingKeyword == null
+
+    LaunchedEffect(Unit) {
+        runCatching { voiceFocusRequester.requestFocus() }
+    }
+
     PageSurface { padding ->
         Column(
             modifier = Modifier
@@ -64,6 +77,7 @@ fun AiRecommendScreen(
                     value = state.aiQuery,
                     onValueChange = actions::updateAiQuery,
                     modifier = Modifier.weight(1f),
+                    enabled = inputEnabled,
                     singleLine = true,
                     label = { Text("例如：悬疑电视剧推荐") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -71,26 +85,39 @@ fun AiRecommendScreen(
                 )
                 Button(
                     onClick = onStartVoiceInput,
-                    enabled = !state.aiLoading,
+                    modifier = Modifier.focusRequester(voiceFocusRequester),
+                    enabled = inputEnabled,
                 ) {
-                    Text("语音")
+                    Text("语音找片")
                 }
                 Button(
-                    onClick = actions::submitAiRecommendation,
-                    enabled = !state.aiLoading,
+                    onClick = { actions.submitAiRecommendation() },
+                    enabled = inputEnabled,
                 ) {
                     Text(if (state.aiLoading) "找片中" else "找片")
+                }
+                Button(
+                    onClick = { actions.refreshAiRecommendationBatch() },
+                    enabled = inputEnabled && state.aiResults.isNotEmpty(),
+                ) {
+                    Text("换一批")
                 }
                 Button(onClick = actions::goBack) {
                     Text("返回")
                 }
             }
+            Spacer(modifier = Modifier.height(12.dp))
+            AiQuickPromptRow(
+                enabled = inputEnabled,
+                onPromptClick = { prompt -> actions.submitAiRecommendation(prompt) },
+            )
             Spacer(modifier = Modifier.height(22.dp))
             when {
+                state.aiVoiceListening -> LoadingState(text = "正在听，请说出找片需求")
                 state.aiLoading -> LoadingState(text = "AI 正在生成推荐")
                 state.aiError != null && state.aiResults.isEmpty() -> ErrorState(
                     message = state.aiError,
-                    onRetry = actions::submitAiRecommendation,
+                    onRetry = { actions.submitAiRecommendation() },
                 )
                 state.aiResults.isEmpty() -> EmptyAiRecommendState()
                 else -> Column(modifier = Modifier.fillMaxSize()) {
@@ -127,6 +154,27 @@ fun AiRecommendScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiQuickPromptRow(
+    enabled: Boolean,
+    onPromptClick: (String) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(end = 8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        rowItems(aiQuickPrompts) { prompt ->
+            Button(
+                onClick = { onPromptClick(prompt) },
+                enabled = enabled,
+            ) {
+                Text(prompt)
             }
         }
     }
@@ -230,3 +278,12 @@ private fun com.tvbox.app.domain.AiRecommendationItem.metaText(): String {
         .joinToString(" / ")
         .ifBlank { "AI 推荐" }
 }
+
+private val aiQuickPrompts = listOf(
+    "悬疑电视剧",
+    "最近高分电影",
+    "动画电影",
+    "韩国犯罪剧",
+    "搞笑综艺",
+    "适合小孩看",
+)

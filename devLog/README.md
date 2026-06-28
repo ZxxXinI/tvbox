@@ -2,6 +2,31 @@
 
 ## Timeline
 
+### 2026-06-28 17:01 - 发布 v1.2.6
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用版本升级到 `1.2.6`，版本码升级到 `10206`。
+  - 将 AI 找片、语音入口、快捷推荐词、换一批和语音权限修复整理为 v1.2.6 发布记录。
+  - 准备 release APK 与 `update.json`，用于 GitHub Release 和 OTA 更新。
+
+### 2026-06-28 16:40 - AI 语音识别空结果修复
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - ADB 日志显示系统把 `RECOGNIZE_SPEECH` 交给小米语音 Activity，但该 Activity 很快返回空结果。
+  - AI 找片语音入口改为应用内 `SpeechRecognizer`，减少对外部语音页面结果返回的依赖。
+  - 新增麦克风权限声明和运行时授权；识别时显示“正在听”状态，失败时显示明确错误。
+
+### 2026-06-28 16:26 - AI 找片交互优化
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - AI 找片页进入后默认聚焦“语音找片”，减少电视遥控器操作步数。
+  - 新增快捷推荐词，用户可直接选择常见找片需求并自动提交。
+  - 新增“换一批”，会把当前推荐片名作为排除名单重新请求模型。
+  - 语音取消、未识别到内容或设备不支持时，在 AI 找片页面给出提示。
+
 ### 2026-06-27 20:19 - AI 推荐延迟资源匹配
 
 - Branch doc: `devLog/ai-recommend.md`
