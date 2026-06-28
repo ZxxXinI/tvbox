@@ -15,6 +15,8 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
 
     override suspend fun getSettings(): AppSettings = withContext(Dispatchers.IO) {
         AppSettings(
+            homeApiLineId = prefs.getString(KEY_HOME_API_LINE_ID, AppSettings().homeApiLineId)
+                ?: AppSettings().homeApiLineId,
             checkUpdatesOnStartup = prefs.getBoolean(KEY_CHECK_UPDATES_ON_STARTUP, true),
             playbackAgentAutoSwitchEnabled = prefs.getBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, true),
         )
@@ -22,6 +24,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
 
     override suspend fun saveSettings(settings: AppSettings): AppSettings = withContext(Dispatchers.IO) {
         prefs.edit()
+            .putString(KEY_HOME_API_LINE_ID, settings.homeApiLineId)
             .putBoolean(KEY_CHECK_UPDATES_ON_STARTUP, settings.checkUpdatesOnStartup)
             .putBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, settings.playbackAgentAutoSwitchEnabled)
             .apply()
@@ -29,6 +32,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
     }
 
     private companion object {
+        const val KEY_HOME_API_LINE_ID = "home_api_line_id"
         const val KEY_CHECK_UPDATES_ON_STARTUP = "check_updates_on_startup"
         const val KEY_PLAYBACK_AGENT_AUTO_SWITCH = "playback_agent_auto_switch"
     }

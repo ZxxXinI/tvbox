@@ -1,5 +1,42 @@
 # Release - 2026-06-25
 
+## 2026-06-28 17:35 - 覆盖发布 v1.2.6
+
+## File Changes
+
+- File path: `CHANGELOG.md`
+  - Reason: 首页资源切换和 AI 焦点优化需要归入当前 v1.2.6 说明。
+  - Purpose: 在 `v1.2.6 - 2026-06-28` 版本块补充本次覆盖发布内容。
+- File path: `README.md`
+  - Reason: 同一个 v1.2.6 APK 重新构建后 SHA-256 与大小发生变化。
+  - Purpose: 同步 `update.json` 示例中的 `apkSha256` 和 `apkSize`。
+- File path: `devLog/release.md`
+  - Reason: 用户要求本次更新仍发布为 v1.2.6，不新增版本号。
+  - Purpose: 记录同版本覆盖发布的产物信息和验证结果。
+
+## Verification
+
+- `.\gradlew.bat assembleRelease --console=plain`
+  - Result: passed.
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.2.6.apk`
+  - Size: `4622709`
+  - SHA-256: `406bdea9a3b0a107790945d3bba1d79f81c46171f765068ef7a2c99feb4ac9e8`
+- GitHub Release asset upload:
+  - Will be performed after commit/tag update so assets match committed source.
+
+## Bug Record
+
+- Time: 2026-06-28 17:35
+- Symptoms: 无新增缺陷；本次为同版本覆盖发布。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-06-28 17:01 - v1.2.6
 
 ## File Changes

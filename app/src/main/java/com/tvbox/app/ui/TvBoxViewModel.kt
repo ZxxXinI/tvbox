@@ -129,26 +129,32 @@ class TvBoxViewModel(
     private val playbackAgent = PlaybackAgent()
 
     init {
+        val defaultApiLineId = repository.apiLines.firstOrNull()?.id.orEmpty()
         _state.update {
             it.copy(
                 apiLines = repository.apiLines,
-                selectedApiLineId = repository.apiLines.firstOrNull()?.id.orEmpty(),
+                selectedApiLineId = defaultApiLineId,
             )
         }
         viewModelScope.launch {
             val settings = runCatching { appSettingsRepository.getSettings() }
                 .getOrDefault(AppSettings())
+            val selectedApiLineId = settings.homeApiLineId
+                .takeIf { apiLineId -> repository.apiLines.any { it.id == apiLineId } }
+                ?: defaultApiLineId
+            val normalizedSettings = settings.copy(homeApiLineId = selectedApiLineId)
             val playbackHealth = runCatching { playbackHealthRepository.getSnapshot() }
                 .getOrDefault(PlaybackHealthSnapshot())
             _state.update {
                 it.copy(
-                    appSettings = settings,
+                    selectedApiLineId = selectedApiLineId,
+                    appSettings = normalizedSettings,
                     playbackHealth = playbackHealth,
                 )
             }
             loadHistory()
             refreshHome()
-            if (settings.checkUpdatesOnStartup) {
+            if (normalizedSettings.checkUpdatesOnStartup) {
                 checkForAppUpdate()
             }
         }
@@ -213,9 +219,17 @@ class TvBoxViewModel(
     }
 
     fun selectApiLine(apiLineId: String) {
+        updateHomeApiLine(apiLineId)
+    }
+
+    fun updateHomeApiLine(apiLineId: String) {
+        if (_state.value.apiLines.none { it.id == apiLineId }) return
         if (_state.value.selectedApiLineId == apiLineId) return
+        val settings = _state.value.appSettings.copy(homeApiLineId = apiLineId)
+        saveSettings(settings)
         _state.update {
             it.copy(
+                appSettings = settings,
                 selectedApiLineId = apiLineId,
                 selectedParentCategoryId = null,
                 selectedCategoryId = null,

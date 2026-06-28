@@ -22,19 +22,23 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,28 +87,27 @@ fun AiRecommendScreen(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { actions.submitAiRecommendation() }),
                 )
-                Button(
+                AiActionButton(
+                    text = "语音找片",
                     onClick = onStartVoiceInput,
-                    modifier = Modifier.focusRequester(voiceFocusRequester),
+                    modifier = Modifier
+                        .focusRequester(voiceFocusRequester),
                     enabled = inputEnabled,
-                ) {
-                    Text("语音找片")
-                }
-                Button(
+                )
+                AiActionButton(
+                    text = if (state.aiLoading) "找片中" else "找片",
                     onClick = { actions.submitAiRecommendation() },
                     enabled = inputEnabled,
-                ) {
-                    Text(if (state.aiLoading) "找片中" else "找片")
-                }
-                Button(
+                )
+                AiActionButton(
+                    text = "换一批",
                     onClick = { actions.refreshAiRecommendationBatch() },
                     enabled = inputEnabled && state.aiResults.isNotEmpty(),
-                ) {
-                    Text("换一批")
-                }
-                Button(onClick = actions::goBack) {
-                    Text("返回")
-                }
+                )
+                AiActionButton(
+                    text = "返回",
+                    onClick = actions::goBack,
+                )
             }
             Spacer(modifier = Modifier.height(12.dp))
             AiQuickPromptRow(
@@ -170,13 +173,62 @@ private fun AiQuickPromptRow(
         modifier = Modifier.fillMaxWidth(),
     ) {
         rowItems(aiQuickPrompts) { prompt ->
-            Button(
+            AiActionButton(
+                text = prompt,
                 onClick = { onPromptClick(prompt) },
                 enabled = enabled,
-            ) {
-                Text(prompt)
-            }
+            )
         }
+    }
+}
+
+@Composable
+private fun AiActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .then(
+                if (enabled) {
+                    Modifier.tvFocusScale(
+                        shape = shape,
+                        focusedBorder = Color.White,
+                        idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .clip(shape)
+            .onFocusChanged { focused = enabled && (it.isFocused || it.hasFocus) }
+            .clickable(enabled = enabled, onClick = onClick)
+            .focusable(enabled = enabled),
+        shape = shape,
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            focused -> MaterialTheme.colorScheme.primary
+            else -> Color.Transparent
+        },
+        contentColor = when {
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            focused -> MaterialTheme.colorScheme.onPrimary
+            else -> MaterialTheme.colorScheme.onSurface
+        },
+        tonalElevation = if (focused) 8.dp else 0.dp,
+        shadowElevation = if (focused) 10.dp else 0.dp,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+        )
     }
 }
 

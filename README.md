@@ -13,6 +13,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - Android TV 适配：支持 `LEANBACK_LAUNCHER`，可在电视桌面启动，同时保留普通 Android 启动入口。
 - 遥控器友好：方向键、确认键、返回键、菜单键和数字键均有对应交互。
 - 首页影视列表：支持一级/二级分类、分页加载、焦点高亮和遥控快捷键。
+- 首页资源切换：设置页可选择量子、如意、360 等资源站作为首页、搜索和 AI 找片默认数据源。
 - 搜索与详情：支持关键词搜索、影片详情、简介、封面、播放源和选集。
 - AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，由大模型生成推荐列表，点击卡片后再匹配可播放资源。
 - 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换和自动跳下一集。
@@ -90,12 +91,12 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
   "versionCode": 10206,
   "versionName": "1.2.6",
   "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.6/TVBox-v1.2.6.apk",
-  "apkSha256": "3a375705659488a45e40dd20d9abb986b84c457518168351b6f29c5b2e762937",
-  "apkSize": 4606325,
+  "apkSha256": "406bdea9a3b0a107790945d3bba1d79f81c46171f765068ef7a2c99feb4ac9e8",
+  "apkSize": 4622709,
   "force": false,
   "changelog": [
-    "新增 AI 找片：首页新增 AI找片(3)，支持文字、语音、快捷推荐词和换一批。",
-    "修复部分手机语音找片空结果或权限误判问题，支持引导系统语音服务麦克风授权。"
+    "新增设置页首页资源切换，可选择量子、如意、360 等资源站。",
+    "优化 AI 找片按钮焦点，未选中为空底描边，选中时绿色高亮。"
   ]
 }
 ```
