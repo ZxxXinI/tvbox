@@ -1,5 +1,103 @@
 # Settings - 2026-06-28
 
+## 2026-06-28 19:10 - AI 手机扫码配置
+
+## File Changes
+
+- File path: `gradle/libs.versions.toml`
+  - Reason: 电视端需要离线生成手机配置二维码。
+  - Purpose: 新增 ZXing core 依赖版本和库声明。
+- File path: `app/build.gradle.kts`
+  - Reason: 二维码生成需要引入 ZXing core。
+  - Purpose: 添加 `implementation(libs.zxing.core)`。
+- File path: `app/src/main/java/com/tvbox/app/data/AiConfigServer.kt`
+  - Reason: 手机需要在同一局域网内提交模型名称和 API Key 到电视。
+  - Purpose: 新增临时 HTTP 配置服务，弹窗打开时启动，关闭时停止；通过一次性 token 接收表单提交。
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 设置页二维码弹窗需要启动/停止配置服务，并接收手机端提交结果。
+  - Purpose: 新增 AI 配置弹窗状态、服务生命周期管理和手机提交后的设置保存逻辑。
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 模型名称和 API Key 不适合用电视遥控器长文本输入。
+  - Purpose: 将模型/API Key 输入框改为按钮；点击后弹出左侧二维码、右侧说明和局域网地址的配置弹窗。
+- File path: `CHANGELOG.md`
+  - Reason: 未发布记录需要反映扫码配置交互。
+  - Purpose: 更新大模型配置描述为手机扫码填写。
+- File path: `README.md`
+  - Reason: 用户需要知道如何在下载后的 APK 中配置自己的大模型 Key。
+  - Purpose: 说明手机扫码填写模型名称和 API Key 的流程，以及未填写 Key 时继续使用 APK 内置配置。
+
+## Verification
+
+- `./gradlew.bat assembleDebug --console=plain`
+  - Result: passed.
+- `./gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+- `git diff --check`
+  - Result: passed.
+- ADB screenshot
+  - Result: skipped because connected device reported `offline`.
+
+## Bug Record
+
+- Time: 2026-06-28 19:10
+- Symptoms: 遥控器输入模型名称和 API Key 不方便，尤其是长 API Key。
+- Attempted fix: 电视端改为二维码弹窗，手机端网页输入并提交回电视本地服务。
+- Temporary solution: 不适用。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/settings.md`
+
+## 2026-06-28 18:49 - 大模型配置与设置按钮焦点
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`
+  - Reason: 设置页需要保存用户选择的大模型、模型名称和 API Key。
+  - Purpose: 新增 `AiProvider`、`AiProviders`、`aiProviderId`、`aiModelName`、`aiApiKey`，内置 Agnes、DeepSeek、SiliconFlow、Qwen 的接口地址和默认模型。
+- File path: `app/src/main/java/com/tvbox/app/data/AppSettingsRepository.kt`
+  - Reason: 大模型配置需要跨启动保存。
+  - Purpose: 使用 SharedPreferences 持久化 AI provider、模型名和 API Key。
+- File path: `app/src/main/java/com/tvbox/app/data/AiRecommendationRepository.kt`
+  - Reason: AI 找片需要在用户填写 API Key 后切换到用户选择的大模型接口。
+  - Purpose: 新增 `AiRequestConfig`；当设置页 API Key 为空时继续使用 APK 内置配置，填写后才使用用户配置。
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 设置页输入需要写入状态并传给 AI 请求层。
+  - Purpose: 新增更新 AI provider、模型名和 API Key 的方法，并在提交 AI 推荐时按“有 Key 才覆盖”的规则生成请求配置。
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 设置页需要显示大模型选择、模型输入和 API Key 输入，并统一按钮焦点样式。
+  - Purpose: 新增大模型设置行和 `SettingsActionButton`；设置页主要按钮改为空底描边、聚焦绿色填充。
+- File path: `CHANGELOG.md`
+  - Reason: 未发布功能需要进入更新记录。
+  - Purpose: 记录大模型配置、AI 配置覆盖规则和设置页按钮焦点优化。
+- File path: `README.md`
+  - Reason: 用户需要知道别人下载 APK 后如何配置自己的 API Key。
+  - Purpose: 说明 APK 默认使用打包配置，设置页填写 API Key 后才覆盖默认 AI 配置。
+
+## Verification
+
+- `./gradlew.bat assembleDebug --console=plain`
+  - Result: passed.
+- `./gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+- `git diff --check`
+  - Result: passed.
+- ADB screenshot
+  - Result: skipped because connected device reported `offline`.
+
+## Bug Record
+
+- Time: 2026-06-28 18:49
+- Symptoms: 设置页按钮焦点样式和首页不一致；公开 APK 用户无法在应用内配置自己的大模型 API Key。
+- Attempted fix: 设置页新增大模型配置区，并统一按钮为空底描边、聚焦绿色填充。
+- Temporary solution: 不适用。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/settings.md`
+
 ## 2026-06-28 17:22 - 首页资源切换
 
 ## File Changes

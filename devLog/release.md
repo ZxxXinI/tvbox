@@ -1,5 +1,57 @@
 # Release - 2026-06-25
 
+## 2026-06-28 20:56 - v1.2.7
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 发布新版本需要提高应用版本号，确保 OTA 能识别为可更新版本。
+  - Purpose: 将 `versionCode` 升级到 `10207`，将 `versionName` 升级到 `1.2.7`。
+
+- File path: `CHANGELOG.md`
+  - Reason: 设置页大模型配置和手机扫码配置能力需要归档到正式版本。
+  - Purpose: 新增 `v1.2.7 - 2026-06-28` 发布记录，并清空未发布条目。
+
+- File path: `README.md`
+  - Reason: README 中安装示例、OTA 示例和功能说明仍指向旧版本。
+  - Purpose: 更新示例版本到 `v1.2.7` / `10207`，并说明手机扫码配置模型名称和 API Key。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
+  - Purpose: 在主时间线加入 v1.2.7 发布索引。
+
+- File path: `devLog/release.md`
+  - Reason: 发布流程是独立维护主题，需要记录版本、资产和验证结果。
+  - Purpose: 记录 v1.2.7 发布涉及的文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-06-28 20:56
+- Symptoms: 无新增缺陷；本次为版本发布整理。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug --console=plain`
+  - Result: passed.
+- `.\gradlew.bat assembleRelease --console=plain`
+  - Result: passed.
+- `E:\Soft\Tools\AndroidSDK\build-tools\36.1.0\apksigner.bat verify --print-certs app\build\outputs\apk\release\TVBox-v1.2.7.apk`
+  - Result: passed. Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`.
+- `git diff --check`
+  - Result: passed. Only line-ending warnings were reported.
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.2.7.apk`
+  - Size: `4671861`
+  - SHA-256: `f1fb17d27f90ecd853382d103a004e03a44395d26d6c8e18d0ab6000763fb088`
+- GitHub Release upload will be performed after commit/tag so release assets match committed source.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-06-28 17:35 - 覆盖发布 v1.2.6
 
 ## File Changes

@@ -19,20 +19,35 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 interface AiRecommendationRepository {
-    suspend fun getRecommendations(query: String): AiRecommendationResult
+    suspend fun getRecommendations(query: String, userConfig: AiRequestConfig? = null): AiRecommendationResult
 }
 
+data class AiRequestConfig(
+    val chatCompletionsUrl: String,
+    val model: String,
+    val apiKey: String,
+)
+
 class DefaultAiRecommendationRepository(
-    private val apiKey: String,
+    private val bundledApiKey: String,
     private val client: OkHttpClient = defaultAiClient,
 ) : AiRecommendationRepository {
-    override suspend fun getRecommendations(query: String): AiRecommendationResult = withContext(Dispatchers.IO) {
+    override suspend fun getRecommendations(
+        query: String,
+        userConfig: AiRequestConfig?,
+    ): AiRecommendationResult = withContext(Dispatchers.IO) {
         val trimmedQuery = query.trim()
         require(trimmedQuery.isNotBlank()) { "请输入找片需求" }
-        require(apiKey.isNotBlank()) { "请先在 local.properties 配置 TVBOX_AI_API_KEY" }
+        val config = userConfig ?: AiRequestConfig(
+            chatCompletionsUrl = BUNDLED_AI_CHAT_COMPLETIONS_URL,
+            model = BUNDLED_AI_MODEL,
+            apiKey = bundledApiKey,
+        )
+        require(config.apiKey.isNotBlank()) { "请先在设置中配置 AI API Key" }
+        require(config.model.isNotBlank()) { "请先在设置中填写模型名称" }
 
         val requestBody = ChatCompletionRequest(
-            model = AI_MODEL,
+            model = config.model,
             messages = listOf(
                 ChatMessage(role = "system", content = buildSystemPrompt()),
                 ChatMessage(role = "user", content = trimmedQuery),
@@ -41,8 +56,8 @@ class DefaultAiRecommendationRepository(
             maxTokens = 1200,
         )
         val request = Request.Builder()
-            .url(AI_CHAT_COMPLETIONS_URL)
-            .header("Authorization", "Bearer $apiKey")
+            .url(config.chatCompletionsUrl)
+            .header("Authorization", "Bearer ${config.apiKey}")
             .header("Content-Type", "application/json")
             .post(aiJson.encodeToString(requestBody).toRequestBody(JSON_MEDIA_TYPE))
             .build()
@@ -140,5 +155,5 @@ private val aiJson = Json {
 }
 
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-private const val AI_CHAT_COMPLETIONS_URL = "https://apihub.agnes-ai.com/v1/chat/completions"
-private const val AI_MODEL = "agnes-2.0-flash"
+private const val BUNDLED_AI_CHAT_COMPLETIONS_URL = "https://apihub.agnes-ai.com/v1/chat/completions"
+private const val BUNDLED_AI_MODEL = "agnes-2.0-flash"

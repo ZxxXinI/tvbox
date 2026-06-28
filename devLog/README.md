@@ -2,6 +2,31 @@
 
 ## Timeline
 
+### 2026-06-28 20:56 - 发布 v1.2.7
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用版本升级到 `1.2.7`，版本码升级到 `10207`。
+  - 将设置页大模型配置、手机扫码填写模型/API Key、设置页焦点样式归档为正式版本。
+  - 准备 release APK 与 `update.json`，用于 GitHub Release 和 OTA 更新。
+
+### 2026-06-28 19:10 - AI 手机扫码配置
+
+- Branch doc: `devLog/settings.md`
+- Summary:
+  - 模型名称和 API Key 不再作为电视端输入框展示，改为可聚焦按钮。
+  - 点击模型或 API Key 按钮后，电视弹出二维码和局域网地址。
+  - 手机扫码打开本地配置页，填写模型名称和 API Key 后自动同步到电视设置。
+
+### 2026-06-28 18:49 - 设置页大模型配置
+
+- Branch doc: `devLog/settings.md`
+- Summary:
+  - 设置页新增大模型配置区，支持 Agnes、DeepSeek、SiliconFlow、Qwen。
+  - 支持配置模型名称和 API Key；API 地址不在设置页展示。
+  - AI 找片仅在用户填写 API Key 后使用设置页配置，否则继续使用 APK 内置 AI 配置。
+  - 设置页主要按钮统一为空底描边、聚焦绿色填充的电视焦点样式。
+
 ### 2026-06-28 17:35 - 覆盖发布 v1.2.6
 
 - Branch doc: `devLog/release.md`

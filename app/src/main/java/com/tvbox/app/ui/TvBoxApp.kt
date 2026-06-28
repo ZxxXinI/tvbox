@@ -1,6 +1,10 @@
 package com.tvbox.app.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -18,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -25,6 +31,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,13 +42,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tvbox.app.domain.AiProvider
+import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.PlaybackHealthSnapshot
@@ -52,6 +66,9 @@ import com.tvbox.app.ui.components.HistoryItemCard
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.MoviePosterCard
 import com.tvbox.app.ui.components.PageSurface
+import com.tvbox.app.ui.components.tvFocusScale
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 
 @Composable
 fun TvBoxApp(
@@ -385,6 +402,9 @@ private fun SettingsScreen(
                 },
             )
         }
+        if (state.aiConfigDialogVisible) {
+            AiConfigDialog(state = state, actions = actions)
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -405,9 +425,7 @@ private fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Button(onClick = actions::goBack) {
-                    Text("返回")
-                }
+                SettingsActionButton(text = "返回", onClick = actions::goBack)
             }
             Spacer(modifier = Modifier.height(22.dp))
             LazyVerticalGrid(
@@ -428,6 +446,21 @@ private fun SettingsScreen(
                         apiLines = state.apiLines,
                         selectedApiLine = state.selectedApiLine,
                         onSelect = actions::updateHomeApiLine,
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsSectionTitle(
+                        title = "大模型",
+                        subtitle = "未填写 API Key 时使用 APK 内置 AI 配置。",
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    AiProviderSetting(
+                        selectedProvider = AiProviders.find(state.appSettings.aiProviderId),
+                        modelName = state.appSettings.aiModelName,
+                        apiKey = state.appSettings.aiApiKey,
+                        onProviderSelect = actions::updateAiProvider,
+                        onOpenConfig = actions::openAiConfigDialog,
                     )
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -478,12 +511,11 @@ private fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Button(
+                        SettingsActionButton(
+                            text = "清空统计",
                             enabled = state.playbackHealth.entryCount > 0,
                             onClick = { confirmClearPlaybackStats = true },
-                        ) {
-                            Text("清空统计")
-                        }
+                        )
                     }
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -516,12 +548,11 @@ private fun SettingsScreen(
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Button(
+                            SettingsActionButton(
+                                text = if (state.updateChecking) "检查中" else "立即检查",
                                 enabled = !state.updateChecking,
                                 onClick = { actions.checkForAppUpdate(showError = true) },
-                            ) {
-                                Text(if (state.updateChecking) "检查中" else "立即检查")
-                            }
+                            )
                             Switch(
                                 checked = state.appSettings.checkUpdatesOnStartup,
                                 onCheckedChange = actions::updateStartupUpdateCheck,
@@ -531,6 +562,192 @@ private fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AiConfigDialog(
+    state: TvBoxUiState,
+    actions: TvBoxViewModel,
+) {
+    val configUrl = state.aiConfigServerUrl
+    AlertDialog(
+        onDismissRequest = actions::closeAiConfigDialog,
+        title = { Text("手机扫码配置 AI") },
+        text = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (configUrl == null) {
+                    Box(
+                        modifier = Modifier.size(220.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("正在启动配置服务...")
+                    }
+                } else {
+                    val qrBitmap = remember(configUrl) { createQrBitmap(configUrl, 320) }
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = "AI 配置二维码",
+                        modifier = Modifier.size(220.dp),
+                    )
+                }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "使用手机扫描二维码",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "或在同一局域网的手机浏览器访问地址：",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = configUrl ?: "正在生成地址...",
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "手机页面里填写模型名称和 API Key，确认后会自动同步到电视。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (state.aiConfigSavedMessage != null) {
+                        Text(
+                            text = state.aiConfigSavedMessage,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    if (state.aiConfigServerError != null) {
+                        Text(
+                            text = state.aiConfigServerError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            SettingsActionButton(text = "完成", onClick = actions::closeAiConfigDialog)
+        },
+        dismissButton = {
+            TextButton(onClick = actions::closeAiConfigDialog) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
+private fun AiProviderSetting(
+    selectedProvider: AiProvider,
+    modelName: String,
+    apiKey: String,
+    onProviderSelect: (String) -> Unit,
+    onOpenConfig: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val displayModelName = modelName.ifBlank { selectedProvider.defaultModel }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(0.9f)) {
+            Text(
+                text = "大模型选择",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box {
+                SettingsActionButton(
+                    text = "${selectedProvider.name} ▾",
+                    onClick = { expanded = true },
+                )
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    AiProviders.all.forEach { provider ->
+                        val selected = provider.id == selectedProvider.id
+                        DropdownMenuItem(
+                            text = { Text(if (selected) "已选 · ${provider.name}" else provider.name) },
+                            onClick = {
+                                expanded = false
+                                onProviderSelect(provider.id)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        SettingsActionButton(
+            text = "模型：$displayModelName",
+            onClick = onOpenConfig,
+            modifier = Modifier.weight(1.25f),
+        )
+        SettingsActionButton(
+            text = if (apiKey.isBlank()) "API Key：未配置" else "API Key：已配置",
+            onClick = onOpenConfig,
+            modifier = Modifier.weight(1.1f),
+        )
+    }
+}
+
+@Composable
+private fun SettingsActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .then(
+                if (enabled) {
+                    Modifier.tvFocusScale(
+                        shape = shape,
+                        focusedBorder = Color.White,
+                        idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .clip(shape)
+            .onFocusChanged { focused = enabled && (it.isFocused || it.hasFocus) }
+            .clickable(enabled = enabled, onClick = onClick)
+            .focusable(enabled = enabled),
+        shape = shape,
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            focused -> MaterialTheme.colorScheme.primary
+            else -> Color.Transparent
+        },
+        contentColor = when {
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            focused -> MaterialTheme.colorScheme.onPrimary
+            else -> MaterialTheme.colorScheme.onSurface
+        },
+        tonalElevation = if (focused) 8.dp else 0.dp,
+        shadowElevation = if (focused) 10.dp else 0.dp,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -557,12 +774,11 @@ private fun HomeApiLineSetting(
             )
         }
         Box {
-            Button(
+            SettingsActionButton(
+                text = "${selectedApiLine?.name ?: "选择资源"} ▾",
                 enabled = apiLines.isNotEmpty(),
                 onClick = { expanded = true },
-            ) {
-                Text("${selectedApiLine?.name ?: "选择资源"} ▾")
-            }
+            )
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
@@ -726,4 +942,19 @@ private fun Category.allChildrenLabel(): String {
 private fun PlaybackHealthSnapshot.qualitySummaryText(): String {
     if (entryCount <= 0) return "暂无线路质量记录"
     return "已记录 $entryCount 条线路表现｜成功 $successCount｜失败 $failureCount｜卡顿 $slowBufferCount｜保留最近 30 天"
+}
+
+private fun createQrBitmap(content: String, size: Int): Bitmap {
+    val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size)
+    val pixels = IntArray(size * size)
+    for (y in 0 until size) {
+        for (x in 0 until size) {
+            pixels[y * size + x] = if (matrix[x, y]) {
+                android.graphics.Color.BLACK
+            } else {
+                android.graphics.Color.WHITE
+            }
+        }
+    }
+    return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
 }

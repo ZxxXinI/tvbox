@@ -15,7 +15,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 首页影视列表：支持一级/二级分类、分页加载、焦点高亮和遥控快捷键。
 - 首页资源切换：设置页可选择量子、如意、360 等资源站作为首页、搜索和 AI 找片默认数据源。
 - 搜索与详情：支持关键词搜索、影片详情、简介、封面、播放源和选集。
-- AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，由大模型生成推荐列表，点击卡片后再匹配可播放资源。
+- AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，可在设置页用手机扫码配置大模型、模型名和 API Key。
 - 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换和自动跳下一集。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间，可从历史继续播放。
 - 电视直播：从 IPTV 文本接口加载频道，支持左右切台、频道列表、数字选台。
@@ -73,7 +73,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.6.apk
+adb install -r TVBox-v1.2.7.apk
 ```
 
 ## OTA 更新机制
@@ -88,15 +88,15 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 
 ```json
 {
-  "versionCode": 10206,
-  "versionName": "1.2.6",
-  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.6/TVBox-v1.2.6.apk",
-  "apkSha256": "406bdea9a3b0a107790945d3bba1d79f81c46171f765068ef7a2c99feb4ac9e8",
-  "apkSize": 4622709,
+  "versionCode": 10207,
+  "versionName": "1.2.7",
+  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.7/TVBox-v1.2.7.apk",
+  "apkSha256": "f1fb17d27f90ecd853382d103a004e03a44395d26d6c8e18d0ab6000763fb088",
+  "apkSize": 4671861,
   "force": false,
   "changelog": [
-    "新增设置页首页资源切换，可选择量子、如意、360 等资源站。",
-    "优化 AI 找片按钮焦点，未选中为空底描边，选中时绿色高亮。"
+    "新增设置页大模型扫码配置，手机填写模型名称和 API Key 后自动同步到电视。",
+    "支持 Agnes、DeepSeek、SiliconFlow、Qwen，未填写 API Key 时继续使用 APK 内置配置。"
   ]
 }
 ```
@@ -118,7 +118,14 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 - Android SDK
 - 使用项目内 Gradle Wrapper
 
-AI 找片本地配置：
+AI 找片配置：
+
+- APK 默认使用打包时配置的 `TVBOX_AI_API_KEY` 和内置 Agnes 参数。
+- 用户可在设置页选择 Agnes、DeepSeek、SiliconFlow 或 Qwen。
+- 模型名称和 API Key 不需要用遥控器输入；点击“模型”或“API Key”按钮后，电视会弹出二维码，手机扫码填写后自动同步到电视。
+- 设置页只有手机提交了 API Key 后才会覆盖 APK 内置 AI 配置；未填写时继续使用默认配置。
+
+打包时的默认 API Key 可放在本地配置中：
 
 ```properties
 TVBOX_AI_API_KEY=你的测试密钥
@@ -174,8 +181,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10206
-versionName = "1.2.6"
+versionCode = 10207
+versionName = "1.2.7"
 ```
 
 2. 构建 release APK：
@@ -191,16 +198,16 @@ versionName = "1.2.6"
 
 ```powershell
 git add CHANGELOG.md app\build.gradle.kts app\src
-git commit -m "Release v1.2.6"
-git tag -a v1.2.6 -m "TVBox v1.2.6"
+git commit -m "Release v1.2.7"
+git tag -a v1.2.7 -m "TVBox v1.2.7"
 git push origin agent
-git push origin v1.2.6
+git push origin v1.2.7
 ```
 
 5. 在 GitHub Release 上传：
 
 ```text
-TVBox-v1.2.6.apk
+TVBox-v1.2.7.apk
 update.json
 ```
 
