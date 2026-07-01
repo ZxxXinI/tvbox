@@ -19,7 +19,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换、自动跳下一集和手机播放手势。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间，可从历史继续播放。
 - 电视直播：从 IPTV 文本接口加载频道，支持左右切台、频道列表、数字选台。
-- OTA 更新：启动后检查 GitHub Release 的 `update.json`，发现新版本后可下载 APK 并跳转系统安装器。
+- OTA 更新：启动后检查 Gitee 仓库中的 `update.json`，发现新版本后可下载 APK 并跳转系统安装器。
 - 内容过滤：过滤伦理、电影解说、演员、新闻资讯等不需要的分类或资源。
 
 ## 遥控器快捷键
@@ -59,10 +59,11 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 
 ## 安装
 
-从 GitHub Release 下载最新 APK：
+从 Release 下载最新 APK：
 
 - [Latest Release](https://github.com/ZxxXinI/tvbox/releases/latest)
-- OTA 更新清单：`https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/update.json`
+- [Gitee Release](https://gitee.com/zhen-xin/tv-box/releases)
+- OTA 更新清单：`https://gitee.com/zhen-xin/tv-box/raw/agent/update.json`
 
 通过 ADB 安装：
 
@@ -81,7 +82,7 @@ adb install -r TVBox-v1.2.8.apk
 应用启动后会请求：
 
 ```text
-https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/update.json
+https://gitee.com/zhen-xin/tv-box/raw/agent/update.json
 ```
 
 `update.json` 示例：
@@ -90,7 +91,7 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 {
   "versionCode": 10208,
   "versionName": "1.2.8",
-  "apkUrl": "https://s3.cstcloud.cn/c68393c9e4fe40e88ec2a07527326176/tvbox/releases/v1.2.8/TVBox-v1.2.8.apk",
+  "apkUrl": "https://gitee.com/zhen-xin/tv-box/releases/download/v1.2.8/TVBox-v1.2.8.apk",
   "apkSha256": "598bef37d28f16898991395ea2a89e092c6320908f82ca381852d4e1403ab030",
   "apkSize": 4721013,
   "force": false,
@@ -104,11 +105,11 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 说明：
 
 - `versionCode` 必须大于当前应用版本，才会提示更新。
-- `apkUrl` 是 APK 下载地址，目前指向 S3 存储，避免电视盒子从 GitHub 下载过慢。
+- `apkUrl` 是 APK 下载地址，目前指向 Gitee Release 附件。
 - `apkSha256` 用于下载完成后的完整性校验。
 - `force` 预留强制更新能力，当前普通更新可选择稍后再说。
-- GitHub Release 仍然需要上传 APK 和 `update.json` 两个附件；`update.json` 由应用从 GitHub 获取，APK 作为备份下载文件保留。
-- S3 需要上传同一个 APK，`update.json` 中的 `apkUrl` 指向 S3 文件。
+- `update.json` 放在仓库根目录，随代码推送到 Gitee 后，应用会通过 raw 地址读取。
+- Gitee Release 需要上传 APK 附件；GitHub Release 可以继续作为备份。
 - `git push` 只会上传代码和 tag，不会自动上传 Release 附件。
 
 ## 本地构建
@@ -133,19 +134,6 @@ TVBOX_AI_API_KEY=你的测试密钥
 ```
 
 `TVBOX_AI_API_KEY` 可以放在 `local.properties`、Gradle 属性或环境变量中。`local.properties` 已被 `.gitignore` 忽略，不会上传到仓库。
-
-发布到 S3 的本地配置也可以放在 `local.properties` 或环境变量中：
-
-```properties
-TVBOX_S3_ENDPOINT=https://s3.cstcloud.cn
-TVBOX_S3_REGION=us-east-1
-TVBOX_S3_BUCKET=c68393c9e4fe40e88ec2a07527326176
-TVBOX_S3_PUBLIC_BASE_URL=https://s3.cstcloud.cn/c68393c9e4fe40e88ec2a07527326176
-TVBOX_S3_ACCESS_KEY_ID=你的 AccessKey ID
-TVBOX_S3_SECRET_ACCESS_KEY=你的 AccessKey Secret
-```
-
-> `TVBOX_S3_ACCESS_KEY_ID` 和 `TVBOX_S3_SECRET_ACCESS_KEY` 只放本机，不要提交到仓库。
 
 视频接口配置：
 
@@ -216,30 +204,30 @@ versionName = "1.2.8"
 3. 提交代码并打 tag：
 
 ```powershell
-git add CHANGELOG.md README.md app\build.gradle.kts app\src devLog scripts
+git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
 git commit -m "Release v1.2.8"
 git tag -a v1.2.8 -m "TVBox v1.2.8"
 git push origin agent
 git push origin v1.2.8
+git push gitee agent
+git push gitee v1.2.8
 ```
 
-4. 生成 `update.json` 并上传发布资产。该脚本会把 APK 上传到 S3，把 APK 和 `update.json` 上传到 GitHub Release；`update.json` 中的 `apkUrl` 会指向 S3：
+4. 更新根目录 `update.json`，其中 `apkUrl` 指向 Gitee Release APK。
+
+5. 在 Gitee Release 上传对应版本 APK：
+
+```text
+TVBox-v1.2.8.apk
+```
+
+6. 可选：在 GitHub Release 上传或覆盖备份附件：
 
 ```powershell
-.\scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208
+gh release upload v1.2.8 app\build\outputs\apk\release\TVBox-v1.2.8.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
-如果只是预览生成的 S3 下载地址，不执行上传：
-
-```powershell
-.\scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208 -DryRun
-```
-
-脚本依赖：
-- GitHub 上传需要安装并登录 `gh`。
-- S3 上传由脚本内置的 AWS Signature V4 请求完成，不需要安装 `aws` CLI。
-- S3 凭据需要放在本机 `local.properties` 或环境变量中，不要提交到仓库。
-- 当前 S3 endpoint 使用 Path-Style 地址：`https://s3.cstcloud.cn/<bucket>/<key>`。
+> Gitee Release 目前建议在网页端创建并上传 APK；GitHub Release 可继续使用 `gh` 命令维护备份。
 
 ## 项目结构
 

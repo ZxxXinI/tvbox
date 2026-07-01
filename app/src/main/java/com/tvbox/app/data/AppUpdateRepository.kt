@@ -150,5 +150,5 @@ private data class UpdateManifestDto(
     @SerialName("changelog") val changelog: List<String> = emptyList(),
 )
 
-private const val UPDATE_MANIFEST_URL = "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/update.json"
+private const val UPDATE_MANIFEST_URL = "https://gitee.com/zhen-xin/tv-box/raw/agent/update.json"
 private const val USER_AGENT = "TVBox-Android"

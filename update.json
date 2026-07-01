@@ -1,0 +1,13 @@
+{
+  "versionCode": 10208,
+  "versionName": "1.2.8",
+  "apkUrl": "https://gitee.com/zhen-xin/tv-box/releases/download/v1.2.8/TVBox-v1.2.8.apk",
+  "apkSha256": "598bef37d28f16898991395ea2a89e092c6320908f82ca381852d4e1403ab030",
+  "apkSize": 4721013,
+  "force": false,
+  "changelog": [
+    "新增设置页自定义视频接口，支持手机扫码添加 MacCms 接口。",
+    "优化手机播放手势：双击左侧快退，中间播放/暂停，右侧快进。",
+    "首页向下滚动时自动隐藏标题和分类栏。"
+  ]
+}
