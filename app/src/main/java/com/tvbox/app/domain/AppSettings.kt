@@ -1,13 +1,35 @@
 package com.tvbox.app.domain
 
+import kotlinx.serialization.Serializable
+
 data class AppSettings(
     val homeApiLineId: String = "liangzi",
+    val customVideoApiLines: List<CustomVideoApiLine> = emptyList(),
     val aiProviderId: String = AiProviders.default.id,
     val aiModelName: String = AiProviders.default.defaultModel,
     val aiApiKey: String = "",
     val checkUpdatesOnStartup: Boolean = true,
     val playbackAgentAutoSwitchEnabled: Boolean = true,
 )
+
+@Serializable
+data class CustomVideoApiLine(
+    val id: String,
+    val name: String,
+    val baseUrl: String,
+) {
+    fun toApiLine(): ApiLine {
+        return ApiLine(
+            id = id,
+            name = name,
+            baseUrls = listOf(baseUrl),
+        )
+    }
+}
+
+fun List<CustomVideoApiLine>.toApiLines(): List<ApiLine> {
+    return map { it.toApiLine() }
+}
 
 data class AiProvider(
     val id: String,
@@ -38,7 +60,7 @@ object AiProviders {
             id = "deepseek",
             name = "DeepSeek",
             apiBaseUrl = "https://api.deepseek.com",
-            defaultModel = "deepseek-chat",
+            defaultModel = "deepseek-v4-flash",
         ),
         AiProvider(
             id = "siliconflow",

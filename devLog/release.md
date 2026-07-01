@@ -1,5 +1,55 @@
 # Release - 2026-06-25
 
+## 2026-07-01 09:36 - v1.2.8
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 发布新版本需要提高应用版本号，确保 OTA 能识别为可更新版本。
+  - Purpose: 将 `versionCode` 升级到 `10208`，将 `versionName` 升级到 `1.2.8`。
+
+- File path: `CHANGELOG.md`
+  - Reason: 已完成的自定义视频接口、手机播放手势和首页滚动体验需要归档到正式版本。
+  - Purpose: 新增 `v1.2.8 - 2026-07-01` 发布记录，并清空未发布条目。
+
+- File path: `README.md`
+  - Reason: README 中安装示例、OTA 示例和发布命令仍指向旧版本。
+  - Purpose: 更新示例版本到 `v1.2.8` / `10208`，并同步 release APK 的 SHA-256 与大小。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
+  - Purpose: 在主时间线加入 v1.2.8 发布索引。
+
+- File path: `devLog/release.md`
+  - Reason: 发布流程是独立维护主题，需要记录版本、资产和验证结果。
+  - Purpose: 记录 v1.2.8 发布涉及的文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-07-01 09:36
+- Symptoms: 无新增缺陷；本次为版本发布整理。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleDebug assembleRelease --console=plain`
+  - Result: passed.
+- `E:\Soft\Tools\AndroidSDK\build-tools\36.1.0\apksigner.bat verify --print-certs app\build\outputs\apk\release\TVBox-v1.2.8.apk`
+  - Result: passed. Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`.
+- `git diff --check`
+  - Result: passed. Only line-ending warnings were reported.
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.2.8.apk`
+  - Size: `4721013`
+  - SHA-256: `598bef37d28f16898991395ea2a89e092c6320908f82ca381852d4e1403ab030`
+- GitHub Release upload will be performed after commit/tag so release assets match committed source.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-06-28 20:56 - v1.2.7
 
 ## File Changes

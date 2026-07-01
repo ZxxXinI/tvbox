@@ -13,10 +13,10 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - Android TV 适配：支持 `LEANBACK_LAUNCHER`，可在电视桌面启动，同时保留普通 Android 启动入口。
 - 遥控器友好：方向键、确认键、返回键、菜单键和数字键均有对应交互。
 - 首页影视列表：支持一级/二级分类、分页加载、焦点高亮和遥控快捷键。
-- 首页资源切换：设置页可选择量子、如意、360 等资源站作为首页、搜索和 AI 找片默认数据源。
+- 视频接口管理：设置页可选择量子、如意、360 等内置资源站，也可手机扫码添加 MacCms 自定义接口作为首页、搜索和 AI 找片默认数据源。
 - 搜索与详情：支持关键词搜索、影片详情、简介、封面、播放源和选集。
 - AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，可在设置页用手机扫码配置大模型、模型名和 API Key。
-- 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换和自动跳下一集。
+- 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换、自动跳下一集和手机播放手势。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间，可从历史继续播放。
 - 电视直播：从 IPTV 文本接口加载频道，支持左右切台、频道列表、数字选台。
 - OTA 更新：启动后检查 GitHub Release 的 `update.json`，发现新版本后可下载 APK 并跳转系统安装器。
@@ -73,7 +73,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.7.apk
+adb install -r TVBox-v1.2.8.apk
 ```
 
 ## OTA 更新机制
@@ -88,15 +88,15 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 
 ```json
 {
-  "versionCode": 10207,
-  "versionName": "1.2.7",
-  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.7/TVBox-v1.2.7.apk",
-  "apkSha256": "f1fb17d27f90ecd853382d103a004e03a44395d26d6c8e18d0ab6000763fb088",
-  "apkSize": 4671861,
+  "versionCode": 10208,
+  "versionName": "1.2.8",
+  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.8/TVBox-v1.2.8.apk",
+  "apkSha256": "598bef37d28f16898991395ea2a89e092c6320908f82ca381852d4e1403ab030",
+  "apkSize": 4721013,
   "force": false,
   "changelog": [
-    "新增设置页大模型扫码配置，手机填写模型名称和 API Key 后自动同步到电视。",
-    "支持 Agnes、DeepSeek、SiliconFlow、Qwen，未填写 API Key 时继续使用 APK 内置配置。"
+    "新增设置页自定义视频接口，支持手机扫码添加 MacCms 接口。",
+    "优化手机播放手势：双击左侧快退，中间播放/暂停，右侧快进。"
   ]
 }
 ```
@@ -132,6 +132,13 @@ TVBOX_AI_API_KEY=你的测试密钥
 ```
 
 `TVBOX_AI_API_KEY` 可以放在 `local.properties`、Gradle 属性或环境变量中。`local.properties` 已被 `.gitignore` 忽略，不会上传到仓库。
+
+视频接口配置：
+
+- 内置视频接口保留在 APK 中，不会被用户配置覆盖。
+- 设置页“视频接口”可选择当前首页、搜索和 AI 找片使用的数据源。
+- 点击“添加接口”后，电视弹出二维码；手机扫码填写接口名称和 MacCms 地址，确认后自动同步到电视。
+- MacCms 地址示例：`https://example.com/api.php/provide/vod`
 
 运行测试：
 
@@ -181,8 +188,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10207
-versionName = "1.2.7"
+versionCode = 10208
+versionName = "1.2.8"
 ```
 
 2. 构建 release APK：
@@ -198,16 +205,16 @@ versionName = "1.2.7"
 
 ```powershell
 git add CHANGELOG.md app\build.gradle.kts app\src
-git commit -m "Release v1.2.7"
-git tag -a v1.2.7 -m "TVBox v1.2.7"
+git commit -m "Release v1.2.8"
+git tag -a v1.2.8 -m "TVBox v1.2.8"
 git push origin agent
-git push origin v1.2.7
+git push origin v1.2.8
 ```
 
 5. 在 GitHub Release 上传：
 
 ```text
-TVBox-v1.2.7.apk
+TVBox-v1.2.8.apk
 update.json
 ```
 

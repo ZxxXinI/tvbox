@@ -1,5 +1,62 @@
 # Settings - 2026-06-28
 
+## 2026-07-01 09:02 - 自定义视频接口配置
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`
+  - Reason: 用户希望在设置页添加自己的 MacCms 视频 API 接口，并且内置接口保持不变。
+  - Purpose: 新增 `CustomVideoApiLine` 和 `customVideoApiLines` 设置项，用于保存用户自定义接口。
+
+- File path: `app/src/main/java/com/tvbox/app/data/AppSettingsRepository.kt`
+  - Reason: 自定义视频接口需要跨启动保存。
+  - Purpose: 使用 SharedPreferences + JSON 持久化用户添加的接口列表，读取失败时回退为空列表。
+
+- File path: `app/src/main/java/com/tvbox/app/data/MovieRepository.kt`
+  - Reason: 首页、搜索、详情和 AI 找片需要能查询用户新增的 MacCms 接口。
+  - Purpose: 保留内置 `ApiLines.defaults`，运行时追加设置页读取到的自定义接口。
+
+- File path: `app/src/main/java/com/tvbox/app/data/VideoApiConfigServer.kt`
+  - Reason: 电视端输入长 URL 不方便，需要像大模型配置一样用手机填写。
+  - Purpose: 新增临时 HTTP 配置服务，弹窗打开时启动，手机提交接口名称和地址后同步回电视。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 设置页二维码弹窗需要管理服务生命周期，并在保存后更新当前可选视频接口。
+  - Purpose: 新增视频接口配置弹窗状态、扫码服务启动/停止、自定义接口保存和线路刷新逻辑。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 设置页需要展示视频接口管理入口。
+  - Purpose: 将“首页资源”升级为“视频接口”，保留线路下拉选择并新增“添加接口”二维码弹窗。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次开发后记录做了什么。
+  - Purpose: 在主时间线加入自定义视频接口配置索引。
+
+- File path: `devLog/settings.md`
+  - Reason: 本次改动属于设置页和数据源管理。
+  - Purpose: 记录文件、原因、目的和验证结果。
+
+## Verification
+
+- `.\gradlew.bat compileDebugKotlin --console=plain`
+  - Result: passed.
+- `.\gradlew.bat testDebugUnitTest assembleDebug --console=plain`
+  - Result: passed.
+- `git diff --check`
+  - Result: passed. Only line-ending warnings were reported.
+
+## Bug Record
+
+- Time: 2026-07-01 09:02
+- Symptoms: 无新增缺陷；本次为设置页功能增强。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/settings.md`
+
 ## 2026-06-28 19:10 - AI 手机扫码配置
 
 ## File Changes

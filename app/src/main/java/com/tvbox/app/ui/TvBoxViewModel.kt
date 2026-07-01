@@ -15,12 +15,14 @@ import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.data.PlaybackHealthRepository
+import com.tvbox.app.data.VideoApiConfigServer
 import com.tvbox.app.domain.AiRecommendationItem
 import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppUpdate
 import com.tvbox.app.domain.Category
+import com.tvbox.app.domain.CustomVideoApiLine
 import com.tvbox.app.domain.LiveChannel
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.PlaybackAgent
@@ -29,6 +31,7 @@ import com.tvbox.app.domain.PlaybackHealthSnapshot
 import com.tvbox.app.domain.PlaybackIssueType
 import com.tvbox.app.domain.WatchHistoryItem
 import com.tvbox.app.domain.playbackHealthKey
+import com.tvbox.app.domain.toApiLines
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,6 +108,10 @@ data class TvBoxUiState(
     val aiConfigServerUrl: String? = null,
     val aiConfigServerError: String? = null,
     val aiConfigSavedMessage: String? = null,
+    val videoApiConfigDialogVisible: Boolean = false,
+    val videoApiConfigServerUrl: String? = null,
+    val videoApiConfigServerError: String? = null,
+    val videoApiConfigSavedMessage: String? = null,
 ) {
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
@@ -134,6 +141,7 @@ class TvBoxViewModel(
     private var updateJob: Job? = null
     private var updateDownloadJob: Job? = null
     private var aiConfigServer: AiConfigServer? = null
+    private var videoApiConfigServer: VideoApiConfigServer? = null
     private val playbackAgent = PlaybackAgent()
 
     init {
@@ -147,14 +155,17 @@ class TvBoxViewModel(
         viewModelScope.launch {
             val settings = runCatching { appSettingsRepository.getSettings() }
                 .getOrDefault(AppSettings())
+            repository.updateCustomApiLines(settings.customVideoApiLines.toApiLines())
+            val availableApiLines = repository.apiLines
             val selectedApiLineId = settings.homeApiLineId
-                .takeIf { apiLineId -> repository.apiLines.any { it.id == apiLineId } }
+                .takeIf { apiLineId -> availableApiLines.any { it.id == apiLineId } }
                 ?: defaultApiLineId
             val normalizedSettings = settings.copy(homeApiLineId = selectedApiLineId)
             val playbackHealth = runCatching { playbackHealthRepository.getSnapshot() }
                 .getOrDefault(PlaybackHealthSnapshot())
             _state.update {
                 it.copy(
+                    apiLines = availableApiLines,
                     selectedApiLineId = selectedApiLineId,
                     appSettings = normalizedSettings,
                     playbackHealth = playbackHealth,
@@ -458,6 +469,48 @@ class TvBoxViewModel(
         closeAiConfigDialog(stopOnly = false)
     }
 
+    fun openVideoApiConfigDialog() {
+        closeVideoApiConfigDialog(stopOnly = true)
+        val server = VideoApiConfigServer(viewModelScope) { submittedLineName, submittedApiUrl ->
+            applyCustomVideoApiFromPhone(
+                lineName = submittedLineName,
+                apiUrl = submittedApiUrl,
+            )
+        }
+        videoApiConfigServer = server
+        _state.update {
+            it.copy(
+                videoApiConfigDialogVisible = true,
+                videoApiConfigServerUrl = null,
+                videoApiConfigServerError = null,
+                videoApiConfigSavedMessage = null,
+            )
+        }
+        viewModelScope.launch {
+            runCatching { server.start() }
+                .onSuccess { session ->
+                    _state.update {
+                        it.copy(
+                            videoApiConfigServerUrl = session.url,
+                            videoApiConfigServerError = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            videoApiConfigServerUrl = null,
+                            videoApiConfigServerError = "启动视频接口配置服务失败：${error.userMessage()}",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun closeVideoApiConfigDialog() {
+        closeVideoApiConfigDialog(stopOnly = false)
+    }
+
     private fun closeAiConfigDialog(stopOnly: Boolean) {
         aiConfigServer?.stop()
         aiConfigServer = null
@@ -468,6 +521,21 @@ class TvBoxViewModel(
                     aiConfigServerUrl = null,
                     aiConfigServerError = null,
                     aiConfigSavedMessage = null,
+                )
+            }
+        }
+    }
+
+    private fun closeVideoApiConfigDialog(stopOnly: Boolean) {
+        videoApiConfigServer?.stop()
+        videoApiConfigServer = null
+        if (!stopOnly) {
+            _state.update {
+                it.copy(
+                    videoApiConfigDialogVisible = false,
+                    videoApiConfigServerUrl = null,
+                    videoApiConfigServerError = null,
+                    videoApiConfigSavedMessage = null,
                 )
             }
         }
@@ -486,6 +554,50 @@ class TvBoxViewModel(
                 aiConfigSavedMessage = "已收到手机配置，模型和 API Key 已保存。",
             )
         }
+    }
+
+    private fun applyCustomVideoApiFromPhone(lineName: String, apiUrl: String): String? {
+        val normalizedName = lineName.trim()
+        val normalizedUrl = normalizeMacCmsApiUrl(apiUrl)
+            ?: return "请输入 http:// 或 https:// 开头的 MacCms 接口地址。"
+        if (normalizedName.isBlank()) {
+            return "接口名称需要填写。"
+        }
+
+        val customLine = CustomVideoApiLine(
+            id = customVideoApiLineId(normalizedUrl),
+            name = normalizedName,
+            baseUrl = normalizedUrl,
+        )
+        val currentSettings = _state.value.appSettings
+        val customLines = (currentSettings.customVideoApiLines
+            .filterNot { it.id == customLine.id || it.baseUrl.equals(customLine.baseUrl, ignoreCase = true) } +
+            customLine)
+        val settings = currentSettings.copy(
+            homeApiLineId = customLine.id,
+            customVideoApiLines = customLines,
+        )
+        saveSettings(settings)
+        repository.updateCustomApiLines(settings.customVideoApiLines.toApiLines())
+        _state.update {
+            it.copy(
+                apiLines = repository.apiLines,
+                selectedApiLineId = customLine.id,
+                appSettings = settings,
+                selectedParentCategoryId = null,
+                selectedCategoryId = null,
+                categories = emptyList(),
+                movies = emptyList(),
+                page = 1,
+                pageCount = 1,
+                total = 0,
+                homeError = null,
+                videoApiConfigServerError = null,
+                videoApiConfigSavedMessage = "已添加视频接口：${customLine.name}",
+            )
+        }
+        refreshHome()
+        return null
     }
 
     fun updateSearchQuery(query: String) {
@@ -1242,6 +1354,8 @@ class TvBoxViewModel(
     override fun onCleared() {
         aiConfigServer?.stop()
         aiConfigServer = null
+        videoApiConfigServer?.stop()
+        videoApiConfigServer = null
         super.onCleared()
     }
 }
@@ -1285,6 +1399,22 @@ private fun AppSettings.userAiRequestConfigOrNull(): AiRequestConfig? {
 
 private fun String.normalizeAiMatchText(): String {
     return lowercase().filter { it.isLetterOrDigit() }
+}
+
+private fun normalizeMacCmsApiUrl(rawUrl: String): String? {
+    val trimmed = rawUrl.trim()
+    if (!trimmed.startsWith("http://", ignoreCase = true) &&
+        !trimmed.startsWith("https://", ignoreCase = true)
+    ) {
+        return null
+    }
+    val withoutQuery = trimmed.substringBefore('?').substringBefore('#').trimEnd('/')
+    if (withoutQuery.length <= "http://".length) return null
+    return "$withoutQuery/"
+}
+
+private fun customVideoApiLineId(baseUrl: String): String {
+    return "custom_" + Integer.toUnsignedString(baseUrl.lowercase().hashCode(), 36)
 }
 
 private const val DEFAULT_ALL_CATEGORY_TYPE_ID = 13
