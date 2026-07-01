@@ -39,6 +39,38 @@
 - Master doc: `devLog/README.md`
 - Branch doc: `devLog/release.md`
 
+## 2026-07-01 18:32 - 校正 Gitee v1.2.8 下载地址
+
+## File Changes
+
+- File path: `update.json`
+  - Reason: Gitee Release tag 已改为 `v1.2.8`，OTA APK 地址需要与正式版本号保持一致。
+  - Purpose: 将当前 OTA APK 地址设置为 `/releases/download/v1.2.8/TVBox-v1.2.8.apk`。
+- File path: `devLog/release.md`
+  - Reason: 发布流程需要记录本次 Gitee 链路验证结果。
+  - Purpose: 记录 Gitee raw 清单和 APK 下载地址验证结果。
+
+## Bug Record
+
+- Time: 2026-07-01 18:32
+- Symptoms: Gitee Release tag 已从 `1.28` 调整为 `v1.2.8`。
+- Attempted fix: 将 `update.json` 中的 `apkUrl` 改回正式版本 tag `v1.2.8`。
+- Temporary solution: 后续保持 Gitee Release tag 与应用版本一致。
+
+## Verification
+
+- `Invoke-WebRequest -Uri "https://gitee.com/zhen-xin/tv-box/raw/agent/update.json"`
+  - Result: HTTP 200.
+- `Invoke-WebRequest -Uri "https://gitee.com/zhen-xin/tv-box/releases/download/v1.2.8/TVBox-v1.2.8.apk" -Method Head`
+  - Result: HTTP 200.
+- `git ls-remote gitee "refs/tags/*"`
+  - Result: `v1.2.8` tag exists on Gitee.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-07-01 18:03 - 撤回 S3 发布流程
 
 ## File Changes
