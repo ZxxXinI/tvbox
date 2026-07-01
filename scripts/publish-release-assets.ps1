@@ -11,6 +11,7 @@ param(
     [string]$GithubRepo = "ZxxXinI/tvbox",
     [string]$S3Prefix = "tvbox/releases",
     [string]$S3Endpoint = "",
+    [string]$S3Region = "",
     [string]$S3Bucket = "",
     [string]$S3PublicBaseUrl = "",
     [string[]]$Changelog = @(),
@@ -88,6 +89,122 @@ function Read-ChangelogFromReleaseNotes {
     return $items.ToArray()
 }
 
+function ConvertTo-HexString {
+    param([byte[]]$Bytes)
+    return (($Bytes | ForEach-Object { $_.ToString("x2") }) -join "")
+}
+
+function Get-Sha256String {
+    param([string]$Value)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+        return ConvertTo-HexString $sha256.ComputeHash($bytes)
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
+function Get-HmacSha256Bytes {
+    param(
+        [byte[]]$Key,
+        [string]$Value
+    )
+    $hmac = [System.Security.Cryptography.HMACSHA256]::new($Key)
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
+        return $hmac.ComputeHash($bytes)
+    } finally {
+        $hmac.Dispose()
+    }
+}
+
+function ConvertTo-S3PathSegment {
+    param([string]$Value)
+    return [System.Uri]::EscapeDataString($Value).Replace("%2F", "/")
+}
+
+function Invoke-S3PutObject {
+    param(
+        [string]$Endpoint,
+        [string]$Region,
+        [string]$Bucket,
+        [string]$Key,
+        [string]$FilePath,
+        [string]$ContentType,
+        [string]$AccessKey,
+        [string]$SecretKey,
+        [bool]$UsePublicReadAcl
+    )
+
+    $baseEndpoint = $Endpoint.TrimEnd("/")
+    $encodedBucket = ConvertTo-S3PathSegment $Bucket
+    $encodedKey = ($Key -split "/" | ForEach-Object { ConvertTo-S3PathSegment $_ }) -join "/"
+    $uri = [System.Uri]"$baseEndpoint/$encodedBucket/$encodedKey"
+    $canonicalUri = "/$encodedBucket/$encodedKey"
+    $payloadHash = (Get-FileHash -LiteralPath $FilePath -Algorithm SHA256).Hash.ToLower()
+    $now = (Get-Date).ToUniversalTime()
+    $amzDate = $now.ToString("yyyyMMddTHHmmssZ", [System.Globalization.CultureInfo]::InvariantCulture)
+    $dateStamp = $now.ToString("yyyyMMdd", [System.Globalization.CultureInfo]::InvariantCulture)
+
+    $headers = @{
+        "content-type" = $ContentType
+        "host" = $uri.Authority.ToLowerInvariant()
+        "x-amz-content-sha256" = $payloadHash
+        "x-amz-date" = $amzDate
+    }
+    if ($UsePublicReadAcl) {
+        $headers["x-amz-acl"] = "public-read"
+    }
+
+    $sortedHeaderNames = $headers.Keys | Sort-Object
+    $canonicalHeaders = ""
+    foreach ($headerName in $sortedHeaderNames) {
+        $canonicalHeaders += "${headerName}:$($headers[$headerName])`n"
+    }
+    $signedHeaders = ($sortedHeaderNames -join ";")
+    $canonicalRequest = "PUT`n$canonicalUri`n`n$canonicalHeaders`n$signedHeaders`n$payloadHash"
+    $canonicalRequestHash = Get-Sha256String $canonicalRequest
+
+    $algorithm = "AWS4-HMAC-SHA256"
+    $credentialScope = "$dateStamp/$Region/s3/aws4_request"
+    $stringToSign = "$algorithm`n$amzDate`n$credentialScope`n$canonicalRequestHash"
+
+    $dateKey = Get-HmacSha256Bytes ([System.Text.Encoding]::UTF8.GetBytes("AWS4$SecretKey")) $dateStamp
+    $regionKey = Get-HmacSha256Bytes $dateKey $Region
+    $serviceKey = Get-HmacSha256Bytes $regionKey "s3"
+    $signingKey = Get-HmacSha256Bytes $serviceKey "aws4_request"
+    $signature = ConvertTo-HexString (Get-HmacSha256Bytes $signingKey $stringToSign)
+    $authorization = "$algorithm Credential=$AccessKey/$credentialScope, SignedHeaders=$signedHeaders, Signature=$signature"
+
+    $client = [System.Net.Http.HttpClient]::new()
+    $stream = [System.IO.File]::OpenRead($FilePath)
+    try {
+        $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Put, $uri)
+        $content = [System.Net.Http.StreamContent]::new($stream)
+        $content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse($ContentType)
+        $request.Content = $content
+        $request.Headers.Host = $headers["host"]
+        $request.Headers.TryAddWithoutValidation("x-amz-content-sha256", $headers["x-amz-content-sha256"]) | Out-Null
+        $request.Headers.TryAddWithoutValidation("x-amz-date", $headers["x-amz-date"]) | Out-Null
+        if ($UsePublicReadAcl) {
+            $request.Headers.TryAddWithoutValidation("x-amz-acl", $headers["x-amz-acl"]) | Out-Null
+        }
+        $request.Headers.TryAddWithoutValidation("Authorization", $authorization) | Out-Null
+
+        $response = $client.SendAsync($request).GetAwaiter().GetResult()
+        $responseBody = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        if (-not $response.IsSuccessStatusCode) {
+            throw "S3 upload failed: HTTP $([int]$response.StatusCode) $($response.ReasonPhrase). $responseBody"
+        }
+    } finally {
+        if ($request) { $request.Dispose() }
+        if ($content) { $content.Dispose() }
+        $stream.Dispose()
+        $client.Dispose()
+    }
+}
+
 $rootDir = Get-RepoRoot
 $localProperties = Read-LocalProperties
 
@@ -118,6 +235,12 @@ if ([string]::IsNullOrWhiteSpace($S3Bucket)) {
 }
 if ([string]::IsNullOrWhiteSpace($bucket)) {
     throw "Missing TVBOX_S3_BUCKET. Set it in local.properties or environment variables."
+}
+
+if ([string]::IsNullOrWhiteSpace($S3Region)) {
+    $region = Get-ConfigValue $localProperties "TVBOX_S3_REGION" "us-east-1"
+} else {
+    $region = $S3Region
 }
 
 if ([string]::IsNullOrWhiteSpace($S3PublicBaseUrl)) {
@@ -170,31 +293,24 @@ if ($DryRun) {
 }
 
 if (-not $SkipS3Upload) {
-    Require-Command "aws"
     $accessKey = Get-ConfigValue $localProperties "TVBOX_S3_ACCESS_KEY_ID" (Get-ConfigValue $localProperties "AWS_ACCESS_KEY_ID")
     $secretKey = Get-ConfigValue $localProperties "TVBOX_S3_SECRET_ACCESS_KEY" (Get-ConfigValue $localProperties "AWS_SECRET_ACCESS_KEY")
     if ([string]::IsNullOrWhiteSpace($accessKey) -or [string]::IsNullOrWhiteSpace($secretKey)) {
         throw "Missing S3 credentials. Set TVBOX_S3_ACCESS_KEY_ID and TVBOX_S3_SECRET_ACCESS_KEY in local.properties or environment variables."
     }
 
-    $env:AWS_ACCESS_KEY_ID = $accessKey
-    $env:AWS_SECRET_ACCESS_KEY = $secretKey
-    if ([string]::IsNullOrWhiteSpace($env:AWS_DEFAULT_REGION)) {
-        $env:AWS_DEFAULT_REGION = "us-east-1"
-    }
+    Invoke-S3PutObject `
+        -Endpoint $endpoint `
+        -Region $region `
+        -Bucket $bucket `
+        -Key $s3Key `
+        -FilePath $apkFile.FullName `
+        -ContentType "application/vnd.android.package-archive" `
+        -AccessKey $accessKey `
+        -SecretKey $secretKey `
+        -UsePublicReadAcl (-not $NoAcl)
 
-    $putArgs = @(
-        "s3api", "put-object",
-        "--endpoint-url", $endpoint,
-        "--bucket", $bucket,
-        "--key", $s3Key,
-        "--body", $apkFile.FullName,
-        "--content-type", "application/vnd.android.package-archive"
-    )
-    if (-not $NoAcl) {
-        $putArgs += @("--acl", "public-read")
-    }
-    & aws @putArgs
+    Write-Host "S3 upload completed."
 }
 
 if (-not $SkipGithubUpload) {

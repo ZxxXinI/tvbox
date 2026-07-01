@@ -6,10 +6,10 @@
 
 - File path: `scripts/publish-release-assets.ps1`
   - Reason: GitHub Release 下载 APK 在电视盒子上速度不稳定，即使代理也可能很慢。
-  - Purpose: 新增发布脚本，生成指向 S3 的 `update.json`，并支持把 APK 上传到 S3、把 APK 和 `update.json` 上传到 GitHub Release。
+  - Purpose: 新增发布脚本，生成指向 S3 的 `update.json`，并内置 AWS Signature V4 上传能力，支持把 APK 上传到 S3、把 APK 和 `update.json` 上传到 GitHub Release。
 - File path: `README.md`
   - Reason: 发布链路从单纯 GitHub 下载改为 GitHub 获取清单、S3 下载 APK。
-  - Purpose: 说明 S3 本地配置、`update.json` 示例、DryRun 和正式上传命令。
+  - Purpose: 说明 S3 本地配置、`update.json` 示例、DryRun、正式上传命令，以及无需安装 AWS CLI。
 - File path: `devLog/README.md`
   - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
   - Purpose: 在主时间线加入 S3 发布流程索引。
