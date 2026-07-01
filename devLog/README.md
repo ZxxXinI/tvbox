@@ -2,6 +2,14 @@
 
 ## Timeline
 
+### 2026-07-01 10:40 - S3 发布流程
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 新增发布资产脚本，发版时同时准备 GitHub Release 和 S3 下载文件。
+  - OTA 仍从 GitHub Release 获取 `update.json`，但 `apkUrl` 指向 S3，减少电视盒子下载 APK 的等待时间。
+  - S3 凭据只从本机配置或环境变量读取，不写入仓库。
+
 ### 2026-07-01 09:36 - 发布 v1.2.8
 
 - Branch doc: `devLog/release.md`

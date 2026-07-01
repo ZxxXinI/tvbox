@@ -1,5 +1,39 @@
 # Release - 2026-06-25
 
+## 2026-07-01 10:40 - S3 发布流程
+
+## File Changes
+
+- File path: `scripts/publish-release-assets.ps1`
+  - Reason: GitHub Release 下载 APK 在电视盒子上速度不稳定，即使代理也可能很慢。
+  - Purpose: 新增发布脚本，生成指向 S3 的 `update.json`，并支持把 APK 上传到 S3、把 APK 和 `update.json` 上传到 GitHub Release。
+- File path: `README.md`
+  - Reason: 发布链路从单纯 GitHub 下载改为 GitHub 获取清单、S3 下载 APK。
+  - Purpose: 说明 S3 本地配置、`update.json` 示例、DryRun 和正式上传命令。
+- File path: `devLog/README.md`
+  - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
+  - Purpose: 在主时间线加入 S3 发布流程索引。
+- File path: `devLog/release.md`
+  - Reason: 发布流程是独立维护主题，需要记录脚本、文档和验证结果。
+  - Purpose: 记录 S3 发布流程涉及的文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-07-01 10:40
+- Symptoms: 无新增缺陷；本次为发布链路优化。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208 -S3Bucket c68393c9e4fe40e88ec2a07527326176 -DryRun`
+  - Result: passed. Generated S3 `apkUrl` and local `update.json`; upload was intentionally skipped.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-07-01 09:36 - v1.2.8
 
 ## File Changes

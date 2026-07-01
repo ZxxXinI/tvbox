@@ -90,7 +90,7 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 {
   "versionCode": 10208,
   "versionName": "1.2.8",
-  "apkUrl": "https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/download/v1.2.8/TVBox-v1.2.8.apk",
+  "apkUrl": "https://s3.cstcloud.cn/c68393c9e4fe40e88ec2a07527326176/tvbox/releases/v1.2.8/TVBox-v1.2.8.apk",
   "apkSha256": "598bef37d28f16898991395ea2a89e092c6320908f82ca381852d4e1403ab030",
   "apkSize": 4721013,
   "force": false,
@@ -104,10 +104,11 @@ https://ghfast.top/https://github.com/ZxxXinI/tvbox/releases/latest/download/upd
 说明：
 
 - `versionCode` 必须大于当前应用版本，才会提示更新。
-- `apkUrl` 是 APK 下载地址，目前使用 `https://ghfast.top/` 代理 GitHub 下载。
+- `apkUrl` 是 APK 下载地址，目前指向 S3 存储，避免电视盒子从 GitHub 下载过慢。
 - `apkSha256` 用于下载完成后的完整性校验。
 - `force` 预留强制更新能力，当前普通更新可选择稍后再说。
-- GitHub Release 需要同时上传 APK 和 `update.json` 两个附件。
+- GitHub Release 仍然需要上传 APK 和 `update.json` 两个附件；`update.json` 由应用从 GitHub 获取，APK 作为备份下载文件保留。
+- S3 需要上传同一个 APK，`update.json` 中的 `apkUrl` 指向 S3 文件。
 - `git push` 只会上传代码和 tag，不会自动上传 Release 附件。
 
 ## 本地构建
@@ -132,6 +133,18 @@ TVBOX_AI_API_KEY=你的测试密钥
 ```
 
 `TVBOX_AI_API_KEY` 可以放在 `local.properties`、Gradle 属性或环境变量中。`local.properties` 已被 `.gitignore` 忽略，不会上传到仓库。
+
+发布到 S3 的本地配置也可以放在 `local.properties` 或环境变量中：
+
+```properties
+TVBOX_S3_ENDPOINT=https://s3.cstcloud.cn
+TVBOX_S3_BUCKET=c68393c9e4fe40e88ec2a07527326176
+TVBOX_S3_PUBLIC_BASE_URL=https://s3.cstcloud.cn/c68393c9e4fe40e88ec2a07527326176
+TVBOX_S3_ACCESS_KEY_ID=你的 AccessKey ID
+TVBOX_S3_SECRET_ACCESS_KEY=你的 AccessKey Secret
+```
+
+> `TVBOX_S3_ACCESS_KEY_ID` 和 `TVBOX_S3_SECRET_ACCESS_KEY` 只放本机，不要提交到仓库。
 
 视频接口配置：
 
@@ -199,24 +212,32 @@ versionName = "1.2.8"
 .\gradlew.bat assembleRelease --console=plain
 ```
 
-3. 生成 `update.json`，其中 `apkUrl` 指向新版本 Release APK。
-
-4. 提交代码并打 tag：
+3. 提交代码并打 tag：
 
 ```powershell
-git add CHANGELOG.md app\build.gradle.kts app\src
+git add CHANGELOG.md README.md app\build.gradle.kts app\src devLog scripts
 git commit -m "Release v1.2.8"
 git tag -a v1.2.8 -m "TVBox v1.2.8"
 git push origin agent
 git push origin v1.2.8
 ```
 
-5. 在 GitHub Release 上传：
+4. 生成 `update.json` 并上传发布资产。该脚本会把 APK 上传到 S3，把 APK 和 `update.json` 上传到 GitHub Release；`update.json` 中的 `apkUrl` 会指向 S3：
 
-```text
-TVBox-v1.2.8.apk
-update.json
+```powershell
+.\scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208
 ```
+
+如果只是预览生成的 S3 下载地址，不执行上传：
+
+```powershell
+.\scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208 -DryRun
+```
+
+脚本依赖：
+- GitHub 上传需要安装并登录 `gh`。
+- S3 上传需要安装 `aws` CLI，并在本地配置好上面的 S3 凭据。
+- 当前 S3 endpoint 使用 Path-Style 地址：`https://s3.cstcloud.cn/<bucket>/<key>`。
 
 ## 项目结构
 
