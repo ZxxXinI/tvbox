@@ -138,6 +138,7 @@ TVBOX_AI_API_KEY=你的测试密钥
 
 ```properties
 TVBOX_S3_ENDPOINT=https://s3.cstcloud.cn
+TVBOX_S3_REGION=us-east-1
 TVBOX_S3_BUCKET=c68393c9e4fe40e88ec2a07527326176
 TVBOX_S3_PUBLIC_BASE_URL=https://s3.cstcloud.cn/c68393c9e4fe40e88ec2a07527326176
 TVBOX_S3_ACCESS_KEY_ID=你的 AccessKey ID
@@ -236,7 +237,8 @@ git push origin v1.2.8
 
 脚本依赖：
 - GitHub 上传需要安装并登录 `gh`。
-- S3 上传需要安装 `aws` CLI，并在本地配置好上面的 S3 凭据。
+- S3 上传由脚本内置的 AWS Signature V4 请求完成，不需要安装 `aws` CLI。
+- S3 凭据需要放在本机 `local.properties` 或环境变量中，不要提交到仓库。
 - 当前 S3 endpoint 使用 Path-Style 地址：`https://s3.cstcloud.cn/<bucket>/<key>`。
 
 ## 项目结构
