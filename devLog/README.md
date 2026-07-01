@@ -2,6 +2,22 @@
 
 ## Timeline
 
+### 2026-07-01 18:09 - 接入 Gitee OTA
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 新增 Gitee 仓库作为国内 OTA 清单入口。
+  - 应用更新检测地址切换为 Gitee raw 的 `update.json`。
+  - 根目录新增 `update.json`，后续随 `agent` 分支同步到 Gitee。
+
+### 2026-07-01 18:03 - 撤回 S3 发布流程
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - S3 存储上传不可用，当前不再维护 S3 发布脚本。
+  - 删除 S3 发布脚本，README 恢复为 GitHub Release 上传 APK 和 `update.json` 的流程。
+  - 后续可以考虑使用 Gitee 作为 OTA 清单和 APK 下载地址。
+
 ### 2026-07-01 10:40 - S3 发布流程
 
 - Branch doc: `devLog/release.md`

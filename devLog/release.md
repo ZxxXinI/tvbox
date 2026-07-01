@@ -1,5 +1,73 @@
 # Release - 2026-06-25
 
+## 2026-07-01 18:09 - 接入 Gitee OTA
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/data/AppUpdateRepository.kt`
+  - Reason: GitHub 直连和代理下载在电视盒子上速度不稳定，需要切换到国内可访问的 OTA 清单地址。
+  - Purpose: 将应用更新检测地址改为 `https://gitee.com/zhen-xin/tv-box/raw/agent/update.json`。
+- File path: `update.json`
+  - Reason: OTA 清单需要随 Gitee 仓库同步，避免依赖 GitHub Release 的 `latest/download` 地址。
+  - Purpose: 新增根目录更新清单，当前指向 Gitee Release 的 `TVBox-v1.2.8.apk`。
+- File path: `README.md`
+  - Reason: 发布流程需要说明 GitHub 与 Gitee 双远端、Gitee OTA 清单和 Gitee Release APK。
+  - Purpose: 更新安装、OTA 和发布命令说明。
+- File path: `devLog/README.md`
+  - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
+  - Purpose: 在主时间线加入 Gitee OTA 接入索引。
+- File path: `devLog/release.md`
+  - Reason: 发布流程是独立维护主题，需要记录 OTA 地址切换原因。
+  - Purpose: 记录 Gitee OTA 接入涉及的文件、原因和后续发布方式。
+
+## Bug Record
+
+- Time: 2026-07-01 18:09
+- Symptoms: GitHub 下载慢，S3 存储不可用。
+- Attempted fix: 改用 Gitee raw 承载 `update.json`，Gitee Release 承载 APK。
+- Temporary solution: GitHub Release 继续作为备份发布渠道。
+
+## Verification
+
+- `Get-Content -Raw -Encoding UTF8 update.json | ConvertFrom-Json`
+  - Result: passed. Root `update.json` is valid JSON.
+- `.\gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
+## 2026-07-01 18:03 - 撤回 S3 发布流程
+
+## File Changes
+
+- File path: `scripts/publish-release-assets.ps1`
+  - Reason: S3 存储端上传不可用，继续维护 S3 上传脚本会增加发布复杂度。
+  - Purpose: 删除 S3 发布脚本，避免后续发版误用不可用链路。
+- File path: `README.md`
+  - Reason: README 当前仍描述 S3 下载 APK 的流程，但实际链路不可用。
+  - Purpose: 恢复为 GitHub Release 上传 APK 和 `update.json` 的说明。
+- File path: `devLog/README.md`
+  - Reason: 用户要求开发记录放在 `devLog` 文件夹下。
+  - Purpose: 在主时间线加入撤回 S3 发布流程索引。
+- File path: `devLog/release.md`
+  - Reason: 发布流程是独立维护主题，需要记录方案撤回原因。
+  - Purpose: 记录 S3 发布脚本删除、README 恢复和后续 Gitee 方向。
+
+## Bug Record
+
+- Time: 2026-07-01 18:03
+- Symptoms: S3 上传不可用，V4 鉴权返回 401，V2 尝试返回服务端 500。
+- Attempted fix: 删除当前 S3 发布脚本和 README 中的 S3 发布说明。
+- Temporary solution: 继续使用 GitHub Release；后续可切换到 Gitee 承载 OTA 清单和 APK。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-07-01 10:40 - S3 发布流程
 
 ## File Changes
@@ -28,6 +96,10 @@
 
 - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208 -S3Bucket c68393c9e4fe40e88ec2a07527326176 -DryRun`
   - Result: passed. Generated S3 `apkUrl` and local `update.json`; upload was intentionally skipped.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208`
+  - Result: first run failed before upload because Windows PowerShell had not loaded `System.Net.Http`; script now loads the assembly explicitly before creating `HttpClient`.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-release-assets.ps1 -VersionName 1.2.8 -VersionCode 10208 -NoAcl`
+  - Result: upload reached S3 but the connection failed while streaming content; script now sends a byte array body with explicit `Content-Length`.
 
 ## Navigation
 
