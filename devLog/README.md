@@ -2,6 +2,47 @@
 
 ## Timeline
 
+### 2026-07-01 09:36 - 发布 v1.2.8
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用版本升级到 `1.2.8`，版本码升级到 `10208`。
+  - 将自定义视频接口、手机播放手势和首页滚动体验整理为 v1.2.8 发布记录。
+  - 准备 release APK 与 `update.json`，用于 GitHub Release 和 OTA 更新。
+
+### 2026-07-01 09:11 - 手机双击暂停修正
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 手机播放页双击区域从左右两段改为左/中/右三段。
+  - 双击左侧快退 10 秒，中间播放/暂停，右侧快进 10 秒。
+  - 保留单击显示/隐藏控制栏和左右滑动拖动进度。
+
+### 2026-07-01 09:02 - 自定义视频接口配置
+
+- Branch doc: `devLog/settings.md`
+- Summary:
+  - 设置页“视频接口”保留内置线路不变，并支持扫码添加 MacCms 自定义接口。
+  - 手机页面填写接口名称和 MacCms 地址后，电视端自动保存并追加到线路列表。
+  - 新增接口会作为当前首页资源使用，首页、搜索、详情和 AI 找片都会走同一套线路选择。
+
+### 2026-07-01 08:23 - 手机播放手势完善
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 手机播放页支持单击屏幕显示或隐藏底部控制栏。
+  - 双击屏幕左半区快退 10 秒，双击右半区快进 10 秒。
+  - 左右滑动屏幕按影片时长拖动进度，并显示半透明进度提示。
+  - 保留长按屏幕临时 2 倍速播放，松手后恢复原倍速。
+
+### 2026-06-30 21:57 - 手机播放与首页滚动交互
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 手机播放页支持长按画面临时 2 倍速播放，松手后恢复原倍速。
+  - 首页影片网格向下滑动后隐藏 `TVBox` 标题和影视分类。
+  - 首页影片网格回到顶部后恢复标题和影视分类。
+
 ### 2026-06-28 20:56 - 发布 v1.2.7
 
 - Branch doc: `devLog/release.md`
@@ -176,3 +217,4 @@
 - Settings: `devLog/settings.md`
 - OTA Update: `devLog/ota-update.md`
 - Release: `devLog/release.md`
+- Home / Player UI: `devLog/home-player-ui.md`

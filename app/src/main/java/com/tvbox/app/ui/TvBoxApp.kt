@@ -2,6 +2,7 @@ package com.tvbox.app.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
 import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -37,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -200,6 +203,14 @@ private fun HomeScreen(
     PageSurface { padding ->
         val apiLineName = state.selectedApiLine?.name ?: "资源"
         val allCategoryFocusRequester = remember { FocusRequester() }
+        val movieGridState = rememberLazyGridState()
+        val homeTopContentVisible by remember {
+            derivedStateOf {
+                movieGridState.firstVisibleItemIndex == 0 &&
+                    movieGridState.firstVisibleItemScrollOffset == 0
+            }
+        }
+        val showHomeTopContent = homeTopContentVisible || state.homeLoading || state.homeError != null
         LaunchedEffect(Unit) {
             runCatching { allCategoryFocusRequester.requestFocus() }
         }
@@ -244,23 +255,27 @@ private fun HomeScreen(
                 }
                 .padding(padding),
         ) {
-            AppHeader(
-                title = "TVBox",
-                subtitle = "$apiLineName 数据 / 共 ${state.total} 部影片",
-                onHistory = actions::openHistory,
-                onSearch = actions::openSearch,
-                onAiRecommend = actions::openAiRecommend,
-                onLive = actions::openLive,
-                onSettings = actions::openSettings,
-            )
-            HomeCategoryRows(
-                state = state,
-                onAll = actions::selectAllCategories,
-                onParent = actions::selectParentCategory,
-                onChild = actions::selectChildCategory,
-                allCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
-            )
-            Spacer(modifier = Modifier.height(20.dp))
+            AnimatedVisibility(visible = showHomeTopContent) {
+                Column {
+                    AppHeader(
+                        title = "TVBox",
+                        subtitle = "$apiLineName 数据 / 共 ${state.total} 部影片",
+                        onHistory = actions::openHistory,
+                        onSearch = actions::openSearch,
+                        onAiRecommend = actions::openAiRecommend,
+                        onLive = actions::openLive,
+                        onSettings = actions::openSettings,
+                    )
+                    HomeCategoryRows(
+                        state = state,
+                        onAll = actions::selectAllCategories,
+                        onParent = actions::selectParentCategory,
+                        onChild = actions::selectChildCategory,
+                        allCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            }
             when {
                 state.homeLoading -> LoadingState(
                     text = "正在加载影片",
@@ -273,6 +288,7 @@ private fun HomeScreen(
                 )
                 else -> MovieGrid(
                     state = state,
+                    gridState = movieGridState,
                     onMovieClick = actions::openDetail,
                     onLoadMore = actions::loadNextPage,
                     modifier = Modifier.weight(1f),
@@ -405,6 +421,9 @@ private fun SettingsScreen(
         if (state.aiConfigDialogVisible) {
             AiConfigDialog(state = state, actions = actions)
         }
+        if (state.videoApiConfigDialogVisible) {
+            VideoApiConfigDialog(state = state, actions = actions)
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -437,15 +456,17 @@ private fun SettingsScreen(
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     SettingsSectionTitle(
-                        title = "首页资源",
-                        subtitle = "选择首页、搜索和 AI 找片默认查询的影视资源站。",
+                        title = "视频接口",
+                        subtitle = "内置接口保留不变，可扫码添加 MacCms 自定义视频接口。",
                     )
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     HomeApiLineSetting(
                         apiLines = state.apiLines,
                         selectedApiLine = state.selectedApiLine,
+                        customLineCount = state.appSettings.customVideoApiLines.size,
                         onSelect = actions::updateHomeApiLine,
+                        onOpenConfig = actions::openVideoApiConfigDialog,
                     )
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -645,6 +666,90 @@ private fun AiConfigDialog(
 }
 
 @Composable
+private fun VideoApiConfigDialog(
+    state: TvBoxUiState,
+    actions: TvBoxViewModel,
+) {
+    val configUrl = state.videoApiConfigServerUrl
+    AlertDialog(
+        onDismissRequest = actions::closeVideoApiConfigDialog,
+        title = { Text("手机扫码添加视频接口") },
+        text = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (configUrl == null) {
+                    Box(
+                        modifier = Modifier.size(220.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("正在启动配置服务...")
+                    }
+                } else {
+                    val qrBitmap = remember(configUrl) { createQrBitmap(configUrl, 320) }
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = "视频接口配置二维码",
+                        modifier = Modifier.size(220.dp),
+                    )
+                }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "使用手机扫描二维码",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "或在同一局域网的手机浏览器访问地址：",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = configUrl ?: "正在生成地址...",
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "手机页面里填写接口名称和 MacCms 地址，确认后会自动添加到电视的视频接口列表。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "示例：https://example.com/api.php/provide/vod",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (state.videoApiConfigSavedMessage != null) {
+                        Text(
+                            text = state.videoApiConfigSavedMessage,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    if (state.videoApiConfigServerError != null) {
+                        Text(
+                            text = state.videoApiConfigServerError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            SettingsActionButton(text = "完成", onClick = actions::closeVideoApiConfigDialog)
+        },
+        dismissButton = {
+            TextButton(onClick = actions::closeVideoApiConfigDialog) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
 private fun AiProviderSetting(
     selectedProvider: AiProvider,
     modelName: String,
@@ -755,7 +860,9 @@ private fun SettingsActionButton(
 private fun HomeApiLineSetting(
     apiLines: List<ApiLine>,
     selectedApiLine: ApiLine?,
+    customLineCount: Int,
     onSelect: (String) -> Unit,
+    onOpenConfig: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
@@ -772,30 +879,45 @@ private fun HomeApiLineSetting(
                 text = selectedApiLine?.let { "当前使用：${it.name}" } ?: "请选择首页资源站",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        Box {
-            SettingsActionButton(
-                text = "${selectedApiLine?.name ?: "选择资源"} ▾",
-                enabled = apiLines.isNotEmpty(),
-                onClick = { expanded = true },
+            Text(
+                text = if (customLineCount > 0) {
+                    "已添加 $customLineCount 条自定义 MacCms 接口"
+                } else {
+                    "暂无自定义接口"
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
             )
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                apiLines.forEach { line ->
-                    val selected = line.id == selectedApiLine?.id
-                    DropdownMenuItem(
-                        text = {
-                            Text(if (selected) "已选 · ${line.name}" else line.name)
-                        },
-                        onClick = {
-                            expanded = false
-                            onSelect(line.id)
-                        },
-                    )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                SettingsActionButton(
+                    text = "${selectedApiLine?.name ?: "选择资源"} ▾",
+                    enabled = apiLines.isNotEmpty(),
+                    onClick = { expanded = true },
+                )
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    apiLines.forEach { line ->
+                        val selected = line.id == selectedApiLine?.id
+                        DropdownMenuItem(
+                            text = {
+                                Text(if (selected) "已选 · ${line.name}" else line.name)
+                            },
+                            onClick = {
+                                expanded = false
+                                onSelect(line.id)
+                            },
+                        )
+                    }
                 }
             }
+            SettingsActionButton(
+                text = "添加接口",
+                onClick = onOpenConfig,
+            )
         }
     }
 }
@@ -874,11 +996,11 @@ private fun HomeCategoryRows(
 @Composable
 private fun MovieGrid(
     state: TvBoxUiState,
+    gridState: LazyGridState,
     onMovieClick: (Int) -> Unit,
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val gridState = rememberLazyGridState()
     var loadMoreFocused by remember { mutableStateOf(false) }
     LaunchedEffect(state.selectedParentCategoryId, state.selectedCategoryId) {
         gridState.scrollToItem(0)

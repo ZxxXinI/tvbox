@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 
 interface MovieRepository {
     val apiLines: List<ApiLine>
+    fun updateCustomApiLines(customApiLines: List<ApiLine>)
     suspend fun getCategories(apiLineId: String): List<Category>
     suspend fun getMovies(apiLineId: String, page: Int, typeId: Int? = null, keyword: String? = null): PagedMovies
     suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies
@@ -19,8 +20,19 @@ interface MovieRepository {
 }
 
 class DefaultMovieRepository(
-    override val apiLines: List<ApiLine> = ApiLines.defaults,
+    private val builtInApiLines: List<ApiLine> = ApiLines.defaults,
 ) : MovieRepository {
+    private var customApiLines: List<ApiLine> = emptyList()
+
+    override val apiLines: List<ApiLine>
+        get() = builtInApiLines + customApiLines
+
+    override fun updateCustomApiLines(customApiLines: List<ApiLine>) {
+        this.customApiLines = customApiLines
+            .filter { it.id.isNotBlank() && it.name.isNotBlank() && it.baseUrls.isNotEmpty() }
+            .distinctBy { it.id }
+    }
+
     override suspend fun getCategories(apiLineId: String): List<Category> = withContext(Dispatchers.IO) {
         val line = requireLine(apiLineId)
         withFallback(line) { api ->
