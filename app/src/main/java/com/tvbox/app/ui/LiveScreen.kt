@@ -360,7 +360,7 @@ private fun LiveChannelList(
         modifier = modifier
             .fillMaxHeight()
             .width(360.dp),
-        color = Color(0xCC000000),
+        color = Color(0xE6121212),
         contentColor = Color.White,
     ) {
         LazyColumn(
@@ -424,7 +424,7 @@ private fun LivePrompt(
     ) {
         Text(
             text = message,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )

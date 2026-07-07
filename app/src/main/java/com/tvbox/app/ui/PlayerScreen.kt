@@ -700,7 +700,7 @@ private fun GesturePrompt(
             text = text,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
@@ -722,7 +722,7 @@ private fun PlaybackSpeedPrompt(
             text = "当前倍速 ${formatPlaybackSpeed(playbackSpeed)}",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
@@ -772,7 +772,7 @@ private fun PlayerChrome(
         }
         if (playbackNotice != null) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = playbackNotice, color = MaterialTheme.colorScheme.secondary)
+            Text(text = playbackNotice, color = MaterialTheme.colorScheme.primary)
         }
         Spacer(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

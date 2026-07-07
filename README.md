@@ -1,4 +1,4 @@
-# TVBox
+﻿# TVBox
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
@@ -74,7 +74,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.8.apk
+adb install -r TVBox-v1.2.9.apk
 ```
 
 ## OTA 更新机制
@@ -89,10 +89,10 @@ https://gitee.com/zhen-xin/tv-box/raw/agent/update.json
 
 ```json
 {
-  "versionCode": 10208,
-  "versionName": "1.2.8",
-  "apkUrl": "https://gitee.com/zhen-xin/tv-box/releases/download/v1.2.8/TVBox-v1.2.8.apk",
-  "apkSha256": "598bef37d28f16898991395ea2a89e092c6320908f82ca381852d4e1403ab030",
+  "versionCode": 10209,
+  "versionName": "1.2.9",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.9/TVBox-v1.2.9.apk",
+  "apkSha256": "68f5c2e9b5763b4ab4b245f623932dd45d68e0ff51961c3ddf45548f2e048901",
   "apkSize": 4721013,
   "force": false,
   "changelog": [
@@ -105,7 +105,7 @@ https://gitee.com/zhen-xin/tv-box/raw/agent/update.json
 说明：
 
 - `versionCode` 必须大于当前应用版本，才会提示更新。
-- `apkUrl` 是 APK 下载地址，目前指向 Gitee Release 附件。
+- `apkUrl` 是 APK 下载地址，目前指向 GitHub Release 附件。
 - `apkSha256` 用于下载完成后的完整性校验。
 - `force` 预留强制更新能力，当前普通更新可选择稍后再说。
 - `update.json` 放在仓库根目录，随代码推送到 Gitee 后，应用会通过 raw 地址读取。
@@ -205,12 +205,12 @@ versionName = "1.2.8"
 
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
-git commit -m "Release v1.2.8"
-git tag -a v1.2.8 -m "TVBox v1.2.8"
+git commit -m "Release v1.2.9"
+git tag -a v1.2.9 -m "TVBox v1.2.9"
 git push origin agent
-git push origin v1.2.8
+git push origin v1.2.9
 git push gitee agent
-git push gitee v1.2.8
+git push gitee v1.2.9
 ```
 
 4. 更新根目录 `update.json`，其中 `apkUrl` 指向 Gitee Release APK。
@@ -218,13 +218,13 @@ git push gitee v1.2.8
 5. 在 Gitee Release 上传对应版本 APK：
 
 ```text
-TVBox-v1.2.8.apk
+TVBox-v1.2.9.apk
 ```
 
 6. 可选：在 GitHub Release 上传或覆盖备份附件：
 
 ```powershell
-gh release upload v1.2.8 app\build\outputs\apk\release\TVBox-v1.2.8.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
+gh release upload v1.2.9 app\build\outputs\apk\release\TVBox-v1.2.9.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
 > Gitee Release 目前建议在网页端创建并上传 APK；GitHub Release 可继续使用 `gh` 命令维护备份。
@@ -252,3 +252,5 @@ app/src/main/java/com/tvbox/app
 ## 版本记录
 
 详细变更见 [CHANGELOG.md](CHANGELOG.md)。
+
+

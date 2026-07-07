@@ -90,28 +90,27 @@ private fun HeaderActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier
             .tvFocusScale(
                 shape = shape,
-                focusedBorder = Color.White,
-                idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
             )
             .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .clickable(onClick = onClick)
             .focusable(),
         shape = shape,
-        color = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        color = if (focused) MaterialTheme.colorScheme.primary else Color(0xFF1F1F1F),
         contentColor = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         tonalElevation = if (focused) 8.dp else 0.dp,
         shadowElevation = if (focused) 10.dp else 0.dp,
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1,
@@ -159,15 +158,20 @@ fun CategoryPill(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(50)
+    var focused by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier
             .tvFocusScale(shape = shape)
             .clip(shape)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .clickable(onClick = onClick)
             .focusable(),
         shape = shape,
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        color = when {
+            selected || focused -> MaterialTheme.colorScheme.primary
+            else -> Color(0xFF1F1F1F)
+        },
+        contentColor = if (selected || focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
     ) {
         Text(
             text = label,
@@ -186,11 +190,13 @@ fun MoviePosterCard(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(8.dp)
+    var focused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .tvFocusScale(shape = shape)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .focusable(),
     ) {
@@ -260,11 +266,13 @@ fun HistoryItemCard(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(8.dp)
+    var focused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .tvFocusScale(shape = shape)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .focusable(),
     ) {
