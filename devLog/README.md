@@ -2,6 +2,23 @@
 
 ## Timeline
 
+### 2026-07-08 07:43 - 影院黑 + 活力绿 UI 风格
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 参考 Spotify 式沉浸暗色播放器风格，统一主题为近黑背景、深灰卡片和绿色功能焦点。
+  - 首页、设置页、AI 找片按钮改为深色胶囊按钮，聚焦时变为绿色。
+  - 海报卡片、历史卡片、AI 推荐卡片聚焦时增加深灰高亮和更明显的绿色边框。
+  - 详情页选集、播放器提示、直播提示统一使用绿色作为主要状态信号。
+
+### 2026-07-08 08:00 - 发布 v1.2.9
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用版本升级到 `1.2.9`，版本码升级到 `10209`。
+  - 将“影院黑 + 活力绿焦点”UI 风格整理为 v1.2.9 发布记录。
+  - 准备 release APK、`update.json` 和 GitHub Release 说明。
+
 ### 2026-07-01 18:09 - 接入 Gitee OTA
 
 - Branch doc: `devLog/release.md`

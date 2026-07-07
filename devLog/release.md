@@ -1,5 +1,63 @@
-# Release - 2026-06-25
+﻿# Release - 2026-06-25
 
+## 2026-07-08 08:00 - 发布 v1.2.9
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 需要发布包含新 UI 风格的正式版本。
+  - Purpose: 将版本号升级到 `1.2.9`，版本码升级到 `10209`。
+
+- File path: `CHANGELOG.md`
+  - Reason: 新版本需要记录用户可见更新内容。
+  - Purpose: 增加 v1.2.9 更新说明，聚焦影院黑 + 活力绿 UI 风格。
+
+- File path: `README.md`
+  - Reason: 安装和发布示例需要跟随当前版本。
+  - Purpose: 更新 APK 文件名、版本号、校验值和 Release 命令示例。
+
+- File path: `update.json`
+  - Reason: OTA 需要识别 v1.2.9 并下载对应 APK。
+  - Purpose: 更新版本码、版本名、APK 地址、SHA-256、大小和更新说明。
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.2.9.apk`
+  - Reason: GitHub Release 需要上传正式安装包。
+  - Purpose: 保存 v1.2.9 release APK，供用户下载安装和 OTA 使用。
+
+- File path: `app/build/outputs/apk/release/release-notes-v1.2.9.md`
+  - Reason: GitHub Release 需要清晰的中文版本说明。
+  - Purpose: 记录 v1.2.9 发布内容和验证结果。
+
+- File path: `app/build/outputs/apk/release/update.json`
+  - Reason: GitHub Release 附件需要携带对应版本 OTA 清单。
+  - Purpose: 与根目录 `update.json` 保持一致，便于手动或备份发布。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次修改后记录做了什么、为什么做。
+  - Purpose: 在主时间线登记 v1.2.9 发布。
+
+- File path: `devLog/release.md`
+  - Reason: 本次属于正式发布任务。
+  - Purpose: 记录版本升级、发布资产、校验值和验证命令。
+
+## Bug Record
+
+- Time: 2026-07-08 08:00
+- Symptoms: 无。本次为正常版本发布。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleRelease --console=plain`
+  - Result: passed.
+- `Get-FileHash app/build/outputs/apk/release/TVBox-v1.2.9.apk -Algorithm SHA256`
+  - Result: `68f5c2e9b5763b4ab4b245f623932dd45d68e0ff51961c3ddf45548f2e048901`.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
 ## 2026-07-01 18:09 - 接入 Gitee OTA
 
 ## File Changes
@@ -375,3 +433,4 @@
 
 - Master doc: `devLog/README.md`
 - Branch doc: `devLog/release.md`
+

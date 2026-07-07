@@ -16,11 +16,11 @@ import androidx.compose.ui.unit.dp
 
 fun Modifier.tvFocusScale(
     shape: Shape,
-    focusedBorder: Color = Color(0xFF23D1A8),
-    idleBorder: Color = Color(0x334D5B6F),
+    focusedBorder: Color = Color(0xFF1ED760),
+    idleBorder: Color = Color(0x334D4D4D),
 ): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(targetValue = if (focused) 1.045f else 1f, label = "tv-focus-scale")
+    val scale by animateFloatAsState(targetValue = if (focused) 1.055f else 1f, label = "tv-focus-scale")
     this
         .onFocusChanged { focused = it.isFocused || it.hasFocus }
         .graphicsLayer {
@@ -33,4 +33,3 @@ fun Modifier.tvFocusScale(
             shape = shape,
         )
 }
-

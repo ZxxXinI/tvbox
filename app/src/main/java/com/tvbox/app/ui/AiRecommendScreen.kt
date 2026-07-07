@@ -189,7 +189,7 @@ private fun AiActionButton(
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier
@@ -197,8 +197,7 @@ private fun AiActionButton(
                 if (enabled) {
                     Modifier.tvFocusScale(
                         shape = shape,
-                        focusedBorder = Color.White,
-                        idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
                     )
                 } else {
                     Modifier
@@ -212,7 +211,7 @@ private fun AiActionButton(
         color = when {
             !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             focused -> MaterialTheme.colorScheme.primary
-            else -> Color.Transparent
+            else -> Color(0xFF1F1F1F)
         },
         contentColor = when {
             !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
@@ -257,11 +256,13 @@ private fun AiRecommendationCard(
 ) {
     val recommendation = item.recommendation
     val shape = RoundedCornerShape(8.dp)
+    var focused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .tvFocusScale(shape = shape)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .focusable(),
     ) {

@@ -32,13 +32,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -291,12 +295,13 @@ private fun EpisodeButton(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(6.dp)
-    val containerColor = if (selected) {
+    var focused by remember { mutableStateOf(false) }
+    val containerColor = if (selected || focused) {
         MaterialTheme.colorScheme.primaryContainer
     } else {
         MaterialTheme.colorScheme.surfaceVariant
     }
-    val contentColor = if (selected) {
+    val contentColor = if (selected || focused) {
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurface
@@ -306,6 +311,7 @@ private fun EpisodeButton(
             .tvFocusScale(shape = shape)
             .focusRequester(focusRequester)
             .clip(shape)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .background(containerColor)
             .clickable(onClick = onClick)
             .focusable(),

@@ -45,8 +45,8 @@ android {
         applicationId = "com.tvbox.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10208
-        versionName = "1.2.8"
+        versionCode = 10209
+        versionName = "1.2.9"
         buildConfigField("String", "AI_API_KEY", aiApiKey.toBuildConfigString())
     }
 

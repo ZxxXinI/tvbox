@@ -1,5 +1,65 @@
-# Home / Player UI - 2026-06-30
+﻿# Home / Player UI - 2026-06-30
 
+## 2026-07-08 07:43 - 影院黑 + 活力绿 UI 风格
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/theme/Theme.kt`
+  - Reason: 用户希望参考 `.codex/skills/awesome-design-md-main` 中适合 TVBox 的 UI 风格，并采用前次讨论的 Spotify 式暗色播放器方向。
+  - Purpose: 将全局主题收敛为近黑背景、深灰层级、Spotify Green 风格主焦点色和柔和错误/提示色。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/components/Focus.kt`
+  - Reason: 电视遥控焦点需要在暗色背景上更清楚。
+  - Purpose: 统一焦点边框为绿色，略微增强聚焦放大比例。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/components/Common.kt`
+  - Reason: 首页头部按钮、分类和通用卡片是 TVBox 最高频视觉区域。
+  - Purpose: 将头部按钮和分类改为深色胶囊按钮；海报卡片和历史卡片聚焦时使用深灰高亮。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/AiRecommendScreen.kt`
+  - Reason: AI 找片页面需要与首页按钮和海报网格保持一致。
+  - Purpose: AI 操作按钮改为胶囊按钮；AI 推荐卡片聚焦时高亮。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 设置页按钮此前与首页视觉不完全一致。
+  - Purpose: 设置页操作按钮改为同样的深色胶囊和绿色焦点。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/DetailScreen.kt`
+  - Reason: 选集按钮在遥控器移动时需要更明显的聚焦反馈。
+  - Purpose: 选集按钮聚焦或选中时统一使用绿色主色。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: 播放器提示需要与新的功能焦点色一致。
+  - Purpose: 倍速、手势和播放管家提示改用绿色状态文字。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/LiveScreen.kt`
+  - Reason: 直播频道列表和提示层需要融入整体播放器风格。
+  - Purpose: 左侧频道列表使用近黑半透明面板，直播提示使用绿色状态文字。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次修改后记录做了什么、为什么做。
+  - Purpose: 在主时间线登记本次 UI 风格统一。
+
+- File path: `devLog/home-player-ui.md`
+  - Reason: 本次属于首页、播放器和通用 UI 风格调整。
+  - Purpose: 记录涉及文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-07-08 07:43
+- Symptoms: 无。本次为视觉风格统一。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleDebug --console=plain`
+  - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
 ## 2026-07-01 09:11 - 手机双击暂停修正
 
 ## File Changes
@@ -117,3 +177,4 @@
 
 - Master doc: `devLog/README.md`
 - Branch doc: `devLog/home-player-ui.md`
+

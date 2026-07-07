@@ -1,13 +1,13 @@
-{
-  "versionCode": 10208,
-  "versionName": "1.2.8",
-  "apkUrl": "https://gitee.com/zhen-xin/tv-box/releases/download/v1.2.8/TVBox-v1.2.8.apk",
-  "apkSha256": "598bef37d28f16898991395ea2a89e092c6320908f82ca381852d4e1403ab030",
+﻿{
+  "versionCode": 10209,
+  "versionName": "1.2.9",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.9/TVBox-v1.2.9.apk",
+  "apkSha256": "68f5c2e9b5763b4ab4b245f623932dd45d68e0ff51961c3ddf45548f2e048901",
   "apkSize": 4721013,
   "force": false,
   "changelog": [
-    "新增设置页自定义视频接口，支持手机扫码添加 MacCms 接口。",
-    "优化手机播放手势：双击左侧快退，中间播放/暂停，右侧快进。",
-    "首页向下滚动时自动隐藏标题和分类栏。"
+    "统一 UI 为影院黑 + 活力绿焦点风格。",
+    "优化首页、设置页、AI 找片按钮的遥控器聚焦效果。",
+    "优化海报卡片、详情选集、播放器提示和直播提示的视觉一致性。"
   ]
 }
