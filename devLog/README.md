@@ -2,6 +2,30 @@
 
 ## Timeline
 
+### 2026-07-08 19:58 - 发布 v1.2.10
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用版本升级到 `1.2.10`，版本码升级到 `10210`。
+  - 发布启动安装权限请求移除、直播手机触摸手势和播放器标题颜色优化。
+  - 准备 release APK、`update.json` 和 GitHub Release 说明。
+
+### 2026-07-08 19:44 - 直播手机触摸手势
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 直播播放界面新增手机触摸操作。
+  - 单击屏幕显示左侧频道列表。
+  - 双击左半屏切换上一个频道，双击右半屏切换下一个频道。
+
+### 2026-07-08 19:35 - 取消启动安装权限请求
+
+- Branch doc: `devLog/ota-update.md`
+- Summary:
+  - 删除应用首次打开时主动请求“安装未知应用”权限的逻辑。
+  - 保留点击更新下载和安装 APK 时的权限检查与引导。
+  - 避免用户刚打开应用就被系统权限页打断。
+
 ### 2026-07-08 07:43 - 影院黑 + 活力绿 UI 风格
 
 - Branch doc: `devLog/home-player-ui.md`

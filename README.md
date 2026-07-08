@@ -74,7 +74,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.9.apk
+adb install -r TVBox-v1.2.10.apk
 ```
 
 ## OTA 更新机制
@@ -89,11 +89,11 @@ https://gitee.com/zhen-xin/tv-box/raw/agent/update.json
 
 ```json
 {
-  "versionCode": 10209,
-  "versionName": "1.2.9",
-  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.9/TVBox-v1.2.9.apk",
-  "apkSha256": "68f5c2e9b5763b4ab4b245f623932dd45d68e0ff51961c3ddf45548f2e048901",
-  "apkSize": 4721013,
+  "versionCode": 10210,
+  "versionName": "1.2.10",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.10/TVBox-v1.2.10.apk",
+  "apkSha256": "b74370f955f1741040267e3efc17c1a50e6750ddfd70be65325d779751eac2b3",
+  "apkSize": 4721017,
   "force": false,
   "changelog": [
     "新增设置页自定义视频接口，支持手机扫码添加 MacCms 接口。",
@@ -205,12 +205,12 @@ versionName = "1.2.8"
 
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
-git commit -m "Release v1.2.9"
-git tag -a v1.2.9 -m "TVBox v1.2.9"
+git commit -m "Release v1.2.10"
+git tag -a v1.2.10 -m "TVBox v1.2.10"
 git push origin agent
-git push origin v1.2.9
+git push origin v1.2.10
 git push gitee agent
-git push gitee v1.2.9
+git push gitee v1.2.10
 ```
 
 4. 更新根目录 `update.json`，其中 `apkUrl` 指向 Gitee Release APK。
@@ -218,13 +218,13 @@ git push gitee v1.2.9
 5. 在 Gitee Release 上传对应版本 APK：
 
 ```text
-TVBox-v1.2.9.apk
+TVBox-v1.2.10.apk
 ```
 
 6. 可选：在 GitHub Release 上传或覆盖备份附件：
 
 ```powershell
-gh release upload v1.2.9 app\build\outputs\apk\release\TVBox-v1.2.9.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
+gh release upload v1.2.10 app\build\outputs\apk\release\TVBox-v1.2.10.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
 > Gitee Release 目前建议在网页端创建并上传 APK；GitHub Release 可继续使用 `gh` 命令维护备份。
@@ -252,5 +252,6 @@ app/src/main/java/com/tvbox/app
 ## 版本记录
 
 详细变更见 [CHANGELOG.md](CHANGELOG.md)。
+
 
 

@@ -758,6 +758,7 @@ private fun PlayerChrome(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            color = Color(0xFFFFFFFF)
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(

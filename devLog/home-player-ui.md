@@ -1,5 +1,37 @@
-﻿# Home / Player UI - 2026-06-30
+# Home / Player UI - 2026-06-30
 
+## 2026-07-08 19:44 - 直播手机触摸手势
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/LiveScreen.kt`
+  - Reason: 用户希望手机端直播界面支持直观触摸切台和显示频道列表。
+  - Purpose: 在直播播放器外层增加触摸手势：单击显示左侧频道列表；双击左半屏切换上一个频道；双击右半屏切换下一个频道。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次开发后记录做了什么、为什么做。
+  - Purpose: 在主时间线登记直播手机触摸手势。
+
+- File path: `devLog/home-player-ui.md`
+  - Reason: 本次属于播放器和直播 UI 交互增强。
+  - Purpose: 记录修改文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-07-08 19:44
+- Symptoms: 无。本次为直播手机触摸交互新增。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `./gradlew.bat compileDebugKotlin --console=plain`
+  - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
 ## 2026-07-08 07:43 - 影院黑 + 活力绿 UI 风格
 
 ## File Changes

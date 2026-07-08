@@ -1,13 +1,13 @@
 ﻿{
-  "versionCode": 10209,
-  "versionName": "1.2.9",
-  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.9/TVBox-v1.2.9.apk",
-  "apkSha256": "68f5c2e9b5763b4ab4b245f623932dd45d68e0ff51961c3ddf45548f2e048901",
-  "apkSize": 4721013,
+  "versionCode": 10210,
+  "versionName": "1.2.10",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.10/TVBox-v1.2.10.apk",
+  "apkSha256": "b74370f955f1741040267e3efc17c1a50e6750ddfd70be65325d779751eac2b3",
+  "apkSize": 4721017,
   "force": false,
   "changelog": [
-    "统一 UI 为影院黑 + 活力绿焦点风格。",
-    "优化首页、设置页、AI 找片按钮的遥控器聚焦效果。",
-    "优化海报卡片、详情选集、播放器提示和直播提示的视觉一致性。"
+    "删除应用启动时主动请求安装未知应用权限的逻辑。",
+    "直播手机端新增单击显示频道列表、双击左右半屏切换频道。",
+    "优化播放器标题颜色显示。"
   ]
 }
