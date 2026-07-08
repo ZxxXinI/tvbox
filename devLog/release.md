@@ -1,5 +1,59 @@
-﻿# Release - 2026-06-25
+# Release - 2026-06-25
 
+## 2026-07-08 19:58 - 发布 v1.2.10
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 需要发布包含启动权限、直播手势和播放器颜色调整的正式版本。
+  - Purpose: 将版本号升级到 `1.2.10`，版本码升级到 `10210`。
+
+- File path: `CHANGELOG.md`
+  - Reason: 新版本需要记录用户可见更新内容。
+  - Purpose: 增加 v1.2.10 更新说明。
+
+- File path: `README.md`
+  - Reason: 安装和发布示例需要跟随当前版本。
+  - Purpose: 更新 APK 文件名、版本号、校验值和 Release 命令示例。
+
+- File path: `update.json`
+  - Reason: OTA 需要识别 v1.2.10 并下载对应 APK。
+  - Purpose: 更新版本码、版本名、APK 地址、SHA-256、大小和更新说明。
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.2.10.apk`
+  - Reason: GitHub Release 需要上传正式安装包。
+  - Purpose: 保存 v1.2.10 release APK，供用户下载安装和 OTA 使用。
+
+- File path: `app/build/outputs/apk/release/release-notes-v1.2.10.md`
+  - Reason: GitHub Release 需要清晰的中文版本说明。
+  - Purpose: 记录 v1.2.10 发布内容和验证结果。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次修改后记录做了什么、为什么做。
+  - Purpose: 在主时间线登记 v1.2.10 发布。
+
+- File path: `devLog/release.md`
+  - Reason: 本次属于正式发布任务。
+  - Purpose: 记录版本升级、发布资产、校验值和验证命令。
+
+## Bug Record
+
+- Time: 2026-07-08 19:58
+- Symptoms: 无。本次为正常版本发布。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleRelease --console=plain`
+  - Result: passed.
+- `Get-FileHash app/build/outputs/apk/release/TVBox-v1.2.10.apk -Algorithm SHA256`
+  - Result: `b74370f955f1741040267e3efc17c1a50e6750ddfd70be65325d779751eac2b3`.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
 ## 2026-07-08 08:00 - 发布 v1.2.9
 
 ## File Changes

@@ -1,5 +1,39 @@
 # OTA 更新 - 2026-06-25
 
+## 2026-07-08 19:35 - 取消启动安装权限请求
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/MainActivity.kt`
+  - Reason: 用户希望删除应用打开后立即获取安装权限的行为，避免首次进入应用被系统权限页打断。
+  - Purpose: 删除 `onCreate` 中的首次启动权限请求，移除 `FirstLaunch` 权限动作和对应 SharedPreferences 标记；保留点击更新下载、安装 APK 时的权限检查与引导。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次开发后记录做了什么、为什么做。
+  - Purpose: 在主时间线登记本次 OTA 权限行为调整。
+
+- File path: `devLog/ota-update.md`
+  - Reason: 本次属于 OTA 安装权限流程调整。
+  - Purpose: 记录修改文件、原因、目的和验证结果。
+
+## Bug Record
+
+- Time: 2026-07-08 19:35
+- Symptoms: 应用打开后会主动跳转安装未知应用权限页，打断用户进入应用。
+- Attempted fix: 删除首次启动权限请求和 `FirstLaunch` 权限动作，仅在更新下载或安装时请求权限。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `./gradlew.bat compileDebugKotlin --console=plain`
+  - Result: passed.
+- `./gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/ota-update.md`
 ## 2026-06-25 08:07 - 安装权限前置
 
 ## File Changes

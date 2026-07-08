@@ -72,9 +72,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-        window.decorView.post {
-            requestInstallPermissionOnFirstLaunch()
-        }
     }
 
     private fun startAiVoiceInput() {
@@ -201,15 +198,6 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun requestInstallPermissionOnFirstLaunch() {
-        if (hasRequestedInstallPermissionOnFirstLaunch() || canInstallUnknownApps()) return
-        markInstallPermissionRequestedOnFirstLaunch()
-        requestInstallPermission(
-            action = InstallPermissionAction.FirstLaunch,
-            message = "请允许 TVBox 安装未知应用，用于以后应用内更新。你也可以选择拒绝。",
-        )
-    }
-
     private fun startUpdateDownloadWithPermission() {
         if (canInstallUnknownApps()) {
             viewModel.startUpdateDownload()
@@ -285,7 +273,6 @@ class MainActivity : ComponentActivity() {
         }
 
         val message = when (action) {
-            InstallPermissionAction.FirstLaunch -> "未开启安装权限，发现新版本时会再次提示。"
             InstallPermissionAction.StartUpdateDownload -> "未获得安装权限，暂不下载更新。"
             is InstallPermissionAction.InstallDownloadedApk -> "未获得安装权限，暂不安装更新。"
         }
@@ -294,9 +281,6 @@ class MainActivity : ComponentActivity() {
 
     private fun handleInstallPermissionGranted(action: InstallPermissionAction) {
         when (action) {
-            InstallPermissionAction.FirstLaunch -> {
-                Toast.makeText(this, "安装权限已允许，以后可直接应用内更新。", Toast.LENGTH_SHORT).show()
-            }
             InstallPermissionAction.StartUpdateDownload -> viewModel.startUpdateDownload()
             is InstallPermissionAction.InstallDownloadedApk -> installUpdateApk(action.apkPath)
         }
@@ -306,18 +290,6 @@ class MainActivity : ComponentActivity() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
     }
 
-    private fun hasRequestedInstallPermissionOnFirstLaunch(): Boolean {
-        return getSharedPreferences(INSTALL_PERMISSION_PREFS, MODE_PRIVATE)
-            .getBoolean(KEY_INSTALL_PERMISSION_FIRST_LAUNCH_REQUESTED, false)
-    }
-
-    private fun markInstallPermissionRequestedOnFirstLaunch() {
-        getSharedPreferences(INSTALL_PERMISSION_PREFS, MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_INSTALL_PERMISSION_FIRST_LAUNCH_REQUESTED, true)
-            .apply()
-    }
-
     override fun onDestroy() {
         releaseSpeechRecognizer()
         super.onDestroy()
@@ -325,7 +297,6 @@ class MainActivity : ComponentActivity() {
 }
 
 private sealed class InstallPermissionAction {
-    data object FirstLaunch : InstallPermissionAction()
     data object StartUpdateDownload : InstallPermissionAction()
     data class InstallDownloadedApk(val apkPath: String) : InstallPermissionAction()
 }
@@ -346,8 +317,6 @@ private class TvBoxViewModelFactory(
 }
 
 private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
-private const val INSTALL_PERMISSION_PREFS = "install_permission"
-private const val KEY_INSTALL_PERMISSION_FIRST_LAUNCH_REQUESTED = "first_launch_requested"
 
 private fun speechErrorMessage(error: Int): String {
     return when (error) {
@@ -365,3 +334,4 @@ private fun speechErrorMessage(error: Int): String {
         else -> "语音识别失败，请再试一次"
     }
 }
+

@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -195,6 +197,20 @@ private fun LivePlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(playerFocusRequester)
+            .pointerInput(channels.size) {
+                detectTapGestures(
+                    onTap = {
+                        showChannelList()
+                    },
+                    onDoubleTap = { offset ->
+                        if (offset.x < size.width / 2f) {
+                            actions.playPreviousLiveChannel()
+                        } else {
+                            actions.playNextLiveChannel()
+                        }
+                    },
+                )
+            }
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
                 when (event.nativeKeyEvent.keyCode) {
