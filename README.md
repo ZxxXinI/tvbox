@@ -77,7 +77,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.2.10.apk
+adb install -r TVBox-v1.3.0.apk
 ```
 
 ## OTA 更新机制
@@ -92,15 +92,15 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 ```json
 {
-  "versionCode": 10210,
-  "versionName": "1.2.10",
-  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.10/TVBox-v1.2.10.apk",
-  "apkSha256": "b74370f955f1741040267e3efc17c1a50e6750ddfd70be65325d779751eac2b3",
-  "apkSize": 4721017,
+  "versionCode": 10300,
+  "versionName": "1.3.0",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.3.0/TVBox-v1.3.0.apk",
+  "apkSha256": "86552fc10d4956d8a4fdcf9e58e1973be30244488af9a691344706af2ed3020b",
+  "apkSize": 4786545,
   "force": false,
   "changelog": [
-    "新增设置页自定义视频接口，支持手机扫码添加 MacCms 接口。",
-    "优化手机播放手势：双击左侧快退，中间播放/暂停，右侧快进。"
+    "新增斗鱼、虎牙、哔哩哔哩、抖音和快手多平台直播。",
+    "新增平台分类浏览、最高画质和多线路播放。"
   ]
 }
 ```
