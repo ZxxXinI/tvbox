@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.withFrameNanos
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
@@ -185,9 +187,21 @@ private fun PlatformLiveRoomsScreen(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
 ) {
-    val firstCardFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(state.platformLiveRooms) {
-        if (state.platformLiveRooms.isNotEmpty()) firstCardFocusRequester.requestFocus()
+    val gridState = rememberLazyGridState()
+    val selectedRoomFocusRequester = remember { FocusRequester() }
+    val selectedRoomIndex = state.platformLiveRoomIndex.coerceIn(
+        0,
+        state.platformLiveRooms.lastIndex.coerceAtLeast(0),
+    )
+    LaunchedEffect(
+        state.platformLiveDestination,
+        state.platformLiveRoomIndex,
+        state.platformLiveRooms.isNotEmpty(),
+    ) {
+        if (state.platformLiveRooms.isEmpty()) return@LaunchedEffect
+        gridState.scrollToItem(selectedRoomIndex)
+        withFrameNanos { }
+        runCatching { selectedRoomFocusRequester.requestFocus() }
     }
     val category = state.platformLiveSelectedCategory
     val site = state.platformLiveSelectedSite
@@ -199,12 +213,17 @@ private fun PlatformLiveRoomsScreen(
         isEmpty = state.platformLiveRooms.isEmpty(),
         emptyMessage = "这个分类暂时没有正在直播的房间",
         onRetry = actions::refreshPlatformLive,
+        gridState = gridState,
     ) {
         itemsIndexed(state.platformLiveRooms, key = { _, room -> room.id }) { index, room ->
             PlatformLiveRoomCard(
                 room = room,
                 onClick = { actions.openPlatformLiveRoom(room) },
-                modifier = if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier,
+                modifier = if (index == selectedRoomIndex) {
+                    Modifier.focusRequester(selectedRoomFocusRequester)
+                } else {
+                    Modifier
+                },
             )
         }
         if (state.platformLiveRoomPage < state.platformLiveRoomPageCount) {
@@ -228,6 +247,7 @@ private fun PlatformLiveBrowseSurface(
     isEmpty: Boolean,
     emptyMessage: String,
     onRetry: () -> Unit,
+    gridState: LazyGridState? = null,
     content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit,
 ) {
     PageSurface { padding ->
@@ -236,10 +256,10 @@ private fun PlatformLiveBrowseSurface(
             error != null -> ErrorState(message = error, onRetry = onRetry, modifier = Modifier.padding(padding))
             isEmpty -> ErrorState(message = emptyMessage, onRetry = onRetry, modifier = Modifier.padding(padding))
             else -> {
-                val gridState = rememberLazyGridState()
+                val resolvedGridState = gridState ?: rememberLazyGridState()
                 val headerVisible by remember {
                     derivedStateOf {
-                        gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 24
+                        resolvedGridState.firstVisibleItemIndex == 0 && resolvedGridState.firstVisibleItemScrollOffset < 24
                     }
                 }
                 Column(
@@ -260,7 +280,7 @@ private fun PlatformLiveBrowseSurface(
                         }
                     }
                     LazyVerticalGrid(
-                        state = gridState,
+                        state = resolvedGridState,
                         columns = GridCells.Fixed(5),
                         contentPadding = PaddingValues(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
