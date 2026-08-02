@@ -1,13 +1,13 @@
 ﻿{
-  "versionCode": 10210,
-  "versionName": "1.2.10",
-  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.2.10/TVBox-v1.2.10.apk",
-  "apkSha256": "b74370f955f1741040267e3efc17c1a50e6750ddfd70be65325d779751eac2b3",
-  "apkSize": 4721017,
+  "versionCode": 10300,
+  "versionName": "1.3.0",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.3.0/TVBox-v1.3.0.apk",
+  "apkSha256": "86552fc10d4956d8a4fdcf9e58e1973be30244488af9a691344706af2ed3020b",
+  "apkSize": 4786545,
   "force": false,
   "changelog": [
-    "删除应用启动时主动请求安装未知应用权限的逻辑。",
-    "直播手机端新增单击显示频道列表、双击左右半屏切换频道。",
-    "优化播放器标题颜色显示。"
+    "新增斗鱼、虎牙、哔哩哔哩、抖音和快手多平台直播。",
+    "新增平台分类浏览、直播间列表、最高画质和多线路播放。",
+    "支持电脑端统一直播服务及服务端部署配置。"
   ]
 }
