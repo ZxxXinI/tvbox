@@ -9,7 +9,7 @@
 - 平台直播页面继续使用通用 UI，分类网格保持五列，标题随滚动自动隐藏。
 - 增加服务端部署文档，支持 Linux、Windows 以及无 Python 主机的 Docker 部署。
 
-> 本次提交完成源码版本升级和 Debug 构建验证，暂未发布 GitHub Release；根目录 `update.json` 继续指向上一版已发布的 v1.2.10。
+> 本版本已发布 GitHub Release，根目录 `update.json` 已同步指向 v1.3.0。
 
 ## v1.2.10 - 2026-07-08
 
