@@ -145,6 +145,10 @@ private fun LivePlayerScreen(
         channelListInteraction++
     }
 
+    fun keepChannelListVisibleWhileBrowsing() {
+        if (channelListVisible) channelListInteraction++
+    }
+
     fun handleNumberKey(number: Int): Boolean {
         channelNumberInput = (channelNumberInput + number.toString()).takeLast(MAX_CHANNEL_NUMBER_DIGITS)
         showPrompt("频道 $channelNumberInput")
@@ -330,13 +334,21 @@ private fun LivePlayerScreen(
                         true
                     }
                     AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                        actions.playPreviousLiveLine()
-                        showChannelList()
+                        if (channelListVisible) {
+                            actions.playPreviousLiveChannel()
+                            keepChannelListVisibleWhileBrowsing()
+                        } else {
+                            actions.playPreviousLiveLine()
+                        }
                         true
                     }
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                        actions.playNextLiveLine()
-                        showChannelList()
+                        if (channelListVisible) {
+                            actions.playNextLiveChannel()
+                            keepChannelListVisibleWhileBrowsing()
+                        } else {
+                            actions.playNextLiveLine()
+                        }
                         true
                     }
                     AndroidKeyEvent.KEYCODE_0,
@@ -465,7 +477,7 @@ private fun LiveChannelList(
     Surface(
         modifier = modifier
             .fillMaxHeight()
-            .width(360.dp),
+            .width(180.dp),
         color = Color(0xE6121212),
         contentColor = Color.White,
     ) {
