@@ -190,9 +190,10 @@ private fun PlatformLiveRoomsScreen(
         if (state.platformLiveRooms.isNotEmpty()) firstCardFocusRequester.requestFocus()
     }
     val category = state.platformLiveSelectedCategory
+    val site = state.platformLiveSelectedSite
     PlatformLiveBrowseSurface(
         title = category?.name ?: "直播间",
-        subtitle = category?.parentName?.ifBlank { "斗鱼直播" } ?: "斗鱼直播",
+        subtitle = category?.parentName?.ifBlank { site?.name ?: "直播" } ?: site?.name ?: "直播",
         loading = state.platformLiveLoading,
         error = state.platformLiveError,
         isEmpty = state.platformLiveRooms.isEmpty(),
@@ -313,7 +314,7 @@ private fun PlatformLiveCategoryCard(
 ) {
     PlatformLiveImageCard(
         title = category.name,
-        subtitle = category.parentName.ifBlank { "斗鱼分类" },
+        subtitle = category.parentName.ifBlank { "直播分类" },
         imageUrl = category.cover,
         onClick = onClick,
         modifier = modifier,

@@ -2,6 +2,8 @@
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
+当前源码版本为 `1.3.0`（`versionCode=10300`）。本版本包含五平台直播接入；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
+
 > 请确保使用的影视与直播接口具备合法授权。本项目仅提供客户端能力，不内置或托管影视内容。
 
 ## 界面预览
@@ -19,7 +21,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换、自动跳下一集和手机播放手势。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间，可从历史继续播放。
 - 电视直播：从 IPTV 文本接口加载频道，支持分组、左右切台、上下切换线路、数字选台；线路播放错误、持续缓冲或播放位置停滞时自动切换下一条线路。
-- 平台直播：支持平台直播服务、分类浏览和直播间播放。
+- 平台直播：支持斗鱼、虎牙、哔哩哔哩、抖音和快手，统一提供平台、一级分类、二级分类、直播间和播放器流程，并按平台返回结果优先选择最高画质。
 - OTA 更新：启动后检查 GitHub 仓库中的 `update.json`，发现新版本后可下载 APK 并跳转系统安装器。
 - 内容过滤：过滤伦理、电影解说、演员、新闻资讯等不需要的分类或资源。
 
@@ -143,6 +145,20 @@ TVBOX_AI_API_KEY=你的测试密钥
 - 点击“添加接口”后，电视弹出二维码；手机扫码填写接口名称和 MacCms 地址，确认后自动同步到电视。
 - MacCms 地址示例：`https://example.com/api.php/provide/vod`
 
+平台直播服务配置：
+
+- 服务端运行在电脑或服务器上，TVBox 通过 `TVBOX_PLATFORM_LIVE_SERVICE_URL` 访问统一接口。
+- 本次 v1.3.0 Debug 构建使用的服务地址为 `http://20.205.10.127:8868`。
+- Windows PowerShell 临时构建配置：
+
+```powershell
+$env:TVBOX_PLATFORM_LIVE_SERVICE_URL="http://20.205.10.127:8868"
+.\gradlew.bat testDebugUnitTest assembleDebug --console=plain
+```
+
+- 该变量只在构建时注入 APK，不需要写入服务器代码；服务器 Cookie 只配置在服务器环境变量中。
+- 如果服务器地址变化，必须使用新地址重新构建 APK；不要填写 `localhost` 或 `127.0.0.1`。
+
 运行测试：
 
 ```powershell
@@ -191,8 +207,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10208
-versionName = "1.2.8"
+versionCode = 10300
+versionName = "1.3.0"
 ```
 
 2. 构建 release APK：
@@ -206,10 +222,10 @@ versionName = "1.2.8"
 
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
-git commit -m "Release v1.2.10"
-git tag -a v1.2.10 -m "TVBox v1.2.10"
+git commit -m "Release v1.3.0"
+git tag -a v1.3.0 -m "TVBox v1.3.0"
 git push origin main
-git push origin v1.2.10
+git push origin v1.3.0
 ```
 
 4. 更新根目录 `update.json`，其中 `apkUrl` 指向 GitHub Release APK。
@@ -217,11 +233,11 @@ git push origin v1.2.10
 5. 在 GitHub Release 上传对应版本 APK：
 
 ```text
-TVBox-v1.2.10.apk
+TVBox-v1.3.0.apk
 ```
 
 ```powershell
-gh release upload v1.2.10 app\build\outputs\apk\release\TVBox-v1.2.10.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
+gh release upload v1.3.0 app\build\outputs\apk\release\TVBox-v1.3.0.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
 > GitHub Release 需要包含对应版本的 APK 和 `update.json`；应用启动时从 GitHub `main` 分支读取更新清单。

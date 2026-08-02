@@ -1,6 +1,30 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-08-02 - v1.3.0 多平台直播与服务端部署
+
+- Branch docs: `devLog/platform-live.md`, `devLog/release.md`
+- Summary:
+  - Android 版本升级为 `1.3.0` / `10300`。
+  - README 增加五平台直播、服务器部署和 `TVBOX_PLATFORM_LIVE_SERVICE_URL` 构建说明。
+  - 本次只提交源码和 Debug 构建验证，不发布 GitHub Release；`update.json` 暂时保持上一版已发布版本。
+
+### 2026-08-02 13:26 - 多平台直播服务部署说明
+
+- Branch doc: `devLog/platform-live.md`
+- Summary:
+  - 新增 `platform_live_server/DEPLOYMENT.md`，说明服务器运行时文件、Python/Node.js 依赖、Linux systemd、Windows 启动、无 Python 主机的 Docker 部署、防火墙、Cookie 环境变量、TVBox 构建地址、接口检查和常见问题。
+  - 明确服务器只解析临时地址，不代理视频流；`reference/`、Android 源码和 APK 不属于运行时依赖。
+
 ## Timeline
+
+### 2026-08-02 - 五平台直播适配完成
+
+- Branch doc: `devLog/platform-live.md`
+- Summary:
+  - 统一服务端接入斗鱼、虎牙、哔哩哔哩、抖音、快手五个平台，保留 `/v1/live/sites`、`categories`、`rooms`、`resolve` 接口和旧响应字段。
+  - 新增 B 站 WBI、虎牙 anti-code/TARS、抖音 a_bogus Node 助手、快手网页状态与 Kww 支持。
+  - 缓存键改为 `(site, room_id)`；Cookie 仅从电脑服务端环境变量读取。
+  - Python/Node 服务端回归测试 21/21 通过。
 
 ### 2026-08-02 11:35 - 一级分类卡片标签与斗鱼最高画质优先
 

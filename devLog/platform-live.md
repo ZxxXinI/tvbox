@@ -1,5 +1,72 @@
 ﻿# 平台直播（斗鱼）- 2026-08-01
 
+## 2026-08-02 - v1.3.0 服务端部署与构建配置
+
+### 文件变更
+
+- `platform_live_server/README.md`：补充 Docker 部署入口和 Node.js/Python 运行边界。
+- `README.md`：补充五平台直播说明、服务端部署文档链接和 `TVBOX_PLATFORM_LIVE_SERVICE_URL` 构建命令。
+- `app/build.gradle.kts`：将 Android 版本升级为 `1.3.0` / `10300`。
+
+### 验证
+
+- 使用 `TVBOX_PLATFORM_LIVE_SERVICE_URL=http://20.205.10.127:8868` 进行 Debug 构建。
+- 未将服务地址写入源码、Cookie 或服务器配置文件。
+
+## 2026-08-02 13:31 - 无 Python 主机的部署路径说明
+
+### 文件变更
+
+- `platform_live_server/DEPLOYMENT.md`：补充当前服务不能由 Node.js 单独启动的架构说明，并新增 Node.js 基础镜像内置 Python 的 Docker 部署方案。
+
+### 目的
+
+- 避免服务器 AI 错误执行 `node server.py` 或临时重写适配器。
+- 在服务器主机没有 Python 时，通过 Docker 保持已验证的 Python 五平台解析实现不变。
+
+## 2026-08-02 - 多平台通用 UI 兜底文案
+
+### 文件变更
+
+- `app/src/main/java/com/tvbox/app/ui/PlatformLiveScreen.kt`：移除房间列表和二级分类卡片中写死的“斗鱼”兜底文案，改为当前平台名称或通用“直播/直播分类”。
+
+### 缺陷记录
+
+- 时间：2026-08-02
+- 症状：虎牙、哔哩哔哩、抖音或快手返回空父分类名称时，通用直播页面可能显示“斗鱼直播/斗鱼分类”。
+- 修复位置：`PlatformLiveScreen.kt` 的房间列表副标题和二级分类卡片。
+- 临时方案：无，已改为按当前平台动态兜底。
+
+# 多平台直播适配 - 2026-08-02
+
+## 统一服务端适配
+
+### 文件变更
+
+- `platform_live_server/platform_common.py`：新增统一分类树、房间分页、播放候选和解析异常数据模型。
+- `platform_live_server/bilibili_resolver.py`：接入 B 站 `getList`、`getRoomList`、WBI 签名和最高 `qn` 多 CDN 播放地址。
+- `platform_live_server/huya_resolver.py`：接入虎牙固定大分类、`bussLive`、`cache.php`、`HNF_GLOBAL_INIT`、anti-code 与最小 TUP3/TARS token 解析。
+- `platform_live_server/douyin_resolver.py`：接入抖音 `categoryData`、分区房间列表、稳定 `webRid`、API/网页回退和最高等级 FLV/HLS 地址。
+- `platform_live_server/douyin_sign.js`：从参考项目封装 `kABogus` 为 Node.js 标准输入输出助手。
+- `platform_live_server/kuaishou_resolver.py`：接入快手固定大分类、分类分页、`__INITIAL_STATE__`、`playUrls` 质量分组和 `kwfv1`/`Kww`。
+- `platform_live_server/server.py`：注册五个平台，保留原有接口和旧响应字段，缓存键改为 `(site, room_id)`，读取五个平台可选 Cookie 环境变量。
+- `platform_live_server/test_platform_resolvers.py`：新增跨平台字段映射、签名、TARS、质量选择和缓存隔离回归测试。
+
+### 验证
+
+- `python -m unittest discover -s platform_live_server -p 'test_*.py' -v`：21/21 通过。
+- `node --check platform_live_server/douyin_sign.js`：通过。
+- 抖音签名助手实际调用：成功返回 `a_bogus`。
+- 联网服务端集成检查：五个平台分类树、房间分页均成功；斗鱼、虎牙、B 站、抖音各验证到可播放房间并返回最高画质/多线路，快手分类与网页状态解析正常但测试窗口返回“请求过快/未开播”房间。
+- Android `emulator-5554`：Debug APK 安装成功；“直播”入口显示斗鱼、虎牙、哔哩哔哩、抖音、快手五个平台卡片，B 站一级分类和二级分类页可正常加载。
+
+### 缺陷记录
+
+- 时间：2026-08-02
+- 症状：B 站子分类缺少父分类参数；快手网页状态正则遇到嵌套对象时截断；虎牙 TARS struct 结束标记被误当字段。
+- 修复位置：B 站分类 ID、快手/虎牙括号平衡解析、TARS 解码器。
+- 临时方案：无，已由单元测试覆盖。
+
 ## 2026-08-02 11:35 - 一级分类卡片标签与最高画质优先
 
 ## File Changes
