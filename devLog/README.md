@@ -2,6 +2,112 @@
 
 ## Timeline
 
+### 2026-08-02 11:35 - 一级分类卡片标签与斗鱼最高画质优先
+
+- Branch doc: `devLog/platform-live.md`
+- Summary:
+  - 一级分类卡片不再显示“一级分类”标签，保留分类名称和二级分类数量。
+  - 斗鱼多档画质按 `rate` 降序尝试，优先使用最高画质；同一画质的多 CDN 兜底逻辑保持不变。
+  - Python 单测、Android 单测、Debug 构建和 `emulator-5554` 实机播放验证通过。
+
+### 2026-08-02 11:23 - OTA 更新地址切回 GitHub
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用更新清单地址切换为 `https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json`。
+  - README 的 OTA、安装和发布说明统一改为 GitHub，APK 继续使用 GitHub Release 地址。
+  - Android 单元测试通过，活动代码和文档中不再保留 Gitee OTA 地址。
+
+### 2026-08-02 11:09 - 直播线路卡顿自动换线
+
+- Branch doc: `devLog/live-source.md`
+- Summary:
+  - 直播页复用缓冲监控，连续缓冲超过 6 秒、60 秒内累计缓冲超过 12 秒或发生 3 次短缓冲时自动切换线路。
+  - 新增播放位置看门狗，播放状态正常但位置连续 4 秒不前进时自动切换线路。
+  - 播放错误、播放结束和卡顿换线统一不显示线路失败提示；自动尝试当前频道的下一条线路。
+  - 新增看门狗单元测试；Android 单元测试、Debug 构建、APK 安装和 ADB 实机播放验证通过。
+
+### 2026-08-02 11:27 - 斗鱼一级/二级分类正式浏览
+
+- Branch doc: `devLog/platform-live.md`
+- Summary:
+  - 斗鱼分类接口不再限制“原创IP”，完整返回一级大类和二级分类。
+  - 平台直播页面改为“斗鱼 → 一级大类 → 二级分类 → 直播间”的浏览流程。
+  - Python 单测、Android 构建和 `emulator-5554` 实机验证通过，已验证“网游竞技 → 英雄联盟”房间列表。
+
+### 2026-08-02 09:53 - 更新 Agnes 默认模型与请求地址确认
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - 默认模型名由 `agnes-2.0-flash` 更新为 `agnes-2.5-flash`。
+  - 确认默认请求地址为 `https://apihub.agnes-ai.com/v1/chat/completions`。
+  - Debug 构建、单元测试和 `emulator-5554` 安装启动验证通过。
+
+### 2026-08-02 09:41 - 更新本地默认大模型 API Key
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - 更新本地 `TVBOX_AI_API_KEY`，仅用于本机 Debug 构建，不写入版本库或开发日志。
+  - Debug 构建、单元测试和 `emulator-5554` 安装验证通过。
+
+### 2026-08-02 09:20 - 首页入口命名与推荐页语音入口隐藏
+
+- Branch doc: `devLog/ai-recommend.md`
+- Summary:
+  - 首页快捷入口调整为“推荐(3) / 电视(4) / 直播(5) / 设置(6)”，数字快捷键同步对应功能。
+  - 推荐页不再展示“语音找片”按钮，语音识别实现仍保留在代码中，便于后续恢复。
+
+### 2026-08-02 09:25 - 入口页面标题同步
+
+- Branch docs: `devLog/ai-recommend.md`, `devLog/platform-live.md`
+- Summary:
+  - 推荐页顶部标题由“AI 找片”改为“推荐”。
+  - 平台直播页顶部标题由“平台直播”改为“直播”。
+  - 搜索页顶部标题由“搜索影片”改为“搜索”；历史、设置和电视直播页面检查后保持现状。
+
+### 2026-08-02 09:00 - 平台直播：斗鱼弹幕验证后撤销
+
+- Branch doc: `devLog/platform-live.md`
+- Summary:
+  - 严格参照本地 `dart_simple_live` 的斗鱼弹幕协议，完成了真机登录、入组、自定义心跳和帧接收验证。
+  - 当前测试房间在验证窗口只返回登录和进房等非聊天帧，未取得可展示的真实 `chatmsg`。
+  - 按用户要求撤销全部弹幕与临时诊断代码，重新构建并安装稳定播放器 APK；不新增电脑服务配置。
+
+### 2026-08-02 07:35 - 直播源分组、频道合并与线路切换
+
+- Branch doc: `devLog/live-source.md`
+- Summary:
+  - 旧的无分组直播格式直接忽略，仅解析 `分组名称,#genre#` 之后的频道行。
+  - 支持带或不带 `$LR•IPV4•29『线路…』` 元数据的 URL，并在播放前移除元数据。
+  - 同一分组内同名频道合并为一个频道，重复 URL 去重；不同分组的同名频道保持独立。
+  - 直播列表显示分组标题和逗号前的频道名称；遥控器上/下切换当前频道线路，播放失败自动尝试下一条线路。
+  - Android 单元测试、Debug 构建和 ADB 实机播放/线路切换验证通过。
+
+### 2026-08-01 22:40 - 平台直播：原创IP 分类页测试体验
+
+- Branch doc: `devLog/platform-live.md`
+- Summary:
+  - 斗鱼测试接口的分类结果限制为“原创IP”（斗鱼 ID `183`），避免测试阶段展示大量未验证分类。
+  - 平台直播的分类与房间网格固定为每行 5 张卡片；卡片按可用宽度保持 16:9 封面比例。
+  - 房间列表向下滚动后自动隐藏标题和副标题，释放空间给直播卡片；返回顶部时自动恢复。
+  - Python 单测、Android Debug 单测与构建通过；ADB 实机验证了分类过滤、五列网格、标题收起和房间播放。
+
+### 2026-08-01 21:10 - 直播源切换为 yanghanhanyingshi result.txt
+
+- Branch doc: `devLog/live-source.md`
+- Summary:
+  - 默认直播源切换为 `https://wget.la/https://raw.githubusercontent.com/yanghanhanyingshi/iptv/main/result.txt`。
+  - 直播解析器兼容 `频道,URL$LR…` 格式，忽略 `#genre#` 分组行和线路元数据。
+  - 新增三条线路示例的回归测试，确认播放请求只使用纯 URL。
+
+### 2026-08-01 19:29 - 平台直播：斗鱼多 CDN 自动恢复测试
+
+- Branch doc: `devLog/platform-live.md`
+- Summary:
+  - 参照本地 `reference/dart_simple_live-feat-ohos-1.12.7` 的斗鱼取流方式，服务端改为一次签名后收集同清晰度的全部 CDN 候选地址。
+  - Android 端改为当前线路重取地址两次、再切下一 CDN；播放结束、播放错误和持续缓冲均进入同一恢复流程。
+  - Python 单元测试、Android 单测与 Debug APK 构建通过；APK 已通过 ADB 安装，实机跨越原先十余秒断流窗口后持续正常播放。
+
 ### 2026-07-08 19:58 - 发布 v1.2.10
 
 - Branch doc: `devLog/release.md`
@@ -283,3 +389,4 @@
 - OTA Update: `devLog/ota-update.md`
 - Release: `devLog/release.md`
 - Home / Player UI: `devLog/home-player-ui.md`
+- Platform Live: `devLog/platform-live.md`

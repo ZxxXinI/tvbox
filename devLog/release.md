@@ -1,4 +1,28 @@
-# Release - 2026-06-25
+﻿# Release - 2026-06-25
+
+## 2026-08-02 11:23 - OTA 更新地址切回 GitHub
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/data/AppUpdateRepository.kt`
+  - Reason: 当前 OTA 更新检测仍然请求 Gitee 地址。
+  - Purpose: 将更新清单地址切换为 GitHub raw 的 `main/update.json`。
+
+- File path: `README.md`
+  - Reason: OTA 地址、安装来源和发布流程仍包含 Gitee 的当前说明。
+  - Purpose: 统一记录 GitHub OTA 清单和 GitHub Release APK 发布方式。
+
+## Bug Record
+
+- Time: 2026-08-02 11:23
+- Symptoms: 应用和文档的当前 OTA 入口仍指向 Gitee。
+- Attempted fix: 切换应用清单地址和 README 当前发布说明至 GitHub。
+- Temporary solution: 无。
+
+## Verification
+
+- `:app:testDebugUnitTest`：通过。
+- 活动项目代码、README 和 `update.json` 中的当前 OTA 地址已核对为 GitHub。
 
 ## 2026-07-08 19:58 - 发布 v1.2.10
 
@@ -150,7 +174,6 @@
 
 - Master doc: `devLog/README.md`
 - Branch doc: `devLog/release.md`
-
 ## 2026-07-01 18:32 - 校正 Gitee v1.2.8 下载地址
 
 ## File Changes
@@ -487,4 +510,3 @@
 
 - Master doc: `devLog/README.md`
 - Branch doc: `devLog/release.md`
-

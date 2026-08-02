@@ -1,4 +1,4 @@
-package com.tvbox.app.ui
+﻿package com.tvbox.app.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
 import android.graphics.Bitmap
@@ -89,6 +89,7 @@ fun TvBoxApp(
             TvScreen.Detail -> DetailScreen(state = state, actions = actions)
             TvScreen.Player -> PlayerScreen(state = state, actions = actions)
             TvScreen.Live -> LiveScreen(state = state, actions = actions)
+            TvScreen.PlatformLive -> PlatformLiveScreen(state = state, actions = actions)
             TvScreen.Settings -> SettingsScreen(state = state, actions = actions)
             TvScreen.AiRecommend -> AiRecommendScreen(
                 state = state,
@@ -247,6 +248,12 @@ private fun HomeScreen(
                         AndroidKeyEvent.KEYCODE_5,
                         AndroidKeyEvent.KEYCODE_NUMPAD_5,
                         -> {
+                            actions.openPlatformLive()
+                            true
+                        }
+                        AndroidKeyEvent.KEYCODE_6,
+                        AndroidKeyEvent.KEYCODE_NUMPAD_6,
+                        -> {
                             actions.openSettings()
                             true
                         }
@@ -264,6 +271,7 @@ private fun HomeScreen(
                         onSearch = actions::openSearch,
                         onAiRecommend = actions::openAiRecommend,
                         onLive = actions::openLive,
+                        onPlatformLive = actions::openPlatformLive,
                         onSettings = actions::openSettings,
                     )
                     HomeCategoryRows(

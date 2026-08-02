@@ -1,4 +1,4 @@
-package com.tvbox.app.ui.components
+﻿package com.tvbox.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,6 +50,7 @@ fun AppHeader(
     onSearch: () -> Unit,
     onAiRecommend: () -> Unit,
     onLive: () -> Unit,
+    onPlatformLive: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -77,9 +78,10 @@ fun AppHeader(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             HeaderActionButton(text = "历史(1)", onClick = onHistory)
             HeaderActionButton(text = "搜索(2)", onClick = onSearch)
-            HeaderActionButton(text = "AI找片(3)", onClick = onAiRecommend)
-            HeaderActionButton(text = "直播(4)", onClick = onLive)
-            HeaderActionButton(text = "设置(5)", onClick = onSettings)
+            HeaderActionButton(text = "推荐(3)", onClick = onAiRecommend)
+            HeaderActionButton(text = "电视(4)", onClick = onLive)
+            HeaderActionButton(text = "直播(5)", onClick = onPlatformLive)
+            HeaderActionButton(text = "设置(6)", onClick = onSettings)
         }
     }
 }

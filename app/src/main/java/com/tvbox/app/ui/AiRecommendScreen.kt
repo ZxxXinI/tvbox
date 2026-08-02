@@ -1,4 +1,4 @@
-package com.tvbox.app.ui
+﻿package com.tvbox.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -54,11 +54,11 @@ fun AiRecommendScreen(
     actions: TvBoxViewModel,
     onStartVoiceInput: () -> Unit,
 ) {
-    val voiceFocusRequester = remember { FocusRequester() }
+    val findFocusRequester = remember { FocusRequester() }
     val inputEnabled = !state.aiLoading && !state.aiVoiceListening && state.aiResolvingKeyword == null
 
     LaunchedEffect(Unit) {
-        runCatching { voiceFocusRequester.requestFocus() }
+        runCatching { findFocusRequester.requestFocus() }
     }
 
     PageSurface { padding ->
@@ -88,15 +88,9 @@ fun AiRecommendScreen(
                     keyboardActions = KeyboardActions(onSearch = { actions.submitAiRecommendation() }),
                 )
                 AiActionButton(
-                    text = "语音找片",
-                    onClick = onStartVoiceInput,
-                    modifier = Modifier
-                        .focusRequester(voiceFocusRequester),
-                    enabled = inputEnabled,
-                )
-                AiActionButton(
                     text = if (state.aiLoading) "找片中" else "找片",
                     onClick = { actions.submitAiRecommendation() },
+                    modifier = Modifier.focusRequester(findFocusRequester),
                     enabled = inputEnabled,
                 )
                 AiActionButton(

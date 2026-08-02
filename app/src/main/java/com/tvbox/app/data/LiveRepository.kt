@@ -35,4 +35,4 @@ class DefaultLiveRepository(
     }
 }
 
-private const val LIVE_SOURCE_URL = "https://nav.zhenxx.de5.net/iptv.txt"
+private const val LIVE_SOURCE_URL = "http://20.205.10.127:8787/tvbox/result.txt"

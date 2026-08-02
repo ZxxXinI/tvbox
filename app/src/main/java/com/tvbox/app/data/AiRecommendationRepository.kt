@@ -1,4 +1,4 @@
-package com.tvbox.app.data
+﻿package com.tvbox.app.data
 
 import com.tvbox.app.domain.AiRecommendationResult
 import com.tvbox.app.domain.parseAiRecommendationContent
@@ -142,7 +142,7 @@ private data class ChatMessage(
 )
 
 private val defaultAiClient = OkHttpClient.Builder()
-    .connectTimeout(15, TimeUnit.SECONDS)
+    .connectTimeout(30, TimeUnit.SECONDS)
     .readTimeout(45, TimeUnit.SECONDS)
     .writeTimeout(20, TimeUnit.SECONDS)
     .build()
@@ -156,4 +156,4 @@ private val aiJson = Json {
 
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 private const val BUNDLED_AI_CHAT_COMPLETIONS_URL = "https://apihub.agnes-ai.com/v1/chat/completions"
-private const val BUNDLED_AI_MODEL = "agnes-2.0-flash"
+private const val BUNDLED_AI_MODEL = "agnes-2.5-flash"

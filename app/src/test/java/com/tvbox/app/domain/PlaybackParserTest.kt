@@ -74,24 +74,29 @@ class PlaybackParserTest {
     }
 
     @Test
-    fun parsesLiveChannels() {
+    fun ignoresUngroupedLegacyLinesAndMergesGroupedChannels() {
         val channels = parseLiveChannels(
             """
-            1CCTV-1,http://video.test/1/index.m3u8
-            CCTV-2,https://video.test/2/index.m3u8
-            无效频道,
-            没有逗号
-            CCTV-3,http://video.test/3/index.m3u8,extra
-            CCTV-1,http://video.test/1/index.m3u8
+            CCTV9,http://legacy.test/ignored
+            央视卫视,#genre#
+            CCTV1,http://video.test/1/index.m3u8
+            CCTV1,https://video.test/2/index.m3u8${'$'}LR•IPV4•29『线路2』${'$'}LR•IPV4•29『线路2』
+            CCTV1,https://video.test/2/index.m3u8${'$'}LR•IPV4•29『线路2』
+            少儿动画,#genre#
+            CCTV1,http://video.test/kid/index.m3u8${'$'}LR•IPV4•29『线路1』
             """.trimIndent(),
         )
 
-        assertEquals(3, channels.size)
+        assertEquals(2, channels.size)
         assertEquals(1, channels[0].number)
-        assertEquals("CCTV-1", channels[0].name)
-        assertEquals("http://video.test/1/index.m3u8", channels[0].url)
-        assertEquals(3, channels[2].number)
-        assertEquals("http://video.test/3/index.m3u8,extra", channels[2].url)
+        assertEquals("央视卫视", channels[0].groupName)
+        assertEquals("CCTV1", channels[0].name)
+        assertEquals(2, channels[0].lines.size)
+        assertEquals("http://video.test/1/index.m3u8", channels[0].lines[0].url)
+        assertEquals("https://video.test/2/index.m3u8", channels[0].lines[1].url)
+        assertEquals("LR•IPV4•29『线路2』", channels[0].lines[1].name)
+        assertEquals("少儿动画", channels[1].groupName)
+        assertEquals("http://video.test/kid/index.m3u8", channels[1].lines.single().url)
     }
 
     @Test
