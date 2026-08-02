@@ -1,4 +1,104 @@
-# AI 找片 - 2026-06-26
+﻿# AI 找片 - 2026-06-26
+
+## 2026-08-02 09:53 - 更新 Agnes 默认模型与请求地址确认
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`
+  - Reason: Agnes 默认模型名称需要更新。
+  - Purpose: 将默认提供商模型改为 `agnes-2.5-flash`。
+
+- File path: `app/src/main/java/com/tvbox/app/data/AiRecommendationRepository.kt`
+  - Reason: 实际请求的内置兜底模型必须与设置页默认模型一致。
+  - Purpose: 将请求兜底模型改为 `agnes-2.5-flash`，并确认请求地址为用户指定地址。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleDebug --console=plain`
+  - Result: passed.
+- `adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk`
+  - Result: installed successfully.
+- `adb -s emulator-5554 shell am start -n com.tvbox.app/.MainActivity`
+  - Result: 应用启动正常，首页入口可见。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/ai-recommend.md`
+
+## 2026-08-02 09:41 - 更新本地默认大模型 API Key
+
+## File Changes
+
+- File path: `local.properties`
+  - Reason: 用户要求替换本机默认大模型 API Key。
+  - Purpose: 通过被 `.gitignore` 忽略的 `TVBOX_AI_API_KEY` 为 Debug 构建注入新的默认凭据；日志不记录密钥明文。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleDebug --console=plain`
+  - Result: passed.
+- Generated Debug `BuildConfig`
+  - Result: 已确认包含新配置，未在输出中打印密钥。
+- `adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk`
+  - Result: installed successfully; 应用启动后首页正常显示。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/ai-recommend.md`
+
+## 2026-08-02 09:20 - 首页入口命名与推荐页语音入口隐藏
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/components/Common.kt`
+  - Reason: 首页入口需要与当前功能定位和数字快捷键对应。
+  - Purpose: 将“AI找片 / 直播 / 平台直播 / 设置”依次改为“推荐 / 电视 / 直播 / 设置”，并显示快捷键 3 至 6。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: “直播”和“设置”的数字标签发生调整。
+  - Purpose: 让数字键 5 打开平台直播、数字键 6 打开设置。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/AiRecommendScreen.kt`
+  - Reason: 推荐页测试阶段暂不提供语音找片入口。
+  - Purpose: 隐藏“语音找片”按钮，并将初始焦点移至“找片”；既有语音识别实现和调用参数保持不变。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleDebug --console=plain`
+  - Result: passed.
+- `adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk`
+  - Result: installed successfully.
+- `emulator-5554` UI smoke test
+  - Result: 首页显示“推荐(3) / 电视(4) / 直播(5) / 设置(6)”；数字键 5 进入平台直播测试服务未配置页，数字键 6 进入设置页；推荐页仅显示“找片 / 换一批 / 返回”，默认焦点为“找片”。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/ai-recommend.md`
+
+## 2026-08-02 09:25 - 推荐页标题同步
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 首页入口已改名为“推荐”，页面内部仍显示旧标题。
+  - Purpose: 将推荐页顶部标题统一为“推荐”。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleDebug --console=plain`
+  - Result: passed.
+- `adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk`
+  - Result: installed successfully.
+- `emulator-5554` UI smoke test
+  - Result: 推荐页顶部显示“推荐”，不再显示“AI 找片”或“语音找片”；搜索页标题显示“搜索”。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/ai-recommend.md`
 
 ## 2026-06-28 16:40 - 语音识别空结果修复
 

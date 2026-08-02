@@ -1,4 +1,4 @@
-package com.tvbox.app.ui
+﻿package com.tvbox.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,7 +39,7 @@ fun SearchScreen(
                 .padding(padding),
         ) {
             Text(
-                text = "搜索影片",
+                text = "搜索",
                 style = MaterialTheme.typography.headlineLarge,
             )
             Spacer(modifier = Modifier.height(18.dp))
@@ -88,4 +88,3 @@ fun SearchScreen(
         }
     }
 }
-

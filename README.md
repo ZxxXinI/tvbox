@@ -6,7 +6,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 
 ## 界面预览
 
-![TVBox 首页](docs/screenshots/home.png)
+![TVBox 首页界面预览](docs/screenshots/home-preview.png)
 
 ## 功能特性
 
@@ -18,8 +18,9 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，可在设置页用手机扫码配置大模型、模型名和 API Key。
 - 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、播放/暂停、上一集、下一集、倍速切换、自动跳下一集和手机播放手势。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间，可从历史继续播放。
-- 电视直播：从 IPTV 文本接口加载频道，支持左右切台、频道列表、数字选台。
-- OTA 更新：启动后检查 Gitee 仓库中的 `update.json`，发现新版本后可下载 APK 并跳转系统安装器。
+- 电视直播：从 IPTV 文本接口加载频道，支持分组、左右切台、上下切换线路、数字选台；线路播放错误、持续缓冲或播放位置停滞时自动切换下一条线路。
+- 平台直播：支持平台直播服务、分类浏览和直播间播放。
+- OTA 更新：启动后检查 GitHub 仓库中的 `update.json`，发现新版本后可下载 APK 并跳转系统安装器。
 - 内容过滤：过滤伦理、电影解说、演员、新闻资讯等不需要的分类或资源。
 
 ## 遥控器快捷键
@@ -31,8 +32,9 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 | 数字 1 | 历史 |
 | 数字 2 | 搜索 |
 | 数字 3 | AI 找片 |
-| 数字 4 | 直播 |
-| 数字 5 | 设置 |
+| 数字 4 | 电视直播 |
+| 数字 5 | 平台直播 |
+| 数字 6 | 设置 |
 | 方向键 | 移动焦点 |
 | 确认键 | 打开当前焦点内容 |
 | 下滑到加载更多 | 自动加载下一页 |
@@ -52,8 +54,8 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 | 按键 | 功能 |
 | --- | --- |
 | 方向左 / 右 | 上一个 / 下一个频道，支持首尾循环 |
+| 方向上 / 下 | 切换当前频道的上一条 / 下一条线路 |
 | 确认 / 播放暂停 | 显示左侧频道列表 |
-| 频道列表中方向上 / 下 | 立即切换频道 |
 | 数字键 | 输入频道号，例如 `1`、`12` |
 | 返回键 | 返回首页 |
 
@@ -62,8 +64,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 从 Release 下载最新 APK：
 
 - [Latest Release](https://github.com/ZxxXinI/tvbox/releases/latest)
-- [Gitee Release](https://gitee.com/zhen-xin/tv-box/releases)
-- OTA 更新清单：`https://gitee.com/zhen-xin/tv-box/raw/agent/update.json`
+- OTA 更新清单：`https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json`
 
 通过 ADB 安装：
 
@@ -82,7 +83,7 @@ adb install -r TVBox-v1.2.10.apk
 应用启动后会请求：
 
 ```text
-https://gitee.com/zhen-xin/tv-box/raw/agent/update.json
+https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 ```
 
 `update.json` 示例：
@@ -108,8 +109,8 @@ https://gitee.com/zhen-xin/tv-box/raw/agent/update.json
 - `apkUrl` 是 APK 下载地址，目前指向 GitHub Release 附件。
 - `apkSha256` 用于下载完成后的完整性校验。
 - `force` 预留强制更新能力，当前普通更新可选择稍后再说。
-- `update.json` 放在仓库根目录，随代码推送到 Gitee 后，应用会通过 raw 地址读取。
-- Gitee Release 需要上传 APK 附件；GitHub Release 可以继续作为备份。
+- `update.json` 放在 GitHub 仓库根目录，随 `main` 分支更新后，应用会通过 raw 地址读取。
+- APK 附件上传到 GitHub Release，`update.json` 中的 `apkUrl` 指向对应 GitHub Release 附件。
 - `git push` 只会上传代码和 tag，不会自动上传 Release 附件。
 
 ## 本地构建
@@ -207,27 +208,23 @@ versionName = "1.2.8"
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
 git commit -m "Release v1.2.10"
 git tag -a v1.2.10 -m "TVBox v1.2.10"
-git push origin agent
+git push origin main
 git push origin v1.2.10
-git push gitee agent
-git push gitee v1.2.10
 ```
 
-4. 更新根目录 `update.json`，其中 `apkUrl` 指向 Gitee Release APK。
+4. 更新根目录 `update.json`，其中 `apkUrl` 指向 GitHub Release APK。
 
-5. 在 Gitee Release 上传对应版本 APK：
+5. 在 GitHub Release 上传对应版本 APK：
 
 ```text
 TVBox-v1.2.10.apk
 ```
 
-6. 可选：在 GitHub Release 上传或覆盖备份附件：
-
 ```powershell
 gh release upload v1.2.10 app\build\outputs\apk\release\TVBox-v1.2.10.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
-> Gitee Release 目前建议在网页端创建并上传 APK；GitHub Release 可继续使用 `gh` 命令维护备份。
+> GitHub Release 需要包含对应版本的 APK 和 `update.json`；应用启动时从 GitHub `main` 分支读取更新清单。
 
 ## 项目结构
 

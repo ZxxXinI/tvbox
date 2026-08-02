@@ -54,7 +54,7 @@ object AiProviders {
             id = "agnes",
             name = "Agnes",
             apiBaseUrl = "https://apihub.agnes-ai.com/v1/chat/completions",
-            defaultModel = "agnes-2.0-flash",
+            defaultModel = "agnes-2.5-flash",
         ),
         AiProvider(
             id = "deepseek",

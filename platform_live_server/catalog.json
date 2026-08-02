@@ -1,0 +1,17 @@
+﻿[
+  {
+    "id": "douyu-36252",
+    "name": "斗鱼赛事测试",
+    "site": "douyu",
+    "roomId": "36252",
+    "group": "测试"
+  },
+  {
+    "id": "douyu-4258555",
+    "name": "斗鱼轮播测试",
+    "site": "douyu",
+    "roomId": "4258555",
+    "group": "测试"
+  }
+]
+
