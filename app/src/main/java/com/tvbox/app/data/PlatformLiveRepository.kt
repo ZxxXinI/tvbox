@@ -277,7 +277,7 @@ private data class PlatformLiveRoomDto(
             id = "${site.lowercase()}:$normalizedRoomId",
             site = site.lowercase(),
             roomId = normalizedRoomId,
-            title = title.trim().ifBlank { "斗鱼直播 $normalizedRoomId" },
+            title = title.trim().ifBlank { "直播 $normalizedRoomId" },
             anchor = anchor.trim(),
             cover = cover.trim(),
             online = online.coerceAtLeast(0),

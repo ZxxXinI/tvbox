@@ -1,5 +1,31 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-02 - v1.3.0 源码版本升级
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 多平台直播接入完成，需要提升 Android 版本号。
+  - Purpose: 将 `versionCode` 设置为 `10300`，将 `versionName` 设置为 `1.3.0`。
+- File path: `CHANGELOG.md`
+  - Reason: 需要记录五平台直播和服务端部署能力。
+  - Purpose: 增加 v1.3.0 变更说明。
+- File path: `README.md`
+  - Reason: 当前 README 缺少平台直播服务部署和构建地址说明。
+  - Purpose: 增加五平台直播说明、部署文档链接和 `TVBOX_PLATFORM_LIVE_SERVICE_URL` 构建示例。
+
+## Bug Record
+
+- Time: 2026-08-02
+- Symptoms: 无新增缺陷。本次为源码版本升级和部署文档同步。
+- Attempted fix: 不适用。
+- Temporary solution: 本次暂不更新 `update.json`，避免 OTA 指向尚未发布的 v1.3.0 Release。
+
+## Verification
+
+- 使用 `TVBOX_PLATFORM_LIVE_SERVICE_URL=http://20.205.10.127:8868` 完成 Debug 构建参数验证。
+- 未发布 GitHub Release，待后续正式发布时再更新 `update.json` 和 Release 资产。
+
 ## 2026-08-02 11:23 - OTA 更新地址切回 GitHub
 
 ## File Changes
