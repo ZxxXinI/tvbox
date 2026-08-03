@@ -95,8 +95,8 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 {
   "versionCode": 10301,
   "versionName": "1.3.1",
-  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.3.1/TVBox-v1.3.1.apk",
-  "apkSha256": "d79636cbdbcb1031aae4a6ccf412106744b2700b197cc74c4db2b3dd41a19ca2",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.1/TVBox-v1.3.1.apk",
+  "apkSha256": "29036c8f5f06b5a81c694aa9cb62c2ad6f418acf314a4001581204ea0229d947",
   "apkSize": 4821161,
   "force": false,
   "changelog": [
@@ -110,7 +110,7 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 说明：
 
 - `versionCode` 必须大于当前应用版本，才会提示更新。
-- `apkUrl` 是 APK 下载地址，目前指向 GitHub Release 附件。
+- `apkUrl` 是 APK 下载地址，目前通过 `gh-proxy.org` 转发 GitHub Release 附件。
 - `apkSha256` 用于下载完成后的完整性校验。
 - `force` 预留强制更新能力，当前普通更新可选择稍后再说。
 - `update.json` 放在 GitHub 仓库根目录，随 `main` 分支更新后，应用会通过 raw 地址读取。
