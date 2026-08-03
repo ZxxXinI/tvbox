@@ -1,5 +1,51 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-03 08:40 - v1.3.1 带平台直播服务地址覆盖构建
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: Release APK 需要连接统一平台直播服务。
+  - Purpose: 使用构建参数 `TVBOX_PLATFORM_LIVE_SERVICE_URL=http://20.205.10.127:8868` 注入 `BuildConfig.PLATFORM_LIVE_SERVICE_URL`。
+- File path: `update.json`
+  - Reason: 代理下载地址和带服务配置的 APK 需要同步到 OTA 清单。
+  - Purpose: 将 `apkUrl` 改为 `https://gh-proxy.org/` 前缀，并更新 APK SHA-256。
+- File path: `README.md`
+  - Reason: OTA 示例必须与实际清单和 Release 资产保持一致。
+  - Purpose: 更新代理下载地址、校验值和说明。
+- File path: `devLog/README.md`
+  - Reason: 需要记录同版本覆盖构建的配置和发布动作。
+  - Purpose: 在主时间线登记带平台直播地址的 v1.3.1 覆盖构建。
+- File path: `devLog/release.md`
+  - Reason: 发布记录需要保留本次 APK 配置、校验值和资产更新结果。
+  - Purpose: 记录带平台直播服务地址的 v1.3.1 覆盖发布。
+
+## Bug Record
+
+- Time: 2026-08-03 08:40
+- Symptoms: 原 v1.3.1 APK 未注入平台直播服务地址，平台直播无法请求统一服务。
+- Attempted fix: 使用 `TVBOX_PLATFORM_LIVE_SERVICE_URL=http://20.205.10.127:8868` 重新构建并覆盖 Release 资产。
+- Temporary solution: 无。
+
+## Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleRelease --console=plain --no-daemon`
+  - Result: passed.
+- Release `BuildConfig.PLATFORM_LIVE_SERVICE_URL`：`http://20.205.10.127:8868`。
+- `E:\Soft\Tools\AndroidSDK\build-tools\36.1.0\apksigner.bat verify --print-certs app\build\outputs\apk\release\app-release.apk`
+  - Result: passed. Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.1.apk`
+  - Size: `4821161`
+  - SHA-256: `29036c8f5f06b5a81c694aa9cb62c2ad6f418acf314a4001581204ea0229d947`
+- OTA APK URL: `https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.1/TVBox-v1.3.1.apk`
+- GitHub v1.3.1 Release 资产将覆盖为本次带服务地址的 APK 和 `update.json`。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-08-03 08:00 - 发布 v1.3.1
 
 ## File Changes

@@ -1,5 +1,13 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-08-03 08:40 - v1.3.1 带平台直播服务地址覆盖构建
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 使用 `TVBOX_PLATFORM_LIVE_SERVICE_URL=http://20.205.10.127:8868` 重新构建 Release APK。
+  - OTA `apkUrl` 增加 `https://gh-proxy.org/` 前缀并更新 APK SHA-256。
+  - 覆盖 GitHub v1.3.1 Release 的 APK 和 `update.json` 资产。
+
 ### 2026-08-03 08:00 - 发布 v1.3.1
 
 - Branch doc: `devLog/release.md`
