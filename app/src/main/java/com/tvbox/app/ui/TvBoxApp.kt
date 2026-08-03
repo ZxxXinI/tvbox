@@ -4,6 +4,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -12,11 +13,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -45,11 +49,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -62,14 +68,19 @@ import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.PlaybackHealthSnapshot
+import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.AppHeader
+import com.tvbox.app.ui.components.AppNavigationRail
 import com.tvbox.app.ui.components.CategoryPill
 import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.HistoryItemCard
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.MoviePosterCard
 import com.tvbox.app.ui.components.PageSurface
+import com.tvbox.app.ui.components.PosterImage
 import com.tvbox.app.ui.components.tvFocusScale
+import com.tvbox.app.ui.theme.TvColors
+import com.tvbox.app.ui.theme.TvDimens
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 
@@ -82,19 +93,38 @@ fun TvBoxApp(
     onInstallUpdate: (String) -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        when (state.screen) {
-            TvScreen.Home -> HomeScreen(state = state, actions = actions)
-            TvScreen.History -> HistoryScreen(state = state, actions = actions)
-            TvScreen.Search -> SearchScreen(state = state, actions = actions)
-            TvScreen.Detail -> DetailScreen(state = state, actions = actions)
-            TvScreen.Player -> PlayerScreen(state = state, actions = actions)
-            TvScreen.Live -> LiveScreen(state = state, actions = actions)
-            TvScreen.PlatformLive -> PlatformLiveScreen(state = state, actions = actions)
-            TvScreen.Settings -> SettingsScreen(state = state, actions = actions)
-            TvScreen.AiRecommend -> AiRecommendScreen(
+        val showNavigationRail = state.appSettings.theme == TvTheme.Cinema &&
+            state.screen != TvScreen.Player &&
+            state.screen != TvScreen.Live
+        if (showNavigationRail) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                AppNavigationRail(
+                    screen = state.screen,
+                    onHome = actions::openHome,
+                    onAiRecommend = actions::openAiRecommend,
+                    onLive = actions::openLive,
+                    onPlatformLive = actions::openPlatformLive,
+                    onSettings = actions::openSettings,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp)
+                        .background(TvColors.TextTertiary.copy(alpha = 0.55f)),
+                )
+                Box(modifier = Modifier.weight(1f)) {
+                    TvBoxScreen(
+                        state = state,
+                        actions = actions,
+                        onStartAiVoiceInput = onStartAiVoiceInput,
+                    )
+                }
+            }
+        } else {
+            TvBoxScreen(
                 state = state,
                 actions = actions,
-                onStartVoiceInput = onStartAiVoiceInput,
+                onStartAiVoiceInput = onStartAiVoiceInput,
             )
         }
         AppUpdateDialog(
@@ -102,6 +132,29 @@ fun TvBoxApp(
             actions = actions,
             onStartUpdateDownload = onStartUpdateDownload,
             onInstallUpdate = onInstallUpdate,
+        )
+    }
+}
+
+@Composable
+private fun TvBoxScreen(
+    state: TvBoxUiState,
+    actions: TvBoxViewModel,
+    onStartAiVoiceInput: () -> Unit,
+) {
+    when (state.screen) {
+        TvScreen.Home -> HomeScreen(state = state, actions = actions)
+        TvScreen.History -> HistoryScreen(state = state, actions = actions)
+        TvScreen.Search -> SearchScreen(state = state, actions = actions)
+        TvScreen.Detail -> DetailScreen(state = state, actions = actions)
+        TvScreen.Player -> PlayerScreen(state = state, actions = actions)
+        TvScreen.Live -> LiveScreen(state = state, actions = actions)
+        TvScreen.PlatformLive -> PlatformLiveScreen(state = state, actions = actions)
+        TvScreen.Settings -> SettingsScreen(state = state, actions = actions)
+        TvScreen.AiRecommend -> AiRecommendScreen(
+            state = state,
+            actions = actions,
+            onStartVoiceInput = onStartAiVoiceInput,
         )
     }
 }
@@ -203,6 +256,7 @@ private fun HomeScreen(
 ) {
     PageSurface { padding ->
         val apiLineName = state.selectedApiLine?.name ?: "资源"
+        val cinemaTheme = state.appSettings.theme == TvTheme.Cinema
         val allCategoryFocusRequester = remember { FocusRequester() }
         val movieGridState = rememberLazyGridState()
         val homeTopContentVisible by remember {
@@ -265,7 +319,7 @@ private fun HomeScreen(
             AnimatedVisibility(visible = showHomeTopContent) {
                 Column {
                     AppHeader(
-                        title = "TVBox",
+                        title = if (cinemaTheme) "首页" else "TVBox",
                         subtitle = "$apiLineName 数据 / 共 ${state.total} 部影片",
                         onHistory = actions::openHistory,
                         onSearch = actions::openSearch,
@@ -273,14 +327,24 @@ private fun HomeScreen(
                         onLive = actions::openLive,
                         onPlatformLive = actions::openPlatformLive,
                         onSettings = actions::openSettings,
+                        showShortcutActions = !cinemaTheme,
                     )
+                    if (cinemaTheme) {
+                        state.movies.firstOrNull()?.let { featuredMovie ->
+                            FeaturedMovieHero(
+                                movie = featuredMovie,
+                                onOpen = { actions.openDetail(featuredMovie.id) },
+                            )
+                            Spacer(modifier = Modifier.height(TvDimens.SectionGap))
+                        }
+                    }
                     HomeCategoryRows(
                         state = state,
                         onAll = actions::selectAllCategories,
                         onParent = actions::selectParentCategory,
-                        onChild = actions::selectChildCategory,
-                        allCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
-                    )
+                    onChild = actions::selectChildCategory,
+                    allCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
+                )
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
@@ -299,8 +363,93 @@ private fun HomeScreen(
                     gridState = movieGridState,
                     onMovieClick = actions::openDetail,
                     onLoadMore = actions::loadNextPage,
+                    showSectionHeader = cinemaTheme,
                     modifier = Modifier.weight(1f),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeaturedMovieHero(
+    movie: com.tvbox.app.domain.Movie,
+    onOpen: () -> Unit,
+) {
+    val heroShape = RoundedCornerShape(18.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 165.dp, max = 190.dp)
+            .clip(heroShape)
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(TvColors.Surface, TvColors.SurfaceOverlay, Color.Transparent),
+                ),
+            ),
+    ) {
+        PosterImage(
+            movie = movie,
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(0.38f),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            TvColors.Surface,
+                            TvColors.SurfaceOverlay.copy(alpha = 0.82f),
+                            Color.Transparent,
+                        ),
+                    ),
+                ),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.68f)
+                .padding(horizontal = 24.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = "今日热播",
+                color = TvColors.AccentStrong,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(
+                text = movie.name,
+                style = MaterialTheme.typography.headlineMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = listOf(movie.year, movie.typeName, movie.remarks)
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString("  ·  "),
+                color = TvColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (movie.description.isNotBlank()) {
+                Text(
+                    text = movie.description,
+                    color = TvColors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpen) {
+                    Text("播放")
+                }
+                TextButton(onClick = onOpen) {
+                    Text("详情")
+                }
             }
         }
     }
@@ -462,6 +611,18 @@ private fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.weight(1f),
             ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsSectionTitle(
+                        title = "外观",
+                        subtitle = "默认主题保留原有界面；影院主题使用左侧图标导航和影院色板。",
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ThemeSetting(
+                        selectedTheme = state.appSettings.theme,
+                        onThemeSelect = actions::updateTheme,
+                    )
+                }
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     SettingsSectionTitle(
                         title = "视频接口",
@@ -818,6 +979,7 @@ private fun SettingsActionButton(
     text: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    selected: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(50)
@@ -842,11 +1004,13 @@ private fun SettingsActionButton(
         color = when {
             !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             focused -> MaterialTheme.colorScheme.primary
-            else -> Color(0xFF1F1F1F)
+            selected -> TvColors.AccentSoft
+            else -> TvColors.Surface
         },
         contentColor = when {
             !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             focused -> MaterialTheme.colorScheme.onPrimary
+            selected -> TvColors.AccentStrong
             else -> MaterialTheme.colorScheme.onSurface
         },
         tonalElevation = if (focused) 8.dp else 0.dp,
@@ -1006,6 +1170,7 @@ private fun MovieGrid(
     gridState: LazyGridState,
     onMovieClick: (Int) -> Unit,
     onLoadMore: () -> Unit,
+    showSectionHeader: Boolean,
     modifier: Modifier = Modifier,
 ) {
     var loadMoreFocused by remember { mutableStateOf(false) }
@@ -1013,50 +1178,106 @@ private fun MovieGrid(
         gridState.scrollToItem(0)
         loadMoreFocused = false
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 148.dp),
-        state = gridState,
-        contentPadding = PaddingValues(bottom = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
-        modifier = modifier.fillMaxSize(),
-    ) {
-        items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
-            MoviePosterCard(movie = movie, onClick = { onMovieClick(movie.id) })
+    Column(modifier = modifier.fillMaxSize()) {
+        if (showSectionHeader) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("正在热播", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "${state.movies.size} / ${state.total} 部",
+                    color = TvColors.TextSecondary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
         }
-        if (state.canLoadMore || state.loadingMore) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Row(
-                    modifier = Modifier.padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Button(
-                        onClick = {
-                            if (!state.loadingMore) {
-                                onLoadMore()
-                            }
-                        },
-                        modifier = Modifier.onFocusChanged { focusState ->
-                            if (focusState.isFocused) {
-                                if (!loadMoreFocused && !state.loadingMore) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 148.dp),
+            state = gridState,
+            contentPadding = PaddingValues(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
+                MoviePosterCard(
+                    movie = movie,
+                    onClick = { onMovieClick(movie.id) },
+                    posterAspectRatio = 0.78f,
+                )
+            }
+            if (state.canLoadMore || state.loadingMore) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Button(
+                            onClick = {
+                                if (!state.loadingMore) {
                                     onLoadMore()
                                 }
-                                loadMoreFocused = true
-                            } else {
-                                loadMoreFocused = false
-                            }
-                        },
-                    ) {
-                        Text(if (state.loadingMore) "加载中..." else "加载更多")
+                            },
+                            modifier = Modifier.onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    if (!loadMoreFocused && !state.loadingMore) {
+                                        onLoadMore()
+                                    }
+                                    loadMoreFocused = true
+                                } else {
+                                    loadMoreFocused = false
+                                }
+                            },
+                        ) {
+                            Text(if (state.loadingMore) "加载中..." else "加载更多")
+                        }
                     }
                 }
+            } else if (state.movies.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "已经到底了",
+                        modifier = Modifier.padding(vertical = 16.dp),
+                        color = TvColors.TextSecondary,
+                    )
+                }
             }
-        } else if (state.movies.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    text = "已经到底了",
-                    modifier = Modifier.padding(vertical = 16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        }
+    }
+}
+
+@Composable
+private fun ThemeSetting(
+    selectedTheme: TvTheme,
+    onThemeSelect: (TvTheme) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("界面主题", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "当前：${selectedTheme.displayName}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "选择后立即生效，设置会保存到本机。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvTheme.entries.forEach { theme ->
+                SettingsActionButton(
+                    text = if (selectedTheme == theme) "✓ ${theme.displayName}" else theme.displayName,
+                    selected = selectedTheme == theme,
+                    onClick = { onThemeSelect(theme) },
                 )
             }
         }

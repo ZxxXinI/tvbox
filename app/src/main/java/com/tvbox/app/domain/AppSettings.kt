@@ -1,16 +1,31 @@
-package com.tvbox.app.domain
+﻿package com.tvbox.app.domain
 
 import kotlinx.serialization.Serializable
 
 data class AppSettings(
     val homeApiLineId: String = "liangzi",
     val customVideoApiLines: List<CustomVideoApiLine> = emptyList(),
+    val theme: TvTheme = TvTheme.Default,
     val aiProviderId: String = AiProviders.default.id,
     val aiModelName: String = AiProviders.default.defaultModel,
     val aiApiKey: String = "",
     val checkUpdatesOnStartup: Boolean = true,
     val playbackAgentAutoSwitchEnabled: Boolean = true,
 )
+
+enum class TvTheme(
+    val storageKey: String,
+    val displayName: String,
+) {
+    Default("default", "默认主题"),
+    Cinema("cinema", "影院主题"),
+    ;
+
+    companion object {
+        fun fromStorageKey(value: String?): TvTheme =
+            entries.firstOrNull { it.storageKey == value } ?: Default
+    }
+}
 
 @Serializable
 data class CustomVideoApiLine(

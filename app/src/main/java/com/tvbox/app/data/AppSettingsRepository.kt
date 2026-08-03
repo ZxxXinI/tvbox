@@ -1,8 +1,9 @@
-package com.tvbox.app.data
+﻿package com.tvbox.app.data
 
 import android.content.Context
 import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.CustomVideoApiLine
+import com.tvbox.app.domain.TvTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -27,6 +28,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             homeApiLineId = prefs.getString(KEY_HOME_API_LINE_ID, AppSettings().homeApiLineId)
                 ?: AppSettings().homeApiLineId,
             customVideoApiLines = readCustomVideoApiLines(),
+            theme = TvTheme.fromStorageKey(prefs.getString(KEY_THEME, TvTheme.Default.storageKey)),
             aiProviderId = prefs.getString(KEY_AI_PROVIDER_ID, AppSettings().aiProviderId)
                 ?: AppSettings().aiProviderId,
             aiModelName = prefs.getString(KEY_AI_MODEL_NAME, AppSettings().aiModelName)
@@ -42,6 +44,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
         prefs.edit()
             .putString(KEY_HOME_API_LINE_ID, settings.homeApiLineId)
             .putString(KEY_CUSTOM_VIDEO_API_LINES, json.encodeToString(settings.customVideoApiLines))
+            .putString(KEY_THEME, settings.theme.storageKey)
             .putString(KEY_AI_PROVIDER_ID, settings.aiProviderId)
             .putString(KEY_AI_MODEL_NAME, settings.aiModelName)
             .putString(KEY_AI_API_KEY, settings.aiApiKey)
@@ -61,6 +64,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
     private companion object {
         const val KEY_HOME_API_LINE_ID = "home_api_line_id"
         const val KEY_CUSTOM_VIDEO_API_LINES = "custom_video_api_lines"
+        const val KEY_THEME = "theme"
         const val KEY_AI_PROVIDER_ID = "ai_provider_id"
         const val KEY_AI_MODEL_NAME = "ai_model_name"
         const val KEY_AI_API_KEY = "ai_api_key"

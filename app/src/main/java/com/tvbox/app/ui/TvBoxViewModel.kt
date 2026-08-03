@@ -37,6 +37,7 @@ import com.tvbox.app.domain.PlatformLiveRoom
 import com.tvbox.app.domain.PlatformLiveSite
 import com.tvbox.app.domain.ResolvedPlatformLiveStream
 import com.tvbox.app.domain.WatchHistoryItem
+import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.domain.playbackHealthKey
 import com.tvbox.app.domain.toApiLines
 import kotlinx.coroutines.Job
@@ -306,6 +307,17 @@ class TvBoxViewModel(
         val current = _state.value
         if (!current.canLoadMore) return
         loadHomePage(reset = false)
+    }
+
+    fun openHome() {
+        _state.update {
+            it.copy(
+                screen = TvScreen.Home,
+                detailReturnScreen = TvScreen.Home,
+                platformLiveDestination = PlatformLiveDestination.Sites,
+                platformLiveStream = null,
+            )
+        }
     }
 
     fun openSearch() {
@@ -1081,6 +1093,13 @@ class TvBoxViewModel(
                 liveLineIndex = 0,
             )
         }
+    }
+
+    fun updateTheme(theme: TvTheme) {
+        if (_state.value.appSettings.theme == theme) return
+        val settings = _state.value.appSettings.copy(theme = theme)
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings) }
     }
 
     fun playPreviousLiveChannel() {

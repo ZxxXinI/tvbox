@@ -1,0 +1,44 @@
+{
+  "id": "",
+  "name": "",
+  "font_family": "iconfont",
+  "css_prefix_text": "icon-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "1149346",
+      "name": "tv",
+      "font_class": "tv",
+      "unicode": "eb34",
+      "unicode_decimal": 60212
+    },
+    {
+      "icon_id": "2000935",
+      "name": "live",
+      "font_class": "live",
+      "unicode": "e6e6",
+      "unicode_decimal": 59110
+    },
+    {
+      "icon_id": "5387880",
+      "name": "灵感_o",
+      "font_class": "linggan_o",
+      "unicode": "eb7d",
+      "unicode_decimal": 60285
+    },
+    {
+      "icon_id": "8370794",
+      "name": "home",
+      "font_class": "home",
+      "unicode": "e608",
+      "unicode_decimal": 58888
+    },
+    {
+      "icon_id": "12865693",
+      "name": "setting",
+      "font_class": "setting",
+      "unicode": "e6f0",
+      "unicode_decimal": 59120
+    }
+  ]
+}

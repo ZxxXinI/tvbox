@@ -1,5 +1,39 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-08-03 08:00 - 发布 v1.3.1
+
+- Branch doc: `devLog/release.md`
+- Summary:
+  - 应用版本升级为 `1.3.1` / `10301`。
+  - 归档默认主题 / 影院主题切换、影院首页图标导航和直播遥控器修复。
+  - 准备 Release APK、OTA 清单和 GitHub Release 资产。
+
+### 2026-08-03 07:53 - 恢复默认主题初始首页结构
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 默认主题恢复无左侧栏、无 Hero 的初始首页结构。
+  - 首页顶部恢复“历史(1) / 搜索(2) / 推荐(3) / 电视(4) / 直播(5) / 设置(6)”六个遥控器入口。
+  - 影院主题继续使用左侧图标栏、Hero 推荐和影院首页布局。
+  - Debug 构建和 ADB 设备主题切换验证通过。
+
+### 2026-08-03 07:32 - 增加首页分界线并修正电视图标尺寸
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 左侧栏与首页内容区之间增加灰色 1dp 分界线。
+  - 电视字体图标缩小至 22sp，避免字形被裁切。
+  - Debug 构建、安装和 ADB 首页截图验证通过。
+
+### 2026-08-03 07:24 - 使用项目字体图标并修正影院首页布局
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 左侧导航改用 `docs/icon/font/iconfont.ttf`，推荐入口映射 `linggan_o` 图标。
+  - 左栏背景与首页背景统一。
+  - 收紧首页 Hero 内部间距，修复“播放 / 详情”文字被裁切。
+  - 本次不调整默认主题语义，保留后续单独处理。
+
 ### 2026-08-02 - v1.3.0 多平台直播与服务端部署
 
 - Branch docs: `devLog/platform-live.md`, `devLog/release.md`
@@ -414,3 +448,12 @@
 - Release: `devLog/release.md`
 - Home / Player UI: `devLog/home-player-ui.md`
 - Platform Live: `devLog/platform-live.md`
+
+### 2026-08-03 06:44 - 首页方案归档、图标导航与主题切换
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 将三套首页切换原型归档到 `docs/design/tvbox-ui-directions.html`，补充第一套方案和遥控器快捷键说明。
+  - 首页左侧导航改为图标形式；移除首页顶部重复 TV 标识和设置入口，仅保留搜索、历史。
+  - 新增“默认主题 / 影院主题”持久化切换，默认主题沿用原有 Material 风格，影院主题使用影院色板。
+  - 保留首页数字键 `1`–`6` 快捷键，并完成 `emulator-5554` 安装截图验证。
