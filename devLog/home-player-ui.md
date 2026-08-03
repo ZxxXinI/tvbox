@@ -1,4 +1,82 @@
-# Home / Player UI - 2026-06-30
+﻿# Home / Player UI - 2026-06-30
+
+## 2026-08-03 07:53 - 默认主题恢复初始首页结构
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 默认主题不能只切换颜色，应恢复最初无侧栏的首页结构。
+  - Purpose: 默认主题隐藏影院左栏和 Hero；影院主题保留现有影院布局。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/components/Common.kt`
+  - Reason: 默认主题需要初始版顶部快捷入口。
+  - Purpose: 默认主题显示历史(1)、搜索(2)、推荐(3)、电视(4)、直播(5)、设置(6)，并恢复旧版按钮样式。
+
+## Bug Record
+
+- Time: 2026-08-03 07:53
+- Symptoms: 默认主题此前只改变颜色，仍显示影院主题的左栏和 Hero 结构。
+- Attempted fix: 按 `TvTheme` 分支恢复初始首页结构与顶部快捷入口。
+- Temporary solution: 无。
+
+## Verification
+
+- `compileDebugKotlin --console=plain --offline --no-daemon`：passed。
+- `assembleDebug --console=plain --offline --no-daemon`：passed。
+- ADB：`emulator-5554` 已验证影院主题保留左栏，切换默认主题后显示初始六按钮顶部栏。
+
+## 2026-08-03 07:32 - 首页分界线和电视图标尺寸修正
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 左侧栏与首页内容区之间需要明确的视觉分界。
+  - Purpose: 增加 1dp 灰色竖向分界线。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/components/Common.kt`
+  - Reason: 项目电视图标字形在原尺寸下显示不完整。
+  - Purpose: 将电视图标单独缩小到 22sp，其他图标保持原尺寸。
+
+## Bug Record
+
+- Time: 2026-08-03 07:32
+- Symptoms: 左栏与内容区没有边界线；电视图标字形超出容器。
+- Attempted fix: 增加灰色分界线，缩小电视图标。
+- Temporary solution: 无。
+
+## Verification
+
+- `assembleDebug --console=plain --offline --no-daemon`：passed。
+- ADB：`emulator-5554` 安装成功；已确认分界线可见，电视图标完整显示。
+
+## 2026-08-03 07:24 - 项目图标和首页布局修正
+
+## File Changes
+
+- File path: `app/src/main/res/font/tvbox_iconfont.ttf`
+  - Reason: `docs/icon/font` 提供了与项目匹配的字体图标代码。
+  - Purpose: 在 Android 中加载 `home`、`tv`、`live`、`linggan_o`、`setting` 五个字形。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/components/Common.kt`
+  - Reason: 左侧栏应使用项目图标，且背景应与首页一致。
+  - Purpose: 用字体图标替换自绘图标，并将导航栏背景改为首页背景色。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: Hero 底部“播放 / 详情”按钮文字显示不完整。
+  - Purpose: 压缩 Hero 文案区垂直间距，保证按钮完整显示。
+
+## Bug Record
+
+- Time: 2026-08-03 07:24
+- Symptoms: 左栏图标与项目资源不一致；左栏背景比首页深色层级不同；Hero 按钮文字被容器裁切。
+- Attempted fix: 接入项目字体图标、统一背景色、收紧 Hero 布局。
+- Temporary solution: 默认主题语义按用户要求暂不调整。
+
+## Verification
+
+- `compileDebugKotlin --console=plain --offline --no-daemon`：passed。
+- `assembleDebug --console=plain --offline --no-daemon`：passed。
+- ADB：`emulator-5554` 安装成功；已确认推荐为灯泡图标，播放 / 详情文字完整显示。
 
 ## 2026-07-08 19:44 - 直播手机触摸手势
 
@@ -123,6 +201,33 @@
   - Result: passed.
 - `git diff --check`
   - Result: passed. Only line-ending warnings were reported.
+
+## 2026-08-03 06:44 - 第一套首页方案对齐
+
+## File Changes
+
+- `docs/design/tvbox-ui-directions.html`：归档可切换的三套首页设计原型。
+- `docs/design/README.md`：说明第一套“影院 · 媒体库”方向与数字键快捷键。
+- `app/src/main/java/com/tvbox/app/ui/components/Common.kt`：使用自绘 TV 导航图标；顶部仅保留首页摘要、搜索和历史，左栏不再重复搜索和历史。
+- `app/src/main/java/com/tvbox/app/ui/theme/Theme.kt`：建立默认 / 影院两套动态色板。
+- `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`：增加 `TvTheme` 枚举与 `AppSettings.theme`。
+- `app/src/main/java/com/tvbox/app/data/AppSettingsRepository.kt`：读写主题存储键。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`：增加 `updateTheme`，即时更新并保存设置。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`：增加主题选择控件，并保留首页数字键 1–6 快捷键。
+- `app/src/main/java/com/tvbox/app/MainActivity.kt`：将当前主题传入 `TVBoxTheme`。
+
+## Bug Record
+
+- Time: 2026-08-03 06:44
+- Symptoms: 设计稿位置不稳定；左栏文字符号与第一套图标方案不一致；首页出现重复入口；影院主题缺少设置切换入口。
+- Attempted fix: 设计稿归档、左栏 Canvas 图标化、顶部入口精简、动态主题和设置持久化。
+- Temporary solution: 无。
+
+## Verification
+
+- `compileDebugKotlin --console=plain --offline --no-daemon`：passed。
+- `assembleDebug --console=plain --offline --no-daemon`：passed。
+- ADB：`emulator-5554`（`1600x900`）安装成功；已验证首页、设置页、影院主题首页，以及数字键 `1` 打开历史、数字键 `6` 打开设置。
 
 ## Navigation
 

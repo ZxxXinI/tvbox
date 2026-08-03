@@ -2,7 +2,7 @@
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
-当前源码版本为 `1.3.0`（`versionCode=10300`）。本版本包含五平台直播接入；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
+当前源码版本为 `1.3.1`（`versionCode=10301`）。本版本包含默认主题 / 影院主题切换、影院首页导航优化和五平台直播接入；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
 
 > 请确保使用的影视与直播接口具备合法授权。本项目仅提供客户端能力，不内置或托管影视内容。
 
@@ -15,6 +15,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - Android TV 适配：支持 `LEANBACK_LAUNCHER`，可在电视桌面启动，同时保留普通 Android 启动入口。
 - 遥控器友好：方向键、确认键、返回键、菜单键和数字键均有对应交互。
 - 首页影视列表：支持一级/二级分类、分页加载、焦点高亮和遥控快捷键。
+- 主题切换：设置页支持“默认主题”和“影院主题”；默认主题保留原有顶部快捷入口，影院主题提供左侧图标导航和 Hero 推荐布局。
 - 视频接口管理：设置页可选择量子、如意、360 等内置资源站，也可手机扫码添加 MacCms 自定义接口作为首页、搜索和 AI 找片默认数据源。
 - 搜索与详情：支持关键词搜索、影片详情、简介、封面、播放源和选集。
 - AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，可在设置页用手机扫码配置大模型、模型名和 API Key。
@@ -77,7 +78,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.3.0.apk
+adb install -r TVBox-v1.3.1.apk
 ```
 
 ## OTA 更新机制
@@ -92,15 +93,16 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 ```json
 {
-  "versionCode": 10300,
-  "versionName": "1.3.0",
-  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.3.0/TVBox-v1.3.0.apk",
-  "apkSha256": "86552fc10d4956d8a4fdcf9e58e1973be30244488af9a691344706af2ed3020b",
-  "apkSize": 4786545,
+  "versionCode": 10301,
+  "versionName": "1.3.1",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.3.1/TVBox-v1.3.1.apk",
+  "apkSha256": "d79636cbdbcb1031aae4a6ccf412106744b2700b197cc74c4db2b3dd41a19ca2",
+  "apkSize": 4821161,
   "force": false,
   "changelog": [
-    "新增斗鱼、虎牙、哔哩哔哩、抖音和快手多平台直播。",
-    "新增平台分类浏览、最高画质和多线路播放。"
+    "新增默认主题 / 影院主题切换和影院首页图标导航。",
+    "修复电视直播焦点恢复与频道快捷键，优化遥控器操作。",
+    "保留斗鱼、虎牙、哔哩哔哩、抖音和快手多平台直播。"
   ]
 }
 ```
@@ -148,7 +150,7 @@ TVBOX_AI_API_KEY=你的测试密钥
 平台直播服务配置：
 
 - 服务端运行在电脑或服务器上，TVBox 通过 `TVBOX_PLATFORM_LIVE_SERVICE_URL` 访问统一接口。
-- 本次 v1.3.0 Debug 构建使用的服务地址为 `http://20.205.10.127:8868`。
+- 本次 v1.3.1 Debug 构建使用的服务地址为 `http://20.205.10.127:8868`。
 - Windows PowerShell 临时构建配置：
 
 ```powershell
@@ -207,8 +209,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10300
-versionName = "1.3.0"
+versionCode = 10301
+versionName = "1.3.1"
 ```
 
 2. 构建 release APK：
@@ -222,10 +224,10 @@ versionName = "1.3.0"
 
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
-git commit -m "Release v1.3.0"
-git tag -a v1.3.0 -m "TVBox v1.3.0"
+git commit -m "Release v1.3.1"
+git tag -a v1.3.1 -m "TVBox v1.3.1"
 git push origin main
-git push origin v1.3.0
+git push origin v1.3.1
 ```
 
 4. 更新根目录 `update.json`，其中 `apkUrl` 指向 GitHub Release APK。
@@ -233,11 +235,11 @@ git push origin v1.3.0
 5. 在 GitHub Release 上传对应版本 APK：
 
 ```text
-TVBox-v1.3.0.apk
+TVBox-v1.3.1.apk
 ```
 
 ```powershell
-gh release upload v1.3.0 app\build\outputs\apk\release\TVBox-v1.3.0.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
+gh release upload v1.3.1 app\build\outputs\apk\release\TVBox-v1.3.1.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
 > GitHub Release 需要包含对应版本的 APK 和 `update.json`；应用启动时从 GitHub `main` 分支读取更新清单。

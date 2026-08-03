@@ -1,0 +1,777 @@
+﻿<style>
+#tvbox-ui-directions {
+  width: 100%;
+  color: light-dark(#1a1d20, #f2f5f3);
+}
+
+#tvbox-ui-directions .tvx-picker {
+  margin-bottom: 12px;
+}
+
+#tvbox-ui-directions .tvx-screen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #080b0b;
+  color: #f5f8f6;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.11), 0 18px 50px rgba(0,0,0,.28);
+}
+
+#tvbox-ui-directions .tvx-screen button {
+  color: inherit;
+  font: inherit;
+}
+
+#tvbox-ui-directions .tvx-screen button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+#tvbox-ui-directions .tvx-screen button[data-demo-focused="true"] {
+  box-shadow: 0 0 0 2px #f7faf8, 0 0 0 5px #29e68c, 0 10px 24px rgba(0,0,0,.4);
+  transform: scale(1.035);
+  z-index: 5;
+}
+
+#tvbox-ui-directions .tvx-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#tvbox-ui-directions .tvx-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+#tvbox-ui-directions .tvx-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  aspect-ratio: 1;
+  border-radius: 9px;
+  background: #29e68c;
+  color: #07110b;
+  font-weight: 500;
+}
+
+#tvbox-ui-directions .tvx-muted {
+  color: #a6b0aa;
+}
+
+#tvbox-ui-directions .tvx-nav-button,
+#tvbox-ui-directions .tvx-icon-button,
+#tvbox-ui-directions .tvx-filter,
+#tvbox-ui-directions .tvx-action,
+#tvbox-ui-directions .tvx-poster {
+  position: relative;
+  appearance: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+#tvbox-ui-directions .tvx-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.10);
+}
+
+#tvbox-ui-directions .tvx-icon-button svg,
+#tvbox-ui-directions .tvx-nav-button svg,
+#tvbox-ui-directions .tvx-action svg {
+  flex: 0 0 auto;
+}
+
+#tvbox-ui-directions .tvx-utility-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+#tvbox-ui-directions .tvx-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.09);
+  border-color: rgba(255,255,255,.12);
+  font-weight: 500;
+}
+
+#tvbox-ui-directions .tvx-action-primary {
+  background: #29e68c;
+  border-color: #29e68c;
+  color: #06110b !important;
+}
+
+#tvbox-ui-directions .tvx-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+#tvbox-ui-directions .tvx-filter {
+  padding: 4px 1px 7px;
+  background: transparent;
+  color: #aab3ae !important;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+#tvbox-ui-directions .tvx-filter[aria-pressed="true"] {
+  color: #f7faf8 !important;
+  border-bottom-color: #29e68c;
+}
+
+#tvbox-ui-directions .tvx-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+#tvbox-ui-directions .tvx-poster-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#tvbox-ui-directions .tvx-poster {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #141918;
+  text-align: left;
+  border-color: rgba(255,255,255,.09);
+}
+
+#tvbox-ui-directions .tvx-poster-art {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  padding: 8px;
+  background: linear-gradient(135deg, #30465a, #101719 70%);
+}
+
+#tvbox-ui-directions .tvx-poster-art::before,
+#tvbox-ui-directions .tvx-poster-art::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  opacity: .78;
+  transform: rotate(-20deg);
+}
+
+#tvbox-ui-directions .tvx-poster-art::before {
+  width: 70%;
+  height: 38%;
+  top: 5%;
+  right: -18%;
+  background: linear-gradient(90deg, rgba(255,255,255,.26), rgba(255,255,255,0));
+}
+
+#tvbox-ui-directions .tvx-poster-art::after {
+  width: 35%;
+  aspect-ratio: 1;
+  right: 12%;
+  bottom: 6%;
+  border: 5px solid rgba(255,255,255,.18);
+}
+
+#tvbox-ui-directions .tvx-art-2 { background: linear-gradient(135deg, #763f34, #18100e 74%); }
+#tvbox-ui-directions .tvx-art-3 { background: linear-gradient(135deg, #6a5044, #171718 72%); }
+#tvbox-ui-directions .tvx-art-4 { background: linear-gradient(135deg, #36524b, #0b1717 72%); }
+#tvbox-ui-directions .tvx-art-5 { background: linear-gradient(135deg, #46406d, #12111a 74%); }
+#tvbox-ui-directions .tvx-art-6 { background: linear-gradient(135deg, #865747, #19100d 72%); }
+#tvbox-ui-directions .tvx-art-7 { background: linear-gradient(135deg, #495a82, #11131d 72%); }
+#tvbox-ui-directions .tvx-art-8 { background: linear-gradient(135deg, #756a39, #17160e 72%); }
+
+#tvbox-ui-directions .tvx-art-title {
+  position: relative;
+  z-index: 2;
+  max-width: 80%;
+  font-weight: 500;
+  text-shadow: 0 2px 8px rgba(0,0,0,.8);
+}
+
+#tvbox-ui-directions .tvx-progress {
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.27);
+}
+
+#tvbox-ui-directions .tvx-progress > span {
+  display: block;
+  width: 62%;
+  height: 100%;
+  background: #29e68c;
+}
+
+#tvbox-ui-directions .tvx-poster-meta {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px 8px;
+}
+
+#tvbox-ui-directions .tvx-poster-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#tvbox-ui-directions .tvx-layout-hybrid {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  height: 100%;
+  background:
+    radial-gradient(circle at 72% 26%, rgba(41,230,140,.10), transparent 31%),
+    linear-gradient(115deg, #080b0b 0%, #0b100f 54%, #07100c 100%);
+}
+
+#tvbox-ui-directions .tvx-side-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 9px;
+  background: rgba(4,7,7,.76);
+  border-right: 1px solid rgba(255,255,255,.07);
+}
+
+#tvbox-ui-directions .tvx-side-rail .tvx-brand-mark {
+  margin-bottom: 7px;
+}
+
+#tvbox-ui-directions .tvx-nav-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  aspect-ratio: 1;
+  padding: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #8e9993 !important;
+}
+
+#tvbox-ui-directions .tvx-nav-button[aria-current="page"] {
+  background: rgba(41,230,140,.14);
+  color: #55f0a1 !important;
+  border-color: rgba(41,230,140,.28);
+}
+
+#tvbox-ui-directions .tvx-nav-spacer {
+  flex: 1;
+}
+
+#tvbox-ui-directions .tvx-hybrid-content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  min-width: 0;
+  padding: 13px 16px 14px;
+}
+
+#tvbox-ui-directions .tvx-hybrid-source {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+#tvbox-ui-directions .tvx-status-dot {
+  width: 7px;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: #29e68c;
+  box-shadow: 0 0 12px rgba(41,230,140,.7);
+}
+
+#tvbox-ui-directions .tvx-hybrid-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(240px, 1.35fr);
+  align-items: center;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, #151917 0%, rgba(17,22,20,.96) 38%, rgba(12,17,15,.28) 72%, rgba(12,17,15,.12) 100%),
+    linear-gradient(135deg, #675044, #152320 72%);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+#tvbox-ui-directions .tvx-hybrid-copy {
+  position: relative;
+  z-index: 3;
+  padding: 14px 0 14px 18px;
+}
+
+#tvbox-ui-directions .tvx-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5df1a8;
+  font-weight: 500;
+}
+
+#tvbox-ui-directions .tvx-hybrid-copy h2,
+#tvbox-ui-directions .tvx-cinema-copy h2 {
+  margin: 6px 0;
+  color: #f8faf8;
+}
+
+#tvbox-ui-directions .tvx-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  color: #c6cec9;
+}
+
+#tvbox-ui-directions .tvx-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+#tvbox-ui-directions .tvx-hero-art {
+  position: absolute;
+  inset: 0 0 0 41%;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(15,20,18,1) 0%, rgba(15,20,18,.16) 40%, transparent 66%),
+    radial-gradient(circle at 65% 38%, rgba(245,195,147,.74) 0 8%, transparent 8.5%),
+    radial-gradient(circle at 58% 40%, rgba(122,52,39,.72) 0 18%, transparent 18.5%),
+    radial-gradient(circle at 72% 54%, rgba(213,151,104,.65) 0 12%, transparent 12.5%),
+    linear-gradient(135deg, #6b4d3c, #263c36 58%, #0c1210);
+}
+
+#tvbox-ui-directions .tvx-hero-art::before {
+  content: "";
+  position: absolute;
+  width: 58%;
+  height: 170%;
+  right: -9%;
+  top: -37%;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.16);
+  transform: rotate(24deg);
+}
+
+#tvbox-ui-directions .tvx-hybrid-bottom {
+  min-width: 0;
+}
+
+#tvbox-ui-directions .tvx-layout-cinema {
+  height: 100%;
+  padding: 15px 18px;
+  background:
+    linear-gradient(90deg, rgba(6,8,8,.98) 0%, rgba(7,10,10,.85) 37%, rgba(7,10,10,.24) 68%, rgba(7,10,10,.44) 100%),
+    radial-gradient(circle at 74% 36%, rgba(238,183,130,.78) 0 7%, transparent 7.5%),
+    radial-gradient(circle at 68% 40%, rgba(120,52,40,.8) 0 19%, transparent 19.5%),
+    radial-gradient(circle at 83% 52%, rgba(208,132,90,.58) 0 13%, transparent 13.5%),
+    linear-gradient(135deg, #42312d, #172523 60%, #060909);
+}
+
+#tvbox-ui-directions .tvx-cinema-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#tvbox-ui-directions .tvx-cinema-nav .tvx-filter {
+  padding-top: 7px;
+}
+
+#tvbox-ui-directions .tvx-cinema-copy {
+  width: 46%;
+  margin-top: 11%;
+}
+
+#tvbox-ui-directions .tvx-cinema-description {
+  color: #b9c2bd;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+#tvbox-ui-directions .tvx-cinema-shelf {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
+}
+
+#tvbox-ui-directions .tvx-cinema-shelf .tvx-poster-row {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+#tvbox-ui-directions .tvx-cinema-shelf .tvx-poster {
+  background: rgba(17,22,20,.86);
+  backdrop-filter: blur(10px);
+}
+
+#tvbox-ui-directions .tvx-cinema-shelf .tvx-poster-art {
+  aspect-ratio: 16 / 8;
+}
+
+#tvbox-ui-directions .tvx-layout-library {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  padding: 14px 17px;
+  background:
+    radial-gradient(circle at 83% 0%, rgba(41,230,140,.07), transparent 28%),
+    #0a0d0d;
+}
+
+#tvbox-ui-directions .tvx-library-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+#tvbox-ui-directions .tvx-library-filter-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#tvbox-ui-directions .tvx-library-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+}
+
+#tvbox-ui-directions .tvx-library-grid .tvx-poster-art {
+  aspect-ratio: 3 / 4;
+}
+
+#tvbox-ui-directions .tvx-library-grid .tvx-poster-meta {
+  padding: 6px 7px 7px;
+}
+
+#tvbox-ui-directions .tvx-library-grid .tvx-poster:nth-child(n+7) {
+  margin-top: 1px;
+}
+
+#tvbox-ui-directions .tvx-density-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #a6b0aa;
+}
+
+@media (max-width: 560px) {
+  #tvbox-ui-directions .tvx-screen {
+    border-radius: 10px;
+    aspect-ratio: 4 / 5;
+  }
+
+  #tvbox-ui-directions .tvx-layout-hybrid {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  #tvbox-ui-directions .tvx-side-rail {
+    padding-inline: 4px;
+  }
+
+  #tvbox-ui-directions .tvx-nav-button {
+    width: 30px;
+  }
+
+  #tvbox-ui-directions .tvx-hybrid-content {
+    padding: 9px 10px;
+    gap: 7px;
+  }
+
+  #tvbox-ui-directions .tvx-hybrid-hero {
+    grid-template-columns: 1fr;
+  }
+
+  #tvbox-ui-directions .tvx-hybrid-copy {
+    padding: 9px 0 9px 11px;
+  }
+
+  #tvbox-ui-directions .tvx-utility-row .text-small,
+  #tvbox-ui-directions .tvx-poster-meta .text-small,
+  #tvbox-ui-directions .tvx-cinema-description,
+  #tvbox-ui-directions .tvx-library-grid .tvx-poster-meta {
+    display: none;
+  }
+
+  #tvbox-ui-directions .tvx-poster-row,
+  #tvbox-ui-directions .tvx-cinema-shelf .tvx-poster-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #tvbox-ui-directions .tvx-poster-row .tvx-poster:nth-child(n+3),
+  #tvbox-ui-directions .tvx-cinema-shelf .tvx-poster:nth-child(n+3) {
+    display: none;
+  }
+
+  #tvbox-ui-directions .tvx-layout-cinema {
+    padding: 10px 11px;
+  }
+
+  #tvbox-ui-directions .tvx-cinema-copy {
+    width: 60%;
+    margin-top: 7%;
+  }
+
+  #tvbox-ui-directions .tvx-cinema-shelf {
+    left: 11px;
+    right: 11px;
+    bottom: 9px;
+  }
+
+  #tvbox-ui-directions .tvx-library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #tvbox-ui-directions .tvx-library-grid .tvx-poster:nth-child(n+3) {
+    display: none;
+  }
+
+  #tvbox-ui-directions .tvx-layout-library {
+    padding: 9px 10px;
+    gap: 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tvbox-ui-directions .tvx-screen button {
+    transition: none;
+  }
+}
+</style>
+
+<div id="tvbox-ui-directions">
+  <div class="viz-controls tvx-picker" aria-label="首页设计方向">
+    <button type="button" class="btn btn-primary" data-direction="hybrid" aria-pressed="true">影院 · 媒体库（建议）</button>
+    <button type="button" class="btn" data-direction="cinema" aria-pressed="false">沉浸影院</button>
+    <button type="button" class="btn" data-direction="library" aria-pressed="false">极速媒体库</button>
+  </div>
+  <section class="tvx-screen" aria-label="TVBox 首页设计方向预览">
+    <div id="tvbox-ui-direction-stage"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const root = document.getElementById('tvbox-ui-directions');
+  const stage = document.getElementById('tvbox-ui-direction-stage');
+  const directionButtons = Array.from(root.querySelectorAll('[data-direction]'));
+
+  const posterData = [
+    ['这一秒过火', '更新至25集', 'tvx-art-2'],
+    ['九门 2026', '全网独播', 'tvx-art-3'],
+    ['昭阳公主', '更新至15集', 'tvx-art-4'],
+    ['警字一号', '更新至16集', 'tvx-art-5'],
+    ['天才，女友', '更新至06集', 'tvx-art-6'],
+    ['夜语记', '即将开播', 'tvx-art-7'],
+    ['江海潮生', '更新至17集', 'tvx-art-8'],
+    ['第五立面', '更新至21集', 'tvx-art-3']
+  ];
+
+  const icon = (name) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+
+  const poster = (item, index, wide = true, focused = false, progress = false) => `
+    <button type="button" class="tvx-poster" data-tvx-focusable="true" ${focused ? 'data-demo-focused="true"' : ''} aria-label="${item[0]}，${item[1]}">
+      <span class="tvx-poster-art ${item[2]}">
+        <span class="tvx-art-title">${item[0]}</span>
+        ${progress ? '<span class="tvx-progress"><span></span></span>' : ''}
+      </span>
+      <span class="tvx-poster-meta">
+        <span>${item[0]}</span>
+        <span class="text-small tvx-muted">${item[1]} · ${index % 2 === 0 ? '国产剧' : '电影'}</span>
+      </span>
+    </button>`;
+
+  const filters = (active = '为你推荐') => ['为你推荐', '电影', '电视剧', '动漫', '综艺'].map((label) => `
+    <button type="button" class="tvx-filter" data-tvx-focusable="true" aria-pressed="${label === active}">${label}</button>`).join('');
+
+  const utilities = () => `
+    <div class="tvx-utility-row">
+      <button type="button" class="tvx-icon-button" data-tvx-focusable="true" aria-label="搜索">${icon('search')}<span class="text-small">搜索</span></button>
+      <button type="button" class="tvx-icon-button" data-tvx-focusable="true" aria-label="观看历史">${icon('history')}<span class="text-small">历史</span></button>
+      <button type="button" class="tvx-icon-button" data-tvx-focusable="true" aria-label="设置">${icon('settings')}<span class="text-small">设置</span></button>
+    </div>`;
+
+  const renderHybrid = () => `
+    <div class="tvx-layout-hybrid">
+      <nav class="tvx-side-rail" aria-label="主导航">
+        <span class="tvx-brand-mark">TV</span>
+        <button type="button" class="tvx-nav-button" data-tvx-focusable="true" aria-current="page" aria-label="首页">${icon('home')}</button>
+        <button type="button" class="tvx-nav-button" data-tvx-focusable="true" aria-label="电视直播">${icon('tv')}</button>
+        <button type="button" class="tvx-nav-button" data-tvx-focusable="true" aria-label="平台直播">${icon('radio-tower')}</button>
+        <button type="button" class="tvx-nav-button" data-tvx-focusable="true" aria-label="AI 找片">${icon('sparkles')}</button>
+        <span class="tvx-nav-spacer"></span>
+        <button type="button" class="tvx-nav-button" data-tvx-focusable="true" aria-label="设置">${icon('settings')}</button>
+      </nav>
+      <main class="tvx-hybrid-content">
+        <header class="tvx-topbar">
+          <div class="tvx-hybrid-source"><span class="tvx-status-dot"></span><span>量子影视</span><span class="text-small tvx-muted">4479 部</span></div>
+          ${utilities()}
+        </header>
+        <section class="tvx-hybrid-hero" aria-label="推荐影片">
+          <div class="tvx-hero-art" aria-hidden="true"></div>
+          <div class="tvx-hybrid-copy">
+            <span class="tvx-eyebrow text-small">${icon('badge-check')} 今日热播</span>
+            <h2>这一秒过火</h2>
+            <div class="tvx-meta-line text-small"><span>2026</span><span>·</span><span>国产剧</span><span>·</span><span>更新至25集</span></div>
+            <div class="tvx-hero-actions">
+              <button type="button" class="tvx-action tvx-action-primary" data-tvx-focusable="true" aria-label="播放这一秒过火">${icon('play')}播放</button>
+              <button type="button" class="tvx-action" data-tvx-focusable="true">详情</button>
+            </div>
+          </div>
+        </section>
+        <section class="tvx-hybrid-bottom" aria-label="继续观看">
+          <div class="tvx-section-title"><span>继续观看</span><span class="text-small tvx-muted">方向键浏览 · OK 播放</span></div>
+          <div class="tvx-poster-row">
+            ${poster(posterData[0], 0, true, true, true)}
+            ${poster(posterData[1], 1, true, false, true)}
+            ${poster(posterData[2], 2, true, false, false)}
+            ${poster(posterData[3], 3, true, false, false)}
+            ${poster(posterData[4], 4, true, false, false)}
+          </div>
+        </section>
+      </main>
+    </div>`;
+
+  const renderCinema = () => `
+    <main class="tvx-layout-cinema">
+      <header class="tvx-topbar">
+        <div class="tvx-brand"><span class="tvx-brand-mark">TV</span><span>TVBox</span></div>
+        <nav class="tvx-cinema-nav" aria-label="内容导航">${filters('为你推荐')}</nav>
+        ${utilities()}
+      </header>
+      <section class="tvx-cinema-copy" aria-label="焦点推荐">
+        <span class="tvx-eyebrow text-small">本周编辑精选</span>
+        <h2>这一秒过火</h2>
+        <div class="tvx-meta-line text-small"><span>9.1</span><span>·</span><span>国产剧</span><span>·</span><span>2026</span><span>·</span><span>全25集</span></div>
+        <p class="tvx-cinema-description text-small">意外重逢牵出一段被时间隐藏的真相。一次选择，改写两个人的余生。</p>
+        <div class="tvx-hero-actions">
+          <button type="button" class="tvx-action tvx-action-primary" data-tvx-focusable="true" data-demo-focused="true">${icon('play')}立即播放</button>
+          <button type="button" class="tvx-action" data-tvx-focusable="true">${icon('plus')}收藏</button>
+        </div>
+      </section>
+      <section class="tvx-cinema-shelf" aria-label="正在热播">
+        <div class="tvx-section-title"><span>正在热播</span><span class="text-small tvx-muted">量子影视 · 每日更新</span></div>
+        <div class="tvx-poster-row">
+          ${poster(posterData[0], 0)}
+          ${poster(posterData[1], 1)}
+          ${poster(posterData[2], 2)}
+          ${poster(posterData[3], 3)}
+          ${poster(posterData[4], 4)}
+          ${poster(posterData[5], 5)}
+        </div>
+      </section>
+    </main>`;
+
+  const renderLibrary = () => `
+    <main class="tvx-layout-library">
+      <header class="tvx-library-toolbar">
+        <div class="tvx-brand"><span class="tvx-brand-mark">TV</span><span>TVBox</span><span class="text-small tvx-muted">量子 · 4479 部影片</span></div>
+        ${utilities()}
+      </header>
+      <section class="tvx-library-filter-line" aria-label="影片分类">
+        <div class="tvx-filter-row">${filters('电视剧')}</div>
+        <span class="tvx-density-pill text-small">${icon('layout-grid')} 6 列</span>
+      </section>
+      <section class="tvx-library-grid" aria-label="影片网格">
+        ${poster(posterData[0], 0, false, false)}
+        ${poster(posterData[1], 1, false, true)}
+        ${poster(posterData[2], 2, false, false)}
+        ${poster(posterData[3], 3, false, false)}
+        ${poster(posterData[4], 4, false, false)}
+        ${poster(posterData[5], 5, false, false)}
+      </section>
+    </main>`;
+
+  const renderers = { hybrid: renderHybrid, cinema: renderCinema, library: renderLibrary };
+
+  function installProductInteractions() {
+    const focusable = Array.from(stage.querySelectorAll('[data-tvx-focusable="true"]'));
+    focusable.forEach((element) => {
+      element.addEventListener('click', () => {
+        focusable.forEach((item) => item.removeAttribute('data-demo-focused'));
+        element.setAttribute('data-demo-focused', 'true');
+      });
+      element.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        const currentIndex = focusable.indexOf(element);
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (currentIndex + delta + focusable.length) % focusable.length;
+        focusable[nextIndex].focus();
+        event.preventDefault();
+      });
+    });
+  }
+
+  function renderIcons(attempt = 0) {
+    if (globalThis.lucide) {
+      globalThis.lucide.createIcons({ attrs: { width: 16, height: 16 } });
+    } else if (attempt < 20) {
+      setTimeout(() => renderIcons(attempt + 1), 25);
+    }
+  }
+
+  function render(direction) {
+    stage.innerHTML = renderers[direction]();
+    directionButtons.forEach((button) => {
+      const selected = button.dataset.direction === direction;
+      button.setAttribute('aria-pressed', String(selected));
+      button.classList.toggle('btn-primary', selected);
+    });
+    installProductInteractions();
+    renderIcons();
+  }
+
+  directionButtons.forEach((button) => {
+    button.addEventListener('click', () => render(button.dataset.direction));
+  });
+
+  render('hybrid');
+})();
+</script>
+
+

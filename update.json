@@ -1,13 +1,13 @@
 ﻿{
-  "versionCode": 10300,
-  "versionName": "1.3.0",
-  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.3.0/TVBox-v1.3.0.apk",
-  "apkSha256": "86552fc10d4956d8a4fdcf9e58e1973be30244488af9a691344706af2ed3020b",
-  "apkSize": 4786545,
+  "versionCode": 10301,
+  "versionName": "1.3.1",
+  "apkUrl": "https://github.com/ZxxXinI/tvbox/releases/download/v1.3.1/TVBox-v1.3.1.apk",
+  "apkSha256": "d79636cbdbcb1031aae4a6ccf412106744b2700b197cc74c4db2b3dd41a19ca2",
+  "apkSize": 4821161,
   "force": false,
   "changelog": [
-    "新增斗鱼、虎牙、哔哩哔哩、抖音和快手多平台直播。",
-    "新增平台分类浏览、直播间列表、最高画质和多线路播放。",
-    "支持电脑端统一直播服务及服务端部署配置。"
+    "新增默认主题 / 影院主题切换和影院首页图标导航。",
+    "修复电视直播焦点恢复与频道快捷键，优化遥控器操作。",
+    "保留斗鱼、虎牙、哔哩哔哩、抖音和快手多平台直播。"
   ]
 }

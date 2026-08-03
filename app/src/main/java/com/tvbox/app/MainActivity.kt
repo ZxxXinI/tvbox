@@ -1,4 +1,4 @@
-package com.tvbox.app
+﻿package com.tvbox.app
 
 import android.Manifest
 import android.content.Intent
@@ -58,8 +58,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            TVBoxTheme {
-                val state = viewModel.state.collectAsStateWithLifecycle().value
+            val state = viewModel.state.collectAsStateWithLifecycle().value
+            TVBoxTheme(theme = state.appSettings.theme) {
                 BackHandler(enabled = state.screen != com.tvbox.app.ui.TvScreen.Home) {
                     viewModel.goBack()
                 }

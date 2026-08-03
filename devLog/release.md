@@ -1,5 +1,52 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-03 08:00 - 发布 v1.3.1
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 发布默认主题 / 影院主题和直播焦点修复，需要提升 Android 版本号。
+  - Purpose: 将 `versionCode` 设置为 `10301`，将 `versionName` 设置为 `1.3.1`。
+- File path: `CHANGELOG.md`
+  - Reason: 新版本需要记录用户可见的主题、导航和遥控器改动。
+  - Purpose: 增加 v1.3.1 更新说明。
+- File path: `README.md`
+  - Reason: 安装、OTA 和发布示例仍指向 v1.3.0。
+  - Purpose: 更新当前版本、安装示例和 v1.3.1 发布命令。
+- File path: `update.json`
+  - Reason: OTA 需要识别并下载 v1.3.1。
+  - Purpose: 更新版本号、Release APK 地址和 v1.3.1 变更说明，构建后写入校验值。
+- File path: `devLog/README.md`
+  - Reason: 用户要求记录每次发布和源码变更。
+  - Purpose: 在主时间线登记 v1.3.1 发布。
+- File path: `devLog/release.md`
+  - Reason: 发布流程需要保留版本、资产和验证记录。
+  - Purpose: 记录 v1.3.1 发布涉及的文件和后续构建结果。
+
+## Bug Record
+
+- Time: 2026-08-03 08:00
+- Symptoms: 无新增缺陷；本次为正常版本发布。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `.\gradlew.bat testDebugUnitTest assembleRelease --console=plain --no-daemon`
+  - Result: passed.
+- `E:\Soft\Tools\AndroidSDK\build-tools\36.1.0\apksigner.bat verify --print-certs app\build\outputs\apk\release\app-release.apk`
+  - Result: passed. Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.1.apk`
+  - Size: `4821161`
+  - SHA-256: `d79636cbdbcb1031aae4a6ccf412106744b2700b197cc74c4db2b3dd41a19ca2`
+- GitHub Release 将在 commit 和 tag 推送后创建并上传 APK、`update.json`。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-08-02 - v1.3.0 源码版本升级
 
 ## File Changes

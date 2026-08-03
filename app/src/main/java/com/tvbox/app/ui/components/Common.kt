@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,12 +36,21 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.tvbox.app.R
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.WatchHistoryItem
+import com.tvbox.app.ui.TvScreen
+import com.tvbox.app.ui.theme.TvColors
+import com.tvbox.app.ui.theme.TvDimens
 
 @Composable
 fun AppHeader(
@@ -48,73 +58,230 @@ fun AppHeader(
     subtitle: String,
     onHistory: () -> Unit,
     onSearch: () -> Unit,
+    onAiRecommend: () -> Unit = {},
+    onLive: () -> Unit = {},
+    onPlatformLive: () -> Unit = {},
+    onSettings: () -> Unit = {},
+    showShortcutActions: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = title,
+                style = if (showShortcutActions) {
+                    MaterialTheme.typography.headlineLarge
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
+                fontWeight = if (showShortcutActions) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = subtitle,
+                color = TvColors.TextSecondary,
+                style = if (showShortcutActions) {
+                    MaterialTheme.typography.bodyMedium
+                } else {
+                    MaterialTheme.typography.labelMedium
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showShortcutActions) {
+                HeaderActionButton(text = "历史(1)", onClick = onHistory, legacyStyle = true)
+                HeaderActionButton(text = "搜索(2)", onClick = onSearch, legacyStyle = true)
+                HeaderActionButton(text = "推荐(3)", onClick = onAiRecommend, legacyStyle = true)
+                HeaderActionButton(text = "电视(4)", onClick = onLive, legacyStyle = true)
+                HeaderActionButton(text = "直播(5)", onClick = onPlatformLive, legacyStyle = true)
+                HeaderActionButton(text = "设置(6)", onClick = onSettings, legacyStyle = true)
+            } else {
+                HeaderActionButton(text = "搜索", onClick = onSearch)
+                HeaderActionButton(text = "历史", onClick = onHistory)
+            }
+        }
+    }
+}
+
+@Composable
+fun AppNavigationRail(
+    screen: TvScreen,
+    onHome: () -> Unit,
     onAiRecommend: () -> Unit,
     onLive: () -> Unit,
     onPlatformLive: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = modifier
+            .fillMaxHeight()
+            .width(TvDimens.RailWidth),
+        color = TvColors.Background,
+        contentColor = TvColors.TextPrimary,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = subtitle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HeaderActionButton(text = "历史(1)", onClick = onHistory)
-            HeaderActionButton(text = "搜索(2)", onClick = onSearch)
-            HeaderActionButton(text = "推荐(3)", onClick = onAiRecommend)
-            HeaderActionButton(text = "电视(4)", onClick = onLive)
-            HeaderActionButton(text = "直播(5)", onClick = onPlatformLive)
-            HeaderActionButton(text = "设置(6)", onClick = onSettings)
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 10.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Surface(
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(13.dp),
+                color = TvColors.Accent,
+                contentColor = TvColors.Background,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("TV", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TvNavigationItem("首页", NavigationIcon.Home, screen.isHomeDestination(), onHome)
+            TvNavigationItem("电视", NavigationIcon.Live, screen == TvScreen.Live, onLive)
+            TvNavigationItem("直播", NavigationIcon.PlatformLive, screen == TvScreen.PlatformLive, onPlatformLive)
+            TvNavigationItem("推荐", NavigationIcon.Recommend, screen == TvScreen.AiRecommend, onAiRecommend)
+            Spacer(modifier = Modifier.weight(1f))
+            TvNavigationItem("设置", NavigationIcon.Settings, screen == TvScreen.Settings, onSettings)
         }
     }
 }
 
 @Composable
-private fun HeaderActionButton(
-    text: String,
+private fun TvNavigationItem(
+    label: String,
+    icon: NavigationIcon,
+    selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(50)
+    val shape = RoundedCornerShape(12.dp)
     var focused by remember { mutableStateOf(false) }
     Surface(
-        modifier = modifier
+        modifier = Modifier
+            .fillMaxWidth()
             .tvFocusScale(
                 shape = shape,
-                idleBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
+                focusedBorder = TvColors.FocusRing,
+                idleBorder = if (selected) TvColors.Accent.copy(alpha = 0.5f) else TvColors.Border,
             )
             .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .clickable(onClick = onClick)
             .focusable(),
         shape = shape,
-        color = if (focused) MaterialTheme.colorScheme.primary else Color(0xFF1F1F1F),
-        contentColor = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-        tonalElevation = if (focused) 8.dp else 0.dp,
-        shadowElevation = if (focused) 10.dp else 0.dp,
+        color = when {
+            focused -> TvColors.SurfaceRaised
+            selected -> TvColors.AccentSoft
+            else -> Color.Transparent
+        },
+        contentColor = when {
+            focused -> TvColors.TextPrimary
+            selected -> TvColors.AccentStrong
+            else -> TvColors.TextSecondary
+        },
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            NavigationGlyph(
+                icon = icon,
+                tint = when {
+                    focused -> TvColors.TextPrimary
+                    selected -> TvColors.AccentStrong
+                    else -> TvColors.TextSecondary
+                },
+                label = label,
+            )
+        }
+    }
+}
+
+private enum class NavigationIcon(val glyph: String) {
+    Home("\uE608"),
+    Live("\uEB34"),
+    PlatformLive("\uE6E6"),
+    Recommend("\uEB7D"),
+    Settings("\uE6F0"),
+}
+
+private val TvBoxIconFont = FontFamily(Font(R.font.tvbox_iconfont))
+
+@Composable
+private fun NavigationGlyph(
+    icon: NavigationIcon,
+    tint: Color,
+    label: String,
+) {
+    val glyphSize = if (icon == NavigationIcon.Live) 22.sp else 26.sp
+    Text(
+        text = icon.glyph,
+        modifier = Modifier
+            .size(24.dp)
+            .semantics { contentDescription = label },
+        color = tint,
+        fontFamily = TvBoxIconFont,
+        fontSize = glyphSize,
+        lineHeight = glyphSize,
+    )
+}
+
+private fun TvScreen.isHomeDestination(): Boolean {
+    return this == TvScreen.Home || this == TvScreen.Detail
+}
+
+@Composable
+private fun HeaderActionButton(
+    text: String,
+    onClick: () -> Unit,
+    legacyStyle: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val shape = if (legacyStyle) RoundedCornerShape(50) else RoundedCornerShape(10.dp)
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .tvFocusScale(
+                shape = shape,
+                focusedBorder = TvColors.FocusRing,
+                idleBorder = TvColors.Border,
+            )
+            .clip(shape)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .clickable(onClick = onClick)
+            .focusable(),
+        shape = shape,
+        color = when {
+            focused && legacyStyle -> TvColors.Accent
+            focused -> TvColors.SurfaceRaised
+            else -> TvColors.Surface
+        },
+        contentColor = if (focused && legacyStyle) TvColors.Background else TvColors.TextPrimary,
+        tonalElevation = if (focused) 5.dp else 0.dp,
+        shadowElevation = if (focused) 8.dp else 0.dp,
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+            modifier = Modifier.padding(
+                horizontal = if (legacyStyle) 20.dp else 14.dp,
+                vertical = if (legacyStyle) 10.dp else 8.dp,
+            ),
+            style = if (legacyStyle) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelLarge,
+            fontWeight = if (focused || legacyStyle) FontWeight.Medium else FontWeight.Normal,
             maxLines = 1,
         )
     }
@@ -163,21 +330,30 @@ fun CategoryPill(
     var focused by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier
-            .tvFocusScale(shape = shape)
+            .tvFocusScale(
+                shape = shape,
+                focusedBorder = TvColors.FocusRing,
+                idleBorder = if (selected) TvColors.Accent.copy(alpha = 0.7f) else TvColors.Border,
+            )
             .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .clickable(onClick = onClick)
             .focusable(),
         shape = shape,
         color = when {
-            selected || focused -> MaterialTheme.colorScheme.primary
-            else -> Color(0xFF1F1F1F)
+            focused -> TvColors.SurfaceRaised
+            selected -> TvColors.AccentSoft
+            else -> TvColors.Surface
         },
-        contentColor = if (selected || focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        contentColor = when {
+            focused -> TvColors.TextPrimary
+            selected -> TvColors.AccentStrong
+            else -> TvColors.TextSecondary
+        },
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             style = MaterialTheme.typography.titleSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -190,23 +366,28 @@ fun MoviePosterCard(
     movie: Movie,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    posterAspectRatio: Float = 2f / 3f,
 ) {
     val shape = RoundedCornerShape(8.dp)
     var focused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
-            .tvFocusScale(shape = shape)
+            .tvFocusScale(
+                shape = shape,
+                focusedBorder = TvColors.FocusRing,
+                idleBorder = TvColors.Border,
+            )
             .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
-            .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
+            .background(if (focused) TvColors.SurfaceRaised else TvColors.Surface)
             .clickable(onClick = onClick)
             .focusable(),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .aspectRatio(posterAspectRatio)
+                .background(TvColors.SurfaceRaised),
         ) {
             if (movie.posterUrl.isNotBlank()) {
                 AsyncImage(
@@ -229,7 +410,7 @@ fun MoviePosterCard(
                         .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color(0xCC000000)),
+                            colors = listOf(Color.Transparent, Color(0xCC080B0B)),
                             ),
                         )
                         .padding(8.dp),
@@ -363,10 +544,15 @@ fun PosterImage(movie: Movie, modifier: Modifier = Modifier) {
 fun PageSurface(content: @Composable (PaddingValues) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onBackground,
+        color = TvColors.Background,
+        contentColor = TvColors.TextPrimary,
     ) {
-        content(PaddingValues(horizontal = 36.dp, vertical = 28.dp))
+        content(
+            PaddingValues(
+                horizontal = TvDimens.PageHorizontalPadding,
+                vertical = TvDimens.PageVerticalPadding,
+            ),
+        )
     }
 }
 
