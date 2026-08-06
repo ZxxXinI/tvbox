@@ -10,7 +10,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.TvTheme
@@ -193,10 +195,13 @@ private fun Typography.scaled(multiplier: Float): Typography = copy(
     labelSmall = labelSmall.scaled(multiplier),
 )
 
-private fun TextStyle.scaled(multiplier: Float): TextStyle = copy(
-    fontSize = fontSize * multiplier,
-    letterSpacing = letterSpacing * multiplier,
+internal fun TextStyle.scaled(multiplier: Float): TextStyle = copy(
+    fontSize = fontSize.scaled(multiplier),
+    letterSpacing = letterSpacing.scaled(multiplier),
 )
+
+private fun TextUnit.scaled(multiplier: Float): TextUnit =
+    if (isSpecified) this * multiplier else this
 
 private fun layoutTokens(fontScale: TvFontScale): TvLayoutTokens = when (fontScale) {
     TvFontScale.Normal -> NormalLayoutTokens

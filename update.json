@@ -1,13 +1,13 @@
 ﻿{
-  "versionCode": 10302,
-  "versionName": "1.3.2",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.2/TVBox-v1.3.2.apk",
-  "apkSha256": "9d35fa39208ce3bf0620677b7367d8a90964470a51dee48f95fe431715224ec5",
+  "versionCode": 10303,
+  "versionName": "1.3.3",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.3/TVBox-v1.3.3.apk",
+  "apkSha256": "5896f3528961df579af6ee7dea95d610b53770196d8007b2a099914053756ff2",
   "apkSize": 4837545,
   "force": false,
   "changelog": [
-    "新增正常、大、超大三档字体大小设置，并自动保存。",
-    "首页、搜索、详情、历史和直播等页面文字与卡片尺寸同步适配。",
-    "大字号下优化影视、选集、设置和直播卡片的展示密度。"
+    "修复 v1.3.2 字体缩放造成的启动闪退。",
+    "默认和大字号设置均可正常进入首页。",
+    "新增字体 Typography 回归测试，避免未指定字距再次导致崩溃。"
   ]
 }

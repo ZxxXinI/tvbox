@@ -1,5 +1,35 @@
 ﻿# Settings - 2026-06-28
 
+## 2026-08-07 07:50 - 修复字体大小导致的启动闪退
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/theme/Theme.kt`
+  - Reason: 默认 Typography 的 `letterSpacing` 是 `TextUnit.Unspecified`，不能直接参与乘法运算。
+  - Purpose: 仅缩放已指定的字体单位，未指定字体大小或字距保持原样，避免 Compose 在首帧布局时崩溃。
+
+- File path: `app/src/test/java/com/tvbox/app/ui/theme/ThemeTypographyTest.kt`
+  - Reason: v1.3.2 的崩溃属于纯 UI 配置回归，需要自动化锁定。
+  - Purpose: 验证未指定字距不会参与缩放，已指定字距和字体大小会按比例缩放。
+
+## Bug Record
+
+- Time: 2026-08-07 07:41
+- Symptoms: v1.3.2 在 Android 设备启动后立即闪退，Logcat 显示 `IllegalArgumentException: Cannot perform operation for Unspecified type`。
+- Attempted fix: 为 `TextUnit` 缩放添加 `isSpecified` 判断，避免对 `TextUnit.Unspecified` 进行乘法。
+- Temporary solution: 无，已通过正式 Release APK 修复。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleRelease --console=plain --no-daemon`
+  - Result: passed.
+- Android 设备：安装 `v1.3.3 / 10303` 后，`MainActivity` 处于前台，应用进程存在，干净 Logcat 无 `FATAL EXCEPTION`。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/settings.md`
+
 ## 2026-08-06 22:26 - 字体大小与卡片布局设置
 
 ## File Changes
