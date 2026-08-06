@@ -1,5 +1,62 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-07 07:50 - 发布 v1.3.3：修复启动闪退
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: v1.3.2 已发布但无法启动，必须提高版本号让已安装用户收到 OTA 修复。
+  - Purpose: 将 `versionCode` 更新为 `10303`，将 `versionName` 更新为 `1.3.3`。
+
+- File path: `CHANGELOG.md`
+  - Reason: 用户需要明确知道本版本是紧急启动修复。
+  - Purpose: 记录字体缩放崩溃修复和回归测试。
+
+- File path: `README.md`
+  - Reason: 当前安装、OTA 示例和手动发布命令应对应修复版。
+  - Purpose: 更新版本、下载地址和 APK 校验值。
+
+- File path: `update.json`
+  - Reason: 旧版应用依赖 OTA 清单识别高版本修复。
+  - Purpose: 指向 v1.3.3 Release APK，并提供实际 SHA-256 与文件大小。
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.3.apk`
+  - Reason: GitHub 与 Gitee Release 需要稳定的版本化安装包。
+  - Purpose: 保存已签名 v1.3.3 APK，供用户安装和 OTA 下载。
+
+- File path: `devLog/README.md`
+  - Reason: 主时间线需要记录线上版本问题和修复结果。
+  - Purpose: 登记根因和设备验证结果。
+
+- File path: `devLog/release.md`
+  - Reason: 发布模块需要保留 v1.3.3 的完整性数据。
+  - Purpose: 记录紧急修复发布准备、构建和签名验证。
+
+## Bug Record
+
+- Time: 2026-08-07 07:41
+- Symptoms: v1.3.2 打开后立即闪退，无法进入首页。
+- Attempted fix: 修正默认 `TextUnit.Unspecified` 的字体缩放逻辑，并添加回归测试。
+- Temporary solution: 无，v1.3.3 为正式修复版本。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleRelease --console=plain --no-daemon`
+  - Result: passed.
+- Android 设备：安装 `v1.3.3 / 10303` 后，`MainActivity` 前台运行，PID 存在，无新崩溃日志。
+- `apksigner verify --print-certs app\build\outputs\apk\release\TVBox-v1.3.3.apk`
+  - Result: passed. Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.3.apk`
+  - Size: `4837545`
+  - SHA-256: `5896f3528961df579af6ee7dea95d610b53770196d8007b2a099914053756ff2`
+- GitHub 和 Gitee 将在 commit 与 tag 推送后同步 v1.3.3 代码和发布资产。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-08-06 22:45 - 发布 v1.3.2：字体大小与卡片布局适配
 
 ## File Changes

@@ -2,7 +2,7 @@
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
-当前源码版本为 `1.3.2`（`versionCode=10302`）。本版本新增全局字体大小与卡片布局适配，并包含默认主题 / 影院主题切换和五平台直播接入；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
+当前源码版本为 `1.3.3`（`versionCode=10303`）。本版本修复字体大小设置引起的启动闪退，并包含全局字体与卡片布局适配、默认主题 / 影院主题切换和五平台直播接入；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
 
 > 请确保使用的影视与直播接口具备合法授权。本项目仅提供客户端能力，不内置或托管影视内容。
 
@@ -78,7 +78,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.3.2.apk
+adb install -r TVBox-v1.3.3.apk
 ```
 
 ## OTA 更新机制
@@ -93,16 +93,16 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 ```json
 {
-  "versionCode": 10302,
-  "versionName": "1.3.2",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.2/TVBox-v1.3.2.apk",
-  "apkSha256": "9d35fa39208ce3bf0620677b7367d8a90964470a51dee48f95fe431715224ec5",
+  "versionCode": 10303,
+  "versionName": "1.3.3",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.3/TVBox-v1.3.3.apk",
+  "apkSha256": "5896f3528961df579af6ee7dea95d610b53770196d8007b2a099914053756ff2",
   "apkSize": 4837545,
   "force": false,
   "changelog": [
-    "新增正常、大、超大三档字体大小设置，并自动保存。",
-    "首页、搜索、详情、历史和直播等页面文字与卡片尺寸同步适配。",
-    "大字号下优化影视、选集、设置和直播卡片的展示密度。"
+    "修复 v1.3.2 字体缩放造成的启动闪退。",
+    "默认和大字号设置均可正常进入首页。",
+    "新增字体 Typography 回归测试，避免未指定字距再次导致崩溃。"
   ]
 }
 ```
@@ -150,7 +150,7 @@ TVBOX_AI_API_KEY=你的测试密钥
 平台直播服务配置：
 
 - 服务端运行在电脑或服务器上，TVBox 通过 `TVBOX_PLATFORM_LIVE_SERVICE_URL` 访问统一接口。
-- 本次 v1.3.2 Debug 构建使用的服务地址为 `http://20.205.10.127:8868`。
+- 本次 v1.3.3 Debug 构建使用的服务地址为 `http://20.205.10.127:8868`。
 - Windows PowerShell 临时构建配置：
 
 ```powershell
@@ -209,8 +209,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10302
-versionName = "1.3.2"
+versionCode = 10303
+versionName = "1.3.3"
 ```
 
 2. 构建 release APK：
@@ -224,10 +224,10 @@ versionName = "1.3.2"
 
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
-git commit -m "Release v1.3.2"
-git tag -a v1.3.2 -m "TVBox v1.3.2"
+git commit -m "Release v1.3.3"
+git tag -a v1.3.3 -m "TVBox v1.3.3"
 git push origin main
-git push origin v1.3.2
+git push origin v1.3.3
 ```
 
 4. 更新根目录 `update.json`，其中 `apkUrl` 指向 GitHub Release APK。
@@ -235,11 +235,11 @@ git push origin v1.3.2
 5. 在 GitHub Release 上传对应版本 APK：
 
 ```text
-TVBox-v1.3.2.apk
+TVBox-v1.3.3.apk
 ```
 
 ```powershell
-gh release upload v1.3.2 app\build\outputs\apk\release\TVBox-v1.3.2.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
+gh release upload v1.3.3 app\build\outputs\apk\release\TVBox-v1.3.3.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
 > GitHub Release 需要包含对应版本的 APK 和 `update.json`；应用启动时从 GitHub `main` 分支读取更新清单。

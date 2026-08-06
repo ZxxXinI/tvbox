@@ -1,5 +1,13 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-08-07 07:50 - 修复 v1.3.2 启动闪退并发布 v1.3.3
+
+- Branch doc: `devLog/settings.md`、`devLog/release.md`
+- Summary:
+  - 定位到字体缩放对 `TextUnit.Unspecified` 字距执行乘法，引发 Compose 首帧布局异常。
+  - 未指定单位现在原样保留，并新增 Typography 缩放回归测试。
+  - 在已连接 Android 设备安装正式签名 APK，确认 `v1.3.3` 首页运行、进程和前台 Activity 正常，且无新的崩溃日志。
+
 ### 2026-08-06 22:45 - 发布 v1.3.2：字体大小与卡片布局适配
 
 - Branch doc: `devLog/settings.md`、`devLog/release.md`
