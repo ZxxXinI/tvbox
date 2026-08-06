@@ -61,6 +61,7 @@ import com.tvbox.app.ui.components.PageSurface
 import com.tvbox.app.ui.components.PosterImage
 import com.tvbox.app.ui.components.SmallMeta
 import com.tvbox.app.ui.components.tvFocusScale
+import com.tvbox.app.ui.theme.TvLayout
 
 @Composable
 fun DetailScreen(
@@ -266,7 +267,7 @@ private fun EpisodeGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 132.dp),
+        columns = GridCells.Adaptive(minSize = TvLayout.EpisodeGridMinWidth),
         state = gridState,
         contentPadding = PaddingValues(bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

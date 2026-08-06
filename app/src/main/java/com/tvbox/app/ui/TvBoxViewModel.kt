@@ -38,6 +38,7 @@ import com.tvbox.app.domain.PlatformLiveSite
 import com.tvbox.app.domain.ResolvedPlatformLiveStream
 import com.tvbox.app.domain.WatchHistoryItem
 import com.tvbox.app.domain.TvTheme
+import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.playbackHealthKey
 import com.tvbox.app.domain.toApiLines
 import kotlinx.coroutines.Job
@@ -1098,6 +1099,13 @@ class TvBoxViewModel(
     fun updateTheme(theme: TvTheme) {
         if (_state.value.appSettings.theme == theme) return
         val settings = _state.value.appSettings.copy(theme = theme)
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings) }
+    }
+
+    fun updateFontScale(fontScale: TvFontScale) {
+        if (_state.value.appSettings.fontScale == fontScale) return
+        val settings = _state.value.appSettings.copy(fontScale = fontScale)
         saveSettings(settings)
         _state.update { it.copy(appSettings = settings) }
     }

@@ -47,6 +47,7 @@ import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.PageSurface
 import com.tvbox.app.ui.components.tvFocusScale
+import com.tvbox.app.ui.theme.TvLayout
 
 @Composable
 fun AiRecommendScreen(
@@ -134,7 +135,7 @@ fun AiRecommendScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 148.dp),
+                        columns = GridCells.Adaptive(minSize = TvLayout.PosterGridMinWidth),
                         contentPadding = PaddingValues(bottom = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(18.dp),
                         verticalArrangement = Arrangement.spacedBy(22.dp),

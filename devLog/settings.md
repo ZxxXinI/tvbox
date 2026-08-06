@@ -1,5 +1,71 @@
-# Settings - 2026-06-28
+﻿# Settings - 2026-06-28
 
+## 2026-08-06 22:26 - 字体大小与卡片布局设置
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`
+  - Reason: 字体大小需要有默认值、显示名称和可持久化的稳定标识。
+  - Purpose: 新增 `TvFontScale`，提供正常、大、超大三档，默认正常。
+
+- File path: `app/src/main/java/com/tvbox/app/data/AppSettingsRepository.kt`
+  - Reason: 用户选择的字体大小需要在应用重启后保留。
+  - Purpose: 使用 SharedPreferences 读取和保存字体大小；旧配置或未知值安全回退到正常。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/theme/Theme.kt`
+  - Reason: 所有页面都应使用同一套字体大小规则，不能逐页维护字号。
+  - Purpose: 按字体档位缩放全局 Material Typography，并提供影视、历史、选集、设置和平台直播卡片的统一尺寸令牌。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: 设置页选择后需要立即更新界面并异步保存。
+  - Purpose: 新增 `updateFontScale`，更新状态和本机设置。
+
+- File path: `app/src/main/java/com/tvbox/app/MainActivity.kt`
+  - Reason: 应用主题层需要读取当前字体档位。
+  - Purpose: 将 `fontScale` 传入 `TVBoxTheme`，使全部页面立即重组并应用字号。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`
+  - Reason: 用户需要在设置页选择字体大小，首页、历史和设置网格也要同步适配。
+  - Purpose: 在外观设置中新增三档字体大小按钮，并让首页影视、历史和设置网格读取统一尺寸。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/SearchScreen.kt`
+  - Reason: 搜索结果必须和首页卡片大小保持一致。
+  - Purpose: 搜索海报网格读取统一影视卡片尺寸。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/AiRecommendScreen.kt`
+  - Reason: AI 找片结果应同步字体和卡片密度。
+  - Purpose: AI 推荐网格读取统一影视卡片尺寸。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/DetailScreen.kt`
+  - Reason: 大字号下选集按钮需要增加宽度，避免内容拥挤。
+  - Purpose: 选集网格读取统一选集尺寸。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlatformLiveScreen.kt`
+  - Reason: 平台直播卡片也应跟随显示大小变化。
+  - Purpose: 根据档位从 5、4、3 列显示直播卡片。
+
+- File path: `app/src/test/java/com/tvbox/app/domain/TvFontScaleTest.kt`
+  - Reason: 字体档位的配置兼容性需要可回归验证。
+  - Purpose: 验证三档存储值、未知值回退和缩放比例递增。
+
+## Bug Record
+
+- Time: 2026-08-06 22:26
+- Symptoms: 无。本次为设置和布局增强。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `./gradlew.bat compileDebugKotlin --console=plain`
+  - Result: passed.
+- `./gradlew.bat testDebugUnitTest --console=plain`
+  - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/settings.md`
 ## 2026-07-01 09:02 - 自定义视频接口配置
 
 ## File Changes

@@ -59,7 +59,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val state = viewModel.state.collectAsStateWithLifecycle().value
-            TVBoxTheme(theme = state.appSettings.theme) {
+            TVBoxTheme(
+                theme = state.appSettings.theme,
+                fontScale = state.appSettings.fontScale,
+            ) {
                 BackHandler(enabled = state.screen != com.tvbox.app.ui.TvScreen.Home) {
                     viewModel.goBack()
                 }

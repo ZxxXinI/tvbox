@@ -1,5 +1,61 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-06 22:45 - 发布 v1.3.2：字体大小与卡片布局适配
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 字体与布局设置完成后需要发布独立 Android 版本，供已有设备通过 OTA 识别更新。
+  - Purpose: 将 `versionCode` 更新为 `10302`，将 `versionName` 更新为 `1.3.2`。
+
+- File path: `CHANGELOG.md`
+  - Reason: 用户需要知道本版本的可见功能变化。
+  - Purpose: 登记字体大小、全局文字缩放和网格卡片适配。
+
+- File path: `README.md`
+  - Reason: 安装、OTA 示例和手动发布命令应对应当前正式版本。
+  - Purpose: 更新版本、APK 文件名、下载地址、校验值和发布命令。
+
+- File path: `update.json`
+  - Reason: 已安装的旧版应用依赖该清单发现 v1.3.2 并校验下载结果。
+  - Purpose: 指向 v1.3.2 Release APK，提供实际 SHA-256 与文件大小。
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.2.apk`
+  - Reason: GitHub 和 Gitee Release 需要明确、稳定的版本化安装包名称。
+  - Purpose: 保存 v1.3.2 已签名 Release APK，供上传作为发布资产。
+
+- File path: `devLog/README.md`
+  - Reason: 主开发时间线需要可追溯本次功能与发布。
+  - Purpose: 登记 v1.3.2 的功能范围与构建验证。
+
+- File path: `devLog/release.md`
+  - Reason: 发布模块需要保留版本、APK 完整性数据和验证结果。
+  - Purpose: 记录 v1.3.2 的正式发布准备工作。
+
+## Bug Record
+
+- Time: 2026-08-06 22:45
+- Symptoms: 无。本次为正常功能版本发布。
+- Attempted fix: 不适用。
+- Temporary solution: 不适用。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleRelease --console=plain --no-daemon`
+  - Result: passed.
+- `E:\Soft\Tools\AndroidSDK\build-tools\36.1.0\apksigner.bat verify --print-certs app\build\outputs\apk\release\TVBox-v1.3.2.apk`
+  - Result: passed. Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.2.apk`
+  - Size: `4837545`
+  - SHA-256: `9d35fa39208ce3bf0620677b7367d8a90964470a51dee48f95fe431715224ec5`
+- GitHub 和 Gitee 将在 commit 与 tag 推送后上传 APK、`update.json`。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-08-03 08:40 - v1.3.1 带平台直播服务地址覆盖构建
 
 ## File Changes
