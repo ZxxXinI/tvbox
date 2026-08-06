@@ -9,8 +9,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.TvTheme
 
 data class TvColorTokens(
@@ -69,6 +71,40 @@ private val CinemaTokens = TvColorTokens(
 
 val LocalTvColors = staticCompositionLocalOf { DefaultTokens }
 
+data class TvLayoutTokens(
+    val posterGridMinWidth: Dp,
+    val historyGridMinWidth: Dp,
+    val episodeGridMinWidth: Dp,
+    val settingsGridMinWidth: Dp,
+    val platformLiveColumns: Int,
+)
+
+private val NormalLayoutTokens = TvLayoutTokens(
+    posterGridMinWidth = 148.dp,
+    historyGridMinWidth = 230.dp,
+    episodeGridMinWidth = 132.dp,
+    settingsGridMinWidth = 176.dp,
+    platformLiveColumns = 5,
+)
+
+private val LargeLayoutTokens = TvLayoutTokens(
+    posterGridMinWidth = 178.dp,
+    historyGridMinWidth = 276.dp,
+    episodeGridMinWidth = 156.dp,
+    settingsGridMinWidth = 210.dp,
+    platformLiveColumns = 4,
+)
+
+private val ExtraLargeLayoutTokens = TvLayoutTokens(
+    posterGridMinWidth = 216.dp,
+    historyGridMinWidth = 322.dp,
+    episodeGridMinWidth = 184.dp,
+    settingsGridMinWidth = 250.dp,
+    platformLiveColumns = 3,
+)
+
+val LocalTvLayout = staticCompositionLocalOf { NormalLayoutTokens }
+
 object TvColors {
     val Background: Color @Composable get() = LocalTvColors.current.background
     val Surface: Color @Composable get() = LocalTvColors.current.surface
@@ -85,6 +121,14 @@ object TvColors {
     val Success: Color @Composable get() = LocalTvColors.current.success
     val Warning: Color @Composable get() = LocalTvColors.current.warning
     val Danger: Color @Composable get() = LocalTvColors.current.danger
+}
+
+object TvLayout {
+    val PosterGridMinWidth: Dp @Composable get() = LocalTvLayout.current.posterGridMinWidth
+    val HistoryGridMinWidth: Dp @Composable get() = LocalTvLayout.current.historyGridMinWidth
+    val EpisodeGridMinWidth: Dp @Composable get() = LocalTvLayout.current.episodeGridMinWidth
+    val SettingsGridMinWidth: Dp @Composable get() = LocalTvLayout.current.settingsGridMinWidth
+    val PlatformLiveColumns: Int @Composable get() = LocalTvLayout.current.platformLiveColumns
 }
 
 object TvDimens {
@@ -131,16 +175,50 @@ private val TvTypography = Typography(
     labelSmall = TextStyle(fontSize = 12.sp),
 )
 
+private fun Typography.scaled(multiplier: Float): Typography = copy(
+    displayLarge = displayLarge.scaled(multiplier),
+    displayMedium = displayMedium.scaled(multiplier),
+    displaySmall = displaySmall.scaled(multiplier),
+    headlineLarge = headlineLarge.scaled(multiplier),
+    headlineMedium = headlineMedium.scaled(multiplier),
+    headlineSmall = headlineSmall.scaled(multiplier),
+    titleLarge = titleLarge.scaled(multiplier),
+    titleMedium = titleMedium.scaled(multiplier),
+    titleSmall = titleSmall.scaled(multiplier),
+    bodyLarge = bodyLarge.scaled(multiplier),
+    bodyMedium = bodyMedium.scaled(multiplier),
+    bodySmall = bodySmall.scaled(multiplier),
+    labelLarge = labelLarge.scaled(multiplier),
+    labelMedium = labelMedium.scaled(multiplier),
+    labelSmall = labelSmall.scaled(multiplier),
+)
+
+private fun TextStyle.scaled(multiplier: Float): TextStyle = copy(
+    fontSize = fontSize * multiplier,
+    letterSpacing = letterSpacing * multiplier,
+)
+
+private fun layoutTokens(fontScale: TvFontScale): TvLayoutTokens = when (fontScale) {
+    TvFontScale.Normal -> NormalLayoutTokens
+    TvFontScale.Large -> LargeLayoutTokens
+    TvFontScale.ExtraLarge -> ExtraLargeLayoutTokens
+}
+
 @Composable
 fun TVBoxTheme(
     theme: TvTheme = TvTheme.Default,
+    fontScale: TvFontScale = TvFontScale.Normal,
     content: @Composable () -> Unit,
 ) {
     val tokens = if (theme == TvTheme.Cinema) CinemaTokens else DefaultTokens
-    androidx.compose.runtime.CompositionLocalProvider(LocalTvColors provides tokens) {
+    val typography = TvTypography.scaled(fontScale.typographyScale)
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalTvColors provides tokens,
+        LocalTvLayout provides layoutTokens(fontScale),
+    ) {
         MaterialTheme(
             colorScheme = colorScheme(tokens),
-            typography = TvTypography,
+            typography = typography,
             content = content,
         )
     }

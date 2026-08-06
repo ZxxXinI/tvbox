@@ -1,5 +1,21 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-08-06 22:45 - 发布 v1.3.2：字体大小与卡片布局适配
+
+- Branch doc: `devLog/settings.md`、`devLog/release.md`
+- Summary:
+  - 发布全局“正常 / 大 / 超大”字体大小设置，选择结果保存到本机并在应用启动后恢复。
+  - 所有页面文字以及首页、搜索、AI 找片、历史、选集、设置、平台直播卡片的密度随档位协调调整。
+  - 完成 `testDebugUnitTest`、R8 Release 构建与 APK 签名验证，准备 GitHub 与 Gitee 的 v1.3.2 发布资产。
+
+### 2026-08-06 22:26 - 字体大小与卡片布局设置
+
+- Branch doc: `devLog/settings.md`
+- Summary:
+  - 设置页新增“字体大小”：正常、大、超大三档，默认正常并持久化到本机。
+  - 全局 Material Typography 会随档位立即更新，覆盖首页、搜索、详情、历史、直播、播放器和设置页面。
+  - 影视海报、搜索/AI 找片、历史、选集和平台直播卡片同步增大，字号和内容密度保持协调。
+
 ### 2026-08-03 08:40 - v1.3.1 带平台直播服务地址覆盖构建
 
 - Branch doc: `devLog/release.md`

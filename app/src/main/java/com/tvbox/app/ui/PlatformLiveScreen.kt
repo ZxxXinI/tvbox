@@ -72,6 +72,7 @@ import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.PageSurface
 import com.tvbox.app.ui.components.tvFocusScale
+import com.tvbox.app.ui.theme.TvLayout
 import kotlinx.coroutines.delay
 
 @Composable
@@ -281,7 +282,7 @@ private fun PlatformLiveBrowseSurface(
                     }
                     LazyVerticalGrid(
                         state = resolvedGridState,
-                        columns = GridCells.Fixed(5),
+                        columns = GridCells.Fixed(TvLayout.PlatformLiveColumns),
                         contentPadding = PaddingValues(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),

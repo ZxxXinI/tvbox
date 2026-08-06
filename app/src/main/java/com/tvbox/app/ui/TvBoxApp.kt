@@ -68,6 +68,7 @@ import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.PlaybackHealthSnapshot
+import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.AppNavigationRail
@@ -81,6 +82,7 @@ import com.tvbox.app.ui.components.PosterImage
 import com.tvbox.app.ui.components.tvFocusScale
 import com.tvbox.app.ui.theme.TvColors
 import com.tvbox.app.ui.theme.TvDimens
+import com.tvbox.app.ui.theme.TvLayout
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 
@@ -531,7 +533,7 @@ private fun HistoryScreen(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 230.dp),
+                    columns = GridCells.Adaptive(minSize = TvLayout.HistoryGridMinWidth),
                     contentPadding = PaddingValues(bottom = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(18.dp),
                     verticalArrangement = Arrangement.spacedBy(22.dp),
@@ -605,7 +607,7 @@ private fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(22.dp))
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 176.dp),
+                columns = GridCells.Adaptive(minSize = TvLayout.SettingsGridMinWidth),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -621,6 +623,12 @@ private fun SettingsScreen(
                     ThemeSetting(
                         selectedTheme = state.appSettings.theme,
                         onThemeSelect = actions::updateTheme,
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    FontScaleSetting(
+                        selectedFontScale = state.appSettings.fontScale,
+                        onFontScaleSelect = actions::updateFontScale,
                     )
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1196,7 +1204,7 @@ private fun MovieGrid(
             }
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 148.dp),
+            columns = GridCells.Adaptive(minSize = TvLayout.PosterGridMinWidth),
             state = gridState,
             contentPadding = PaddingValues(bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -1278,6 +1286,34 @@ private fun ThemeSetting(
                     text = if (selectedTheme == theme) "✓ ${theme.displayName}" else theme.displayName,
                     selected = selectedTheme == theme,
                     onClick = { onThemeSelect(theme) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FontScaleSetting(
+    selectedFontScale: TvFontScale,
+    onFontScaleSelect: (TvFontScale) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("字体大小", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "当前：${selectedFontScale.displayName}。文字和内容卡片会立即按此大小调整。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(TvFontScale.entries, key = { it.storageKey }) { fontScale ->
+                SettingsActionButton(
+                    text = if (selectedFontScale == fontScale) {
+                        "✓ ${fontScale.displayName}"
+                    } else {
+                        fontScale.displayName
+                    },
+                    selected = selectedFontScale == fontScale,
+                    onClick = { onFontScaleSelect(fontScale) },
                 )
             }
         }

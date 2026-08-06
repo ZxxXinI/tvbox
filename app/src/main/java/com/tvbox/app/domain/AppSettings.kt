@@ -6,6 +6,7 @@ data class AppSettings(
     val homeApiLineId: String = "liangzi",
     val customVideoApiLines: List<CustomVideoApiLine> = emptyList(),
     val theme: TvTheme = TvTheme.Default,
+    val fontScale: TvFontScale = TvFontScale.Normal,
     val aiProviderId: String = AiProviders.default.id,
     val aiModelName: String = AiProviders.default.defaultModel,
     val aiApiKey: String = "",
@@ -24,6 +25,22 @@ enum class TvTheme(
     companion object {
         fun fromStorageKey(value: String?): TvTheme =
             entries.firstOrNull { it.storageKey == value } ?: Default
+    }
+}
+
+enum class TvFontScale(
+    val storageKey: String,
+    val displayName: String,
+    val typographyScale: Float,
+) {
+    Normal("normal", "正常", 1f),
+    Large("large", "大", 1.18f),
+    ExtraLarge("extra_large", "超大", 1.36f),
+    ;
+
+    companion object {
+        fun fromStorageKey(value: String?): TvFontScale =
+            entries.firstOrNull { it.storageKey == value } ?: Normal
     }
 }
 
