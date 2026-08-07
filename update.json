@@ -1,13 +1,13 @@
 ﻿{
-  "versionCode": 10303,
-  "versionName": "1.3.3",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.3/TVBox-v1.3.3.apk",
-  "apkSha256": "5896f3528961df579af6ee7dea95d610b53770196d8007b2a099914053756ff2",
-  "apkSize": 4837545,
+  "versionCode": 10304,
+  "versionName": "1.3.4",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.4/TVBox-v1.3.4.apk",
+  "apkSha256": "3875d84023e5b620536f7619ee2989a62f07eddc141ee1bad0e27891c898d74d",
+  "apkSize": 4853929,
   "force": false,
   "changelog": [
-    "修复 v1.3.2 字体缩放造成的启动闪退。",
-    "默认和大字号设置均可正常进入首页。",
-    "新增字体 Typography 回归测试，避免未指定字距再次导致崩溃。"
+    "首页默认展示豆瓣热播剧集，支持分页加载。",
+    "点击热播卡片后再使用当前影视数据源搜索播放资源。",
+    "热播接口异常时会提示并回退为当前数据源最近更新。"
   ]
 }

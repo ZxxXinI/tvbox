@@ -11,6 +11,8 @@ import com.tvbox.app.data.AppUpdateRepository
 import com.tvbox.app.data.DefaultAiRecommendationRepository
 import com.tvbox.app.data.DefaultMovieRepository
 import com.tvbox.app.data.DefaultLiveRepository
+import com.tvbox.app.data.DefaultDoubanHotRepository
+import com.tvbox.app.data.DoubanHotRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
@@ -25,6 +27,7 @@ import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppUpdate
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.CustomVideoApiLine
+import com.tvbox.app.domain.DoubanHotItem
 import com.tvbox.app.domain.LiveChannel
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.PlaybackAgent
@@ -39,6 +42,7 @@ import com.tvbox.app.domain.ResolvedPlatformLiveStream
 import com.tvbox.app.domain.WatchHistoryItem
 import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.domain.TvFontScale
+import com.tvbox.app.domain.findBestTitleMatchIndex
 import com.tvbox.app.domain.playbackHealthKey
 import com.tvbox.app.domain.toApiLines
 import kotlinx.coroutines.Job
@@ -62,6 +66,11 @@ enum class TvScreen {
     AiRecommend,
 }
 
+enum class HomeFeedMode {
+    DoubanHot,
+    Catalog,
+}
+
 enum class PlatformLiveDestination {
     Sites,
     ParentCategories,
@@ -79,9 +88,14 @@ data class TvBoxUiState(
     val apiLines: List<ApiLine> = emptyList(),
     val selectedApiLineId: String = "",
     val categories: List<Category> = emptyList(),
+    val homeFeedMode: HomeFeedMode = HomeFeedMode.DoubanHot,
     val selectedParentCategoryId: Int? = null,
     val selectedCategoryId: Int? = null,
     val movies: List<Movie> = emptyList(),
+    val doubanHotMovies: List<DoubanHotItem> = emptyList(),
+    val doubanHotFallbackActive: Boolean = false,
+    val homeNotice: String? = null,
+    val resolvingDoubanHotId: String? = null,
     val page: Int = 1,
     val pageCount: Int = 1,
     val total: Int = 0,
@@ -152,12 +166,19 @@ data class TvBoxUiState(
     val canLoadMore: Boolean
         get() = page < pageCount && !homeLoading && !loadingMore
 
+    val isShowingDoubanHot: Boolean
+        get() = homeFeedMode == HomeFeedMode.DoubanHot && !doubanHotFallbackActive
+
+    val homeItemCount: Int
+        get() = if (isShowingDoubanHot) doubanHotMovies.size else movies.size
+
     val selectedApiLine: ApiLine?
         get() = apiLines.firstOrNull { it.id == selectedApiLineId }
 }
 
 class TvBoxViewModel(
     private val repository: MovieRepository = DefaultMovieRepository(),
+    private val doubanHotRepository: DoubanHotRepository = DefaultDoubanHotRepository(),
     private val liveRepository: LiveRepository = DefaultLiveRepository(),
     private val platformLiveRepository: PlatformLiveRepository = DefaultPlatformLiveRepository(),
     private val aiRecommendationRepository: AiRecommendationRepository = DefaultAiRecommendationRepository(BuildConfig.AI_API_KEY),
@@ -170,6 +191,7 @@ class TvBoxViewModel(
     val state: StateFlow<TvBoxUiState> = _state.asStateFlow()
 
     private var homeJob: Job? = null
+    private var doubanHotResolveJob: Job? = null
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var historyResumeJob: Job? = null
@@ -220,25 +242,36 @@ class TvBoxViewModel(
         }
     }
 
-    fun refreshHome() {
+    fun refreshHome(forceRefresh: Boolean = false) {
         loadCategoriesOnly()
-        loadHomePage(reset = true)
+        _state.update { state ->
+            if (state.homeFeedMode == HomeFeedMode.DoubanHot) {
+                state.copy(doubanHotFallbackActive = false, homeNotice = null)
+            } else {
+                state
+            }
+        }
+        loadHomePage(reset = true, forceRefresh = forceRefresh)
     }
 
-    fun selectAllCategories() {
+    fun selectDoubanHot() {
         val current = _state.value
-        if (current.selectedParentCategoryId == null && current.selectedCategoryId == null) return
+        if (current.isShowingDoubanHot && current.doubanHotMovies.isNotEmpty()) return
         _state.update {
             it.copy(
+                homeFeedMode = HomeFeedMode.DoubanHot,
                 selectedParentCategoryId = null,
                 selectedCategoryId = null,
                 movies = emptyList(),
+                doubanHotMovies = emptyList(),
+                doubanHotFallbackActive = false,
+                homeNotice = null,
                 page = 1,
                 pageCount = 1,
                 total = 0,
             )
         }
-        refreshHome()
+        loadHomePage(reset = true)
     }
 
     fun selectParentCategory(parentCategoryId: Int) {
@@ -246,9 +279,12 @@ class TvBoxViewModel(
         if (current.selectedParentCategoryId == parentCategoryId && current.selectedCategoryId == null) return
         _state.update {
             it.copy(
+                homeFeedMode = HomeFeedMode.Catalog,
                 selectedParentCategoryId = parentCategoryId,
                 selectedCategoryId = null,
                 movies = emptyList(),
+                doubanHotFallbackActive = false,
+                homeNotice = null,
                 page = 1,
                 pageCount = 1,
                 total = 0,
@@ -267,9 +303,12 @@ class TvBoxViewModel(
             ?: current.selectedParentCategoryId
         _state.update {
             it.copy(
+                homeFeedMode = HomeFeedMode.Catalog,
                 selectedParentCategoryId = parentCategoryId,
                 selectedCategoryId = categoryId,
                 movies = emptyList(),
+                doubanHotFallbackActive = false,
+                homeNotice = null,
                 page = 1,
                 pageCount = 1,
                 total = 0,
@@ -295,6 +334,9 @@ class TvBoxViewModel(
                 selectedCategoryId = null,
                 categories = emptyList(),
                 movies = emptyList(),
+                doubanHotMovies = emptyList(),
+                doubanHotFallbackActive = false,
+                homeNotice = null,
                 page = 1,
                 pageCount = 1,
                 total = 0,
@@ -307,7 +349,7 @@ class TvBoxViewModel(
     fun loadNextPage() {
         val current = _state.value
         if (!current.canLoadMore) return
-        loadHomePage(reset = false)
+        loadHomePage(reset = false, forceRefresh = current.homeNotice != null)
     }
 
     fun openHome() {
@@ -822,6 +864,39 @@ class TvBoxViewModel(
         }
     }
 
+    fun openDoubanHotDetail(item: DoubanHotItem) {
+        val current = _state.value
+        if (current.resolvingDoubanHotId == item.doubanId) return
+
+        val apiLineId = current.selectedApiLineId
+        doubanHotResolveJob?.cancel()
+        doubanHotResolveJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    homeNotice = null,
+                    resolvingDoubanHotId = item.doubanId,
+                )
+            }
+            runCatching { findPlayableDoubanMovie(item.title, apiLineId) }
+                .onSuccess { movie ->
+                    _state.update { it.copy(resolvingDoubanHotId = null) }
+                    if (movie == null) {
+                        _state.update { it.copy(homeNotice = "暂无该视频资源") }
+                    } else {
+                        openDetail(movie.id, apiLineId)
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            resolvingDoubanHotId = null,
+                            homeNotice = error.userMessage(),
+                        )
+                    }
+                }
+        }
+    }
+
     fun submitSearch() {
         val query = _state.value.searchQuery.trim()
         if (query.isBlank()) {
@@ -855,7 +930,7 @@ class TvBoxViewModel(
         }
     }
 
-    fun openDetail(movieId: Int) {
+    fun openDetail(movieId: Int, apiLineId: String = _state.value.selectedApiLineId) {
         detailJob?.cancel()
         val current = _state.value
         val returnScreen = when (current.screen) {
@@ -878,7 +953,7 @@ class TvBoxViewModel(
             )
         }
         detailJob = viewModelScope.launch {
-            runCatching { repository.getDetail(apiLineId = _state.value.selectedApiLineId, id = movieId) }
+            runCatching { repository.getDetail(apiLineId = apiLineId, id = movieId) }
                 .onSuccess { movie ->
                     _state.update { state ->
                         val sourceIndex = movie?.let { detailMovie ->
@@ -1369,7 +1444,7 @@ class TvBoxViewModel(
 
     fun retryCurrent() {
         when (_state.value.screen) {
-            TvScreen.Home -> refreshHome()
+            TvScreen.Home -> refreshHome(forceRefresh = true)
             TvScreen.History -> loadHistory()
             TvScreen.Search -> submitSearch()
             TvScreen.Detail -> _state.value.detailMovie?.let { openDetail(it.id) }
@@ -1445,7 +1520,15 @@ class TvBoxViewModel(
         }
     }
 
-    private fun loadHomePage(reset: Boolean) {
+    private fun loadHomePage(reset: Boolean, forceRefresh: Boolean = false) {
+        if (_state.value.isShowingDoubanHot) {
+            loadDoubanHotPage(reset = reset, forceRefresh = forceRefresh)
+        } else {
+            launchCatalogHomePage(reset = reset)
+        }
+    }
+
+    private fun loadDoubanHotPage(reset: Boolean, forceRefresh: Boolean) {
         homeJob?.cancel()
         val current = _state.value
         val nextPage = if (reset) 1 else current.page + 1
@@ -1455,7 +1538,71 @@ class TvBoxViewModel(
                     homeLoading = reset,
                     loadingMore = !reset,
                     homeError = null,
+                    homeNotice = if (reset) null else it.homeNotice,
                     movies = if (reset) emptyList() else it.movies,
+                    doubanHotMovies = if (reset) emptyList() else it.doubanHotMovies,
+                    doubanHotFallbackActive = false,
+                )
+            }
+            runCatching {
+                doubanHotRepository.getRecentHot(page = nextPage, forceRefresh = forceRefresh)
+            }.onSuccess { result ->
+                _state.update {
+                    it.copy(
+                        doubanHotMovies = if (reset) {
+                            result.items
+                        } else {
+                            (it.doubanHotMovies + result.items)
+                                .distinctBy { item -> item.doubanId.ifBlank { item.title } }
+                        },
+                        page = result.page,
+                        pageCount = result.pageCount,
+                        total = result.total,
+                        homeLoading = false,
+                        loadingMore = false,
+                        homeError = if (result.items.isEmpty() && reset) "当前没有热播内容" else null,
+                        homeNotice = null,
+                    )
+                }
+            }.onFailure { error ->
+                if (reset) {
+                    val fallbackNotice = "豆瓣热播暂时不可用，已显示当前线路最近更新"
+                    _state.update { it.copy(doubanHotFallbackActive = true, homeNotice = fallbackNotice) }
+                    launchCatalogHomePage(
+                        reset = true,
+                        fallbackNotice = fallbackNotice,
+                        cancelCurrent = false,
+                    )
+                } else {
+                    _state.update {
+                        it.copy(
+                            homeLoading = false,
+                            loadingMore = false,
+                            homeNotice = "热播加载失败，点击加载更多重试",
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun launchCatalogHomePage(
+        reset: Boolean,
+        fallbackNotice: String? = null,
+        cancelCurrent: Boolean = true,
+    ) {
+        if (cancelCurrent) homeJob?.cancel()
+        val current = _state.value
+        val nextPage = if (reset) 1 else current.page + 1
+        homeJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    homeLoading = reset,
+                    loadingMore = !reset,
+                    homeError = null,
+                    homeNotice = fallbackNotice ?: if (reset) null else it.homeNotice,
+                    movies = if (reset) emptyList() else it.movies,
+                    doubanHotFallbackActive = fallbackNotice != null || it.doubanHotFallbackActive,
                 )
             }
             runCatching {
@@ -1549,6 +1696,18 @@ class TvBoxViewModel(
             candidate.isNotBlank() &&
                 (candidate.contains(normalizedKeyword) || normalizedKeyword.contains(candidate))
         } ?: movies.first()
+    }
+
+    private suspend fun findPlayableDoubanMovie(title: String, apiLineId: String): Movie? {
+        val keyword = title.trim()
+        if (keyword.isBlank()) return null
+        val movies = repository.getMovies(
+            apiLineId = apiLineId,
+            page = 1,
+            keyword = keyword,
+        ).movies
+        val matchedIndex = findBestTitleMatchIndex(keyword, movies.map { it.name }) ?: return null
+        return movies.getOrNull(matchedIndex)
     }
 
     private fun buildAiRecommendationRequest(query: String, excludedNames: List<String>): String {

@@ -2,7 +2,7 @@
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
-当前源码版本为 `1.3.3`（`versionCode=10303`）。本版本修复字体大小设置引起的启动闪退，并包含全局字体与卡片布局适配、默认主题 / 影院主题切换和五平台直播接入；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
+当前源码版本为 `1.3.4`（`versionCode=10304`）。本版本新增首页豆瓣热播榜单：启动默认显示热门剧集，点击卡片后再用当前影视数据源查找可播放资源；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
 
 > 请确保使用的影视与直播接口具备合法授权。本项目仅提供客户端能力，不内置或托管影视内容。
 
@@ -14,7 +14,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 
 - Android TV 适配：支持 `LEANBACK_LAUNCHER`，可在电视桌面启动，同时保留普通 Android 启动入口。
 - 遥控器友好：方向键、确认键、返回键、菜单键和数字键均有对应交互。
-- 首页影视列表：支持一级/二级分类、分页加载、焦点高亮和遥控快捷键。
+- 首页影视列表：默认展示豆瓣热播剧集，支持海报、评分、分页加载、焦点高亮；点击热播卡片后才按片名从当前影视数据源查找详情与播放资源。
 - 主题切换：设置页支持“默认主题”和“影院主题”；默认主题保留原有顶部快捷入口，影院主题提供左侧图标导航和 Hero 推荐布局。
 - 视频接口管理：设置页可选择量子、如意、360 等内置资源站，也可手机扫码添加 MacCms 自定义接口作为首页、搜索和 AI 找片默认数据源。
 - 搜索与详情：支持关键词搜索、影片详情、简介、封面、播放源和选集。
@@ -78,7 +78,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.3.3.apk
+adb install -r TVBox-v1.3.4.apk
 ```
 
 ## OTA 更新机制
@@ -93,16 +93,16 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 ```json
 {
-  "versionCode": 10303,
-  "versionName": "1.3.3",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.3/TVBox-v1.3.3.apk",
-  "apkSha256": "5896f3528961df579af6ee7dea95d610b53770196d8007b2a099914053756ff2",
-  "apkSize": 4837545,
+  "versionCode": 10304,
+  "versionName": "1.3.4",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.4/TVBox-v1.3.4.apk",
+  "apkSha256": "3875d84023e5b620536f7619ee2989a62f07eddc141ee1bad0e27891c898d74d",
+  "apkSize": 4853929,
   "force": false,
   "changelog": [
-    "修复 v1.3.2 字体缩放造成的启动闪退。",
-    "默认和大字号设置均可正常进入首页。",
-    "新增字体 Typography 回归测试，避免未指定字距再次导致崩溃。"
+    "首页默认展示豆瓣热播剧集，支持分页加载。",
+    "点击热播卡片后再使用当前影视数据源搜索播放资源。",
+    "热播接口异常时会提示并回退为当前数据源最近更新。"
   ]
 }
 ```
@@ -209,8 +209,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10303
-versionName = "1.3.3"
+versionCode = 10304
+versionName = "1.3.4"
 ```
 
 2. 构建 release APK：
@@ -224,8 +224,8 @@ versionName = "1.3.3"
 
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
-git commit -m "Release v1.3.3"
-git tag -a v1.3.3 -m "TVBox v1.3.3"
+git commit -m "Release v1.3.4"
+git tag -a v1.3.4 -m "TVBox v1.3.4"
 git push origin main
 git push origin v1.3.3
 ```

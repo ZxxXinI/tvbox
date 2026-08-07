@@ -73,6 +73,7 @@ import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.AppNavigationRail
 import com.tvbox.app.ui.components.CategoryPill
+import com.tvbox.app.ui.components.DoubanHotPosterCard
 import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.HistoryItemCard
 import com.tvbox.app.ui.components.LoadingState
@@ -259,6 +260,11 @@ private fun HomeScreen(
     PageSurface { padding ->
         val apiLineName = state.selectedApiLine?.name ?: "资源"
         val cinemaTheme = state.appSettings.theme == TvTheme.Cinema
+        val homeSubtitle = when {
+            state.isShowingDoubanHot -> "豆瓣热播 / 共 ${state.total} 部"
+            state.doubanHotFallbackActive -> "$apiLineName 最近更新 / 共 ${state.total} 部"
+            else -> "$apiLineName 数据 / 共 ${state.total} 部影片"
+        }
         val allCategoryFocusRequester = remember { FocusRequester() }
         val movieGridState = rememberLazyGridState()
         val homeTopContentVisible by remember {
@@ -322,7 +328,7 @@ private fun HomeScreen(
                 Column {
                     AppHeader(
                         title = if (cinemaTheme) "首页" else "TVBox",
-                        subtitle = "$apiLineName 数据 / 共 ${state.total} 部影片",
+                        subtitle = homeSubtitle,
                         onHistory = actions::openHistory,
                         onSearch = actions::openSearch,
                         onAiRecommend = actions::openAiRecommend,
@@ -331,7 +337,7 @@ private fun HomeScreen(
                         onSettings = actions::openSettings,
                         showShortcutActions = !cinemaTheme,
                     )
-                    if (cinemaTheme) {
+                    if (cinemaTheme && !state.isShowingDoubanHot) {
                         state.movies.firstOrNull()?.let { featuredMovie ->
                             FeaturedMovieHero(
                                 movie = featuredMovie,
@@ -342,11 +348,11 @@ private fun HomeScreen(
                     }
                     HomeCategoryRows(
                         state = state,
-                        onAll = actions::selectAllCategories,
+                        onHot = actions::selectDoubanHot,
                         onParent = actions::selectParentCategory,
-                    onChild = actions::selectChildCategory,
-                    allCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
-                )
+                        onChild = actions::selectChildCategory,
+                        hotCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
+                    )
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
@@ -357,13 +363,14 @@ private fun HomeScreen(
                 )
                 state.homeError != null -> ErrorState(
                     message = state.homeError,
-                    onRetry = actions::refreshHome,
+                    onRetry = { actions.refreshHome(forceRefresh = true) },
                     modifier = Modifier.weight(1f),
                 )
                 else -> MovieGrid(
                     state = state,
                     gridState = movieGridState,
                     onMovieClick = actions::openDetail,
+                    onDoubanHotClick = actions::openDoubanHotDetail,
                     onLoadMore = actions::loadNextPage,
                     showSectionHeader = cinemaTheme,
                     modifier = Modifier.weight(1f),
@@ -1121,10 +1128,10 @@ private fun SettingsSectionTitle(
 @Composable
 private fun HomeCategoryRows(
     state: TvBoxUiState,
-    onAll: () -> Unit,
+    onHot: () -> Unit,
     onParent: (Int) -> Unit,
     onChild: (Int) -> Unit,
-    allCategoryModifier: Modifier = Modifier,
+    hotCategoryModifier: Modifier = Modifier,
 ) {
     val parentCategories = state.categories.filter { it.parentId == 0 }
     val selectedParent = state.selectedParentCategoryId
@@ -1137,10 +1144,10 @@ private fun HomeCategoryRows(
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 CategoryPill(
-                    label = "全部",
-                    selected = state.selectedParentCategoryId == null && state.selectedCategoryId == null,
-                    onClick = onAll,
-                    modifier = allCategoryModifier,
+                    label = "热播",
+                    selected = state.homeFeedMode == HomeFeedMode.DoubanHot,
+                    onClick = onHot,
+                    modifier = hotCategoryModifier,
                 )
             }
             items(parentCategories, key = { it.id }) { category ->
@@ -1177,12 +1184,13 @@ private fun MovieGrid(
     state: TvBoxUiState,
     gridState: LazyGridState,
     onMovieClick: (Int) -> Unit,
+    onDoubanHotClick: (com.tvbox.app.domain.DoubanHotItem) -> Unit,
     onLoadMore: () -> Unit,
     showSectionHeader: Boolean,
     modifier: Modifier = Modifier,
 ) {
     var loadMoreFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(state.selectedParentCategoryId, state.selectedCategoryId) {
+    LaunchedEffect(state.homeFeedMode, state.selectedParentCategoryId, state.selectedCategoryId) {
         gridState.scrollToItem(0)
         loadMoreFocused = false
     }
@@ -1194,10 +1202,13 @@ private fun MovieGrid(
                     .padding(bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("正在热播", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (state.isShowingDoubanHot) "豆瓣热播" else "正在热播",
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    text = "${state.movies.size} / ${state.total} 部",
+                    text = "${state.homeItemCount} / ${state.total} 部",
                     color = TvColors.TextSecondary,
                     style = MaterialTheme.typography.labelMedium,
                 )
@@ -1211,12 +1222,41 @@ private fun MovieGrid(
             verticalArrangement = Arrangement.spacedBy(22.dp),
             modifier = Modifier.weight(1f),
         ) {
-            items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
-                MoviePosterCard(
-                    movie = movie,
-                    onClick = { onMovieClick(movie.id) },
-                    posterAspectRatio = 0.78f,
-                )
+            state.homeNotice?.let { notice ->
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 2.dp),
+                        color = TvColors.SurfaceRaised,
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Text(
+                            text = notice,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            color = TvColors.TextSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+            if (state.isShowingDoubanHot) {
+                items(state.doubanHotMovies, key = { it.doubanId.ifBlank { it.title } }) { item ->
+                    DoubanHotPosterCard(
+                        item = item,
+                        resolving = state.resolvingDoubanHotId == item.doubanId,
+                        onClick = { onDoubanHotClick(item) },
+                        posterAspectRatio = 0.78f,
+                    )
+                }
+            } else {
+                items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
+                    MoviePosterCard(
+                        movie = movie,
+                        onClick = { onMovieClick(movie.id) },
+                        posterAspectRatio = 0.78f,
+                    )
+                }
             }
             if (state.canLoadMore || state.loadingMore) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1245,7 +1285,7 @@ private fun MovieGrid(
                         }
                     }
                 }
-            } else if (state.movies.isNotEmpty()) {
+            } else if (state.homeItemCount > 0) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         text = "已经到底了",

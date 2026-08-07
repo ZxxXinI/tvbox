@@ -22,8 +22,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.tvbox.app.data.DefaultAppUpdateRepository
+import com.tvbox.app.data.DefaultDoubanHotRepository
 import com.tvbox.app.data.DefaultMovieRepository
 import com.tvbox.app.data.SharedAppSettingsRepository
+import com.tvbox.app.data.SharedDoubanHotCache
 import com.tvbox.app.data.SharedHistoryRepository
 import com.tvbox.app.data.SharedPlaybackHealthRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -311,6 +313,9 @@ private class TvBoxViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return TvBoxViewModel(
             repository = DefaultMovieRepository(),
+            doubanHotRepository = DefaultDoubanHotRepository(
+                cache = SharedDoubanHotCache(activity.applicationContext),
+            ),
             appUpdateRepository = DefaultAppUpdateRepository(activity.applicationContext),
             appSettingsRepository = SharedAppSettingsRepository(activity.applicationContext),
             playbackHealthRepository = SharedPlaybackHealthRepository(activity.applicationContext),
