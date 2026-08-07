@@ -1,5 +1,6 @@
 ﻿package com.tvbox.app.ui.components
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -36,6 +37,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.Font
@@ -45,7 +47,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.tvbox.app.R
+import com.tvbox.app.data.DOUBAN_REFERER
+import com.tvbox.app.data.DOUBAN_USER_AGENT
+import com.tvbox.app.domain.DoubanHotItem
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.WatchHistoryItem
 import com.tvbox.app.ui.TvScreen
@@ -433,6 +439,120 @@ fun MoviePosterCard(
         )
         Text(
             text = movie.subtitle.ifBlank { movie.typeName.ifBlank { "影视" } },
+            modifier = Modifier.padding(start = 10.dp, top = 3.dp, end = 10.dp, bottom = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+fun DoubanHotPosterCard(
+    item: DoubanHotItem,
+    resolving: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    posterAspectRatio: Float = 0.78f,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    val context = LocalContext.current
+    var focused by remember { mutableStateOf(false) }
+    var posterFailed by remember(item.doubanId, item.posterUrl) { mutableStateOf(item.posterUrl.isBlank()) }
+    val imageRequest = remember(item.posterUrl) {
+        ImageRequest.Builder(context)
+            .data(item.posterUrl)
+            .apply {
+                val host = Uri.parse(item.posterUrl).host.orEmpty()
+                if (host.endsWith(".doubanio.com", ignoreCase = true)) {
+                    addHeader("Referer", DOUBAN_REFERER)
+                    addHeader("User-Agent", DOUBAN_USER_AGENT)
+                }
+            }
+            .build()
+    }
+
+    Column(
+        modifier = modifier
+            .tvFocusScale(
+                shape = shape,
+                focusedBorder = TvColors.FocusRing,
+                idleBorder = TvColors.Border,
+            )
+            .clip(shape)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .background(if (focused) TvColors.SurfaceRaised else TvColors.Surface)
+            .clickable(onClick = onClick)
+            .focusable(),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(posterAspectRatio)
+                .background(TvColors.SurfaceRaised),
+        ) {
+            if (!posterFailed) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    onError = { posterFailed = true },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    text = item.title,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(14.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (item.score > 0.0) {
+                Text(
+                    text = "豆瓣 ${"%.1f".format(item.score)}",
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .background(Color(0xCC080B0B), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            if (resolving) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xB3080B0B)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 2.dp)
+                        Text(
+                            text = "正在查找资源...",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            text = item.title,
+            modifier = Modifier.padding(start = 10.dp, top = 10.dp, end = 10.dp),
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = item.subtitle.ifBlank { "豆瓣热播" },
             modifier = Modifier.padding(start = 10.dp, top = 3.dp, end = 10.dp, bottom = 12.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,

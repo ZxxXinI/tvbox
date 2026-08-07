@@ -1,5 +1,49 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-07 13:45 - 发布 v1.3.4：豆瓣热播首页
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 热播首页功能完成后需要提供可被 OTA 识别的正式版本。
+  - Purpose: 将版本更新为 `1.3.4 / 10304`。
+
+- File path: `CHANGELOG.md`、`README.md`、`update.json`
+  - Reason: 用户安装、OTA 检测和发布说明必须指向同一个版本化 APK。
+  - Purpose: 记录热播功能，并写入 v1.3.4 APK 的下载地址、SHA-256 与文件大小。
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.4.apk`
+  - Reason: GitHub Release 需要稳定的版本化安装包。
+  - Purpose: 保存已签名 v1.3.4 APK，供用户安装和 OTA 下载。
+
+- File path: `devLog/README.md`、`devLog/douban-hot-api.md`、`devLog/release.md`
+  - Reason: 需要可追溯地记录接口实现、设备测试与发布结果。
+  - Purpose: 登记本次功能、验证边界和完整性数据。
+
+## Bug Record
+
+- Time: 2026-08-07 13:45
+- Symptoms: 无。
+- Attempted fix: 不适用；本次为功能发布。
+- Temporary solution: 无。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleRelease`
+  - Result: passed.
+- Android 9 设备：成功覆盖安装 `v1.3.4 / 10304`，豆瓣热播首屏返回 `243` 部；点击“这一秒过火”通过量子线路进入详情页；返回后仍为热播页；加载更多后显示 `40 / 243` 部。
+- `apksigner verify --print-certs app\build\outputs\apk\release\TVBox-v1.3.4.apk`
+  - Result: passed. Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.4.apk`
+  - Size: `4853929`
+  - SHA-256: `3875d84023e5b620536f7619ee2989a62f07eddc141ee1bad0e27891c898d74d`
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-08-07 07:50 - 发布 v1.3.3：修复启动闪退
 
 ## File Changes
