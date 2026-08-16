@@ -1,5 +1,40 @@
 ﻿# Home / Player UI - 2026-06-30
 
+## 2026-08-16 20:52 - 播放器智能横竖屏比例适配
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: 电影、电视剧与短剧的视频实际比例不同，手机端需要针对竖屏短剧自动适配。
+  - Purpose: 监听 Media3 `VideoSize`，按真实比例区分横屏和竖屏；`PlayerView` 固定使用 `FIT` 完整显示。非电视设备播放竖屏流时自动转为竖屏，横屏流保持横屏；电视设备维持横向并使用黑边显示竖屏流；退出播放器恢复横屏。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次代码修改后记录开发内容。
+  - Purpose: 在项目主时间线登记本次播放器比例适配。
+
+- File path: `devLog/home-player-ui.md`
+  - Reason: 本次属于播放器显示与移动端交互调整。
+  - Purpose: 保存实现原因、边界和验证结果。
+
+## Bug Record
+
+- Time: 2026-08-16 20:41
+- Symptoms: `testDebugUnitTest` 的两项内容过滤测试失败。
+- Attempted fix: 已定位为当前 `ContentFilter` 将屏蔽关键词改为 `x` 后，与测试期望的“伦理、电影解说”过滤规则不一致。
+- Temporary solution: 此改动在本次任务前已由用户保留并提交，不擅自恢复；比例适配代码已通过 Kotlin 编译与 APK 构建。
+
+## Verification
+
+- `./gradlew.bat assembleDebug --console=plain --offline --no-daemon`：passed。
+- `./gradlew.bat assembleRelease --console=plain --offline --no-daemon`：passed。
+- `./gradlew.bat testDebugUnitTest assembleDebug --console=plain --offline --no-daemon`：比例适配编译通过；两项既有内容过滤测试失败，原因见上方缺陷记录。
+- ADB `emulator-5554`：正式签名 APK 覆盖安装成功；横屏电视剧实播，系统配置保持 `land`，画面按比例完整显示且无拉伸或裁切。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
+
 ## 2026-08-16 20:29 - 手机播放亮度与音量手势
 
 ## File Changes

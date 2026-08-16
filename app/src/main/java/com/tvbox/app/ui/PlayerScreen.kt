@@ -3,6 +3,8 @@ package com.tvbox.app.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.KeyEvent as AndroidKeyEvent
@@ -42,8 +44,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.R as Media3UiR
 import com.tvbox.app.domain.PlaybackAgentDecision
@@ -79,6 +83,7 @@ fun PlayerScreen(
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    val isTelevision = remember(context) { context.isTelevision() }
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
@@ -91,6 +96,7 @@ fun PlayerScreen(
         }
     }
     var nativePlayerView by remember { mutableStateOf<PlayerView?>(null) }
+    var videoDisplayMode by remember { mutableStateOf(VideoDisplayMode.Unknown) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var seekGesturePrompt by remember { mutableStateOf<String?>(null) }
     var seekGesturePromptNonce by remember { mutableIntStateOf(0) }
@@ -195,6 +201,24 @@ fun PlayerScreen(
 
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 actions.updatePlaybackSpeed(playbackParameters.speed)
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                val displayMode = videoSize.toVideoDisplayMode()
+                if (displayMode == VideoDisplayMode.Unknown || displayMode == videoDisplayMode) return
+
+                videoDisplayMode = displayMode
+                if (isTelevision) return
+
+                val requestedOrientation = displayMode.requestedOrientation ?: return
+                val currentActivity = activity ?: return
+                if (currentActivity.requestedOrientation == requestedOrientation) return
+
+                actions.savePlaybackProgress(
+                    positionMs = player.currentPosition,
+                    durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+                )
+                currentActivity.requestedOrientation = requestedOrientation
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -390,13 +414,16 @@ fun PlayerScreen(
         )
     }
 
-    DisposableEffect(touchHandler, player, activity, initialScreenBrightness) {
+    DisposableEffect(touchHandler, player, activity, initialScreenBrightness, isTelevision) {
         onDispose {
             touchGesture.longPressRunnable?.let(touchHandler::removeCallbacks)
             touchGesture.singleTapRunnable?.let(touchHandler::removeCallbacks)
             touchGesture.longPressRunnable = null
             touchGesture.singleTapRunnable = null
             activity?.window?.restoreScreenBrightness(initialScreenBrightness)
+            if (!isTelevision) {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            }
         }
     }
 
@@ -419,6 +446,7 @@ fun PlayerScreen(
                     controllerAutoShow = true
                     controllerShowTimeoutMs = PLAYER_CONTROLLER_SHOW_TIMEOUT_MS
                     controllerHideOnTouch = true
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                     val centerControls = findViewById<View>(Media3UiR.id.exo_center_controls)
                     setOnKeyListener { _, keyCode, keyEvent ->
@@ -777,6 +805,21 @@ private fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+private fun Context.isTelevision(): Boolean {
+    val deviceType = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
+    return deviceType == Configuration.UI_MODE_TYPE_TELEVISION
+}
+
+private fun VideoSize.toVideoDisplayMode(): VideoDisplayMode {
+    if (width <= 0 || height <= 0) return VideoDisplayMode.Unknown
+    val aspectRatio = width.toFloat() * pixelWidthHeightRatio / height
+    return when {
+        aspectRatio <= PORTRAIT_VIDEO_ASPECT_RATIO_MAX -> VideoDisplayMode.Portrait
+        aspectRatio >= LANDSCAPE_VIDEO_ASPECT_RATIO_MIN -> VideoDisplayMode.Landscape
+        else -> VideoDisplayMode.Unknown
+    }
+}
+
 private fun Window.currentScreenBrightness(context: Context): Float {
     val current = attributes.screenBrightness
     if (current >= 0f) return current.coerceIn(MIN_SCREEN_BRIGHTNESS, 1f)
@@ -803,6 +846,14 @@ private enum class PlayerSwipeMode {
     Seek,
     Brightness,
     Volume,
+}
+
+private enum class VideoDisplayMode(
+    val requestedOrientation: Int? = null,
+) {
+    Unknown,
+    Portrait(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT),
+    Landscape(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE),
 }
 
 private class PlayerTouchGestureState {
@@ -832,6 +883,8 @@ private const val MIN_SCREEN_BRIGHTNESS = 0.01f
 private const val DEFAULT_SCREEN_BRIGHTNESS = 0.5f
 private const val DEFAULT_SYSTEM_BRIGHTNESS = 128
 private const val MAX_SYSTEM_BRIGHTNESS = 255f
+private const val PORTRAIT_VIDEO_ASPECT_RATIO_MAX = 0.8f
+private const val LANDSCAPE_VIDEO_ASPECT_RATIO_MIN = 1.1f
 
 private fun PlaybackAgentDecision.toPlaybackNotice(prefix: String): String {
     val sourceName = nextSourceName
