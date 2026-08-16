@@ -1,5 +1,49 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-16 21:02 - 发布 v1.3.5：原生播放器与智能比例适配
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 播放器与手机端交互功能完成后需要提供可 OTA 更新的正式版本。
+  - Purpose: 将版本更新为 `1.3.5 / 10305`。
+
+- File path: `CHANGELOG.md`、`README.md`、`update.json`
+  - Reason: 用户安装、OTA 检测和发布说明必须指向同一份 v1.3.5 安装包。
+  - Purpose: 记录原生播放器、手势和比例适配，并写入 APK 下载地址、SHA-256 与文件大小。
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.5.apk`
+  - Reason: GitHub Release 需要稳定的版本化安装包。
+  - Purpose: 保存已签名 v1.3.5 APK，供手动安装和 OTA 下载。
+
+- File path: `devLog/README.md`、`devLog/release.md`
+  - Reason: 用户要求每次开发与发布后记录内容。
+  - Purpose: 登记 v1.3.5 的版本范围、构建结果和完整性数据。
+
+## Bug Record
+
+- Time: 2026-08-16 21:02
+- Symptoms: 完整单测中有两项内容过滤测试失败。
+- Attempted fix: 已定位到当前 `ContentFilter` 的屏蔽词改为 `x`，与测试期望不一致。
+- Temporary solution: 按用户要求保留当前过滤行为；本次正式构建、签名与播放器 ADB 验证均正常。
+
+## Verification
+
+- `./gradlew.bat assembleDebug --console=plain --offline --no-daemon`：passed。
+- `./gradlew.bat assembleRelease --console=plain --offline --no-daemon`：passed。
+- ADB `emulator-5554`：横屏影片实播，原生控制器、画面比例与播放器手势正常。
+- ADB `192.168.0.7:5555`：v1.3.5 正式签名 APK 覆盖安装成功；系统显示 `versionCode=10305`、`versionName=1.3.5`，应用进程正常，未发现新的崩溃日志。
+- `apksigner verify --print-certs app\build\outputs\apk\release\TVBox-v1.3.5.apk`：passed。Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- Release asset:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.5.apk`
+  - Size: `4853925`
+  - SHA-256: `83499f7a98a05cdae1a11366a56af49868f0c66737396261716a22a220910ed3`
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-08-07 13:45 - 发布 v1.3.4：豆瓣热播首页
 
 ## File Changes
