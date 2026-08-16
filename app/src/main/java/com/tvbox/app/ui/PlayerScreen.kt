@@ -1,27 +1,25 @@
 package com.tvbox.app.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.media.AudioManager
+import android.provider.Settings
 import android.view.KeyEvent as AndroidKeyEvent
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewConfiguration
-import android.view.ViewGroup
+import android.view.Window
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,15 +34,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -53,6 +45,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.R as Media3UiR
 import com.tvbox.app.domain.PlaybackAgentDecision
 import com.tvbox.app.domain.PlaybackAttemptTracker
 import com.tvbox.app.domain.PlaybackBufferDecision
@@ -62,6 +55,7 @@ import com.tvbox.app.domain.SlowBufferReason
 import com.tvbox.app.ui.components.ErrorState
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 @OptIn(UnstableApi::class)
@@ -84,22 +78,22 @@ fun PlayerScreen(
     }
 
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
+    val initialScreenBrightness = remember(activity) {
+        activity?.window?.attributes?.screenBrightness ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    }
     val player = remember {
         ExoPlayer.Builder(context).build().apply {
             playWhenReady = true
         }
     }
-    val playerFocusRequester = remember { FocusRequester() }
+    var nativePlayerView by remember { mutableStateOf<PlayerView?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
-    var reloadNonce by remember { mutableIntStateOf(0) }
-    var controlsVisible by remember { mutableStateOf(true) }
-    var controlsInteraction by remember { mutableIntStateOf(0) }
-    var speedPromptVisible by remember { mutableStateOf(false) }
-    var speedPromptNonce by remember { mutableIntStateOf(0) }
-    var speedPromptOverride by remember { mutableStateOf<Float?>(null) }
     var seekGesturePrompt by remember { mutableStateOf<String?>(null) }
     var seekGesturePromptNonce by remember { mutableIntStateOf(0) }
-    var autoAdvancedEpisodeUrl by remember { mutableStateOf<String?>(null) }
     var playbackNotice by remember { mutableStateOf<String?>(null) }
     val bufferMonitor = remember { PlaybackBufferMonitor() }
     val attemptTracker = remember { PlaybackAttemptTracker() }
@@ -109,7 +103,6 @@ fun PlayerScreen(
         mutableStateOf(emptySet<Int>())
     }
     val latestState by rememberUpdatedState(state)
-    val latestControlsVisible by rememberUpdatedState(controlsVisible)
     val latestPlaybackError by rememberUpdatedState(playbackError)
     val latestFailedSourceIndexes by rememberUpdatedState(failedSourceIndexes)
 
@@ -127,8 +120,7 @@ fun PlayerScreen(
             issueType = issueToRecord,
             autoTriggered = true,
         )
-        controlsVisible = true
-        controlsInteraction++
+        nativePlayerView?.showController()
         if (decision.switched) {
             bufferingPlaybackKey = null
             playbackError = null
@@ -187,6 +179,24 @@ fun PlayerScreen(
                 }
             }
 
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val episodeIndex = player.currentMediaItemIndex
+                val episodes = latestState.detailMovie
+                    ?.playSources
+                    ?.getOrNull(latestState.playerSourceIndex)
+                    ?.episodes
+                    .orEmpty()
+                if (episodeIndex in episodes.indices && episodeIndex != latestState.playerEpisodeIndex) {
+                    bufferingPlaybackKey = null
+                    bufferMonitor.onMediaChanged()
+                    actions.syncPlayerEpisode(episodeIndex)
+                }
+            }
+
+            override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                actions.updatePlaybackSpeed(playbackParameters.speed)
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val currentState = latestState
                 val currentSource = currentState.detailMovie
@@ -226,16 +236,10 @@ fun PlayerScreen(
                     }
                     Player.STATE_ENDED -> {
                         bufferingPlaybackKey = null
-                        if (autoAdvancedEpisodeUrl == currentEpisode.url) return
-
-                        autoAdvancedEpisodeUrl = currentEpisode.url
                         actions.savePlaybackProgress(
                             positionMs = player.currentPosition,
                             durationMs = player.duration.takeIf { it > 0L } ?: 0L,
                         )
-                        if (currentState.playerEpisodeIndex < currentSource.episodes.lastIndex) {
-                            actions.playNextEpisode()
-                        }
                     }
                 }
             }
@@ -251,13 +255,16 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(state.playerSourceIndex, state.playerEpisodeIndex, episode.url, reloadNonce) {
+    LaunchedEffect(state.playerSourceIndex, source.episodes) {
         playbackError = null
-        autoAdvancedEpisodeUrl = null
         bufferingPlaybackKey = null
         bufferMonitor.onMediaChanged()
         attemptTracker.onPlaybackChanged(state.currentPlaybackKey())
-        player.setMediaItem(MediaItem.fromUri(episode.url), state.playerStartPositionMs)
+        player.setMediaItems(
+            source.episodes.map { item -> MediaItem.fromUri(item.url) },
+            state.playerEpisodeIndex,
+            state.playerStartPositionMs,
+        )
         player.prepare()
         player.setPlaybackSpeed(state.playerSpeed)
         player.play()
@@ -289,7 +296,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(player, episode.url) {
+    LaunchedEffect(player) {
         while (true) {
             delay(5_000L)
             actions.savePlaybackProgress(
@@ -299,36 +306,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        playerFocusRequester.requestFocus()
-    }
-
-    LaunchedEffect(controlsVisible) {
-        if (!controlsVisible) {
-            playerFocusRequester.requestFocus()
-        }
-    }
-
     LaunchedEffect(state.playerSpeed) {
         player.setPlaybackSpeed(state.playerSpeed)
-    }
-
-    LaunchedEffect(controlsInteraction, playbackError) {
-        if (playbackError == null) {
-            controlsVisible = true
-            delay(4_000L)
-            controlsVisible = false
-        } else {
-            controlsVisible = true
-        }
-    }
-
-    LaunchedEffect(speedPromptNonce) {
-        if (speedPromptNonce == 0) return@LaunchedEffect
-        speedPromptVisible = true
-        delay(1_600L)
-        speedPromptVisible = false
-        speedPromptOverride = null
     }
 
     LaunchedEffect(seekGesturePromptNonce) {
@@ -337,15 +316,9 @@ fun PlayerScreen(
         seekGesturePrompt = null
     }
 
-    val showSpeedPromptAndCycle = {
-        speedPromptOverride = null
-        speedPromptNonce++
-        actions.cyclePlaybackSpeed()
-    }
-
     val showLongPressSpeedPrompt = {
-        speedPromptOverride = LONG_PRESS_PLAYBACK_SPEED
-        speedPromptNonce++
+        seekGesturePrompt = "2x 倍速播放"
+        seekGesturePromptNonce++
     }
     val touchHandler = remember { Handler(Looper.getMainLooper()) }
     val touchGesture = remember { PlayerTouchGestureState() }
@@ -358,8 +331,7 @@ fun PlayerScreen(
         touchGesture.longPressRunnable = null
         if (touchGesture.longPressActive) {
             touchGesture.longPressActive = false
-            speedPromptVisible = false
-            speedPromptOverride = null
+            seekGesturePrompt = null
             player.setPlaybackSpeed(latestState.playerSpeed)
         }
     }
@@ -378,23 +350,23 @@ fun PlayerScreen(
         )
     }
     val showControlsTemporarily = {
-        controlsVisible = true
-        controlsInteraction++
+        nativePlayerView?.showController()
     }
     val toggleControlsByTap = {
         if (latestPlaybackError == null) {
-            if (latestControlsVisible) {
-                controlsVisible = false
-            } else {
-                showControlsTemporarily()
+            nativePlayerView?.let { view ->
+                if (view.isControllerFullyVisible) {
+                    view.hideController()
+                } else {
+                    view.showController()
+                }
             }
         }
     }
     val togglePlaybackByGesture = {
         cancelLongPressSpeed()
         cancelPendingSingleTap()
-        controlsVisible = true
-        controlsInteraction++
+        nativePlayerView?.showController()
         if (player.isPlaying) {
             bufferMonitor.onPaused()
             player.pause()
@@ -418,120 +390,148 @@ fun PlayerScreen(
         )
     }
 
-    DisposableEffect(touchHandler, player) {
+    DisposableEffect(touchHandler, player, activity, initialScreenBrightness) {
         onDispose {
             touchGesture.longPressRunnable?.let(touchHandler::removeCallbacks)
             touchGesture.singleTapRunnable?.let(touchHandler::removeCallbacks)
             touchGesture.longPressRunnable = null
             touchGesture.singleTapRunnable = null
+            activity?.window?.restoreScreenBrightness(initialScreenBrightness)
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .focusRequester(playerFocusRequester)
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
-                controlsVisible = true
-                controlsInteraction++
-                when (event.nativeKeyEvent.keyCode) {
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                    AndroidKeyEvent.KEYCODE_ENTER,
-                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                    -> {
-                        if (player.isPlaying) {
-                            bufferMonitor.onPaused()
-                            player.pause()
-                        } else {
-                            player.play()
-                        }
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> {
-                        player.play()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                        bufferMonitor.onPaused()
-                        player.pause()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT,
-                    AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
-                    -> {
-                        bufferMonitor.onSeekStarted(System.currentTimeMillis())
-                        player.seekBack()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
-                    AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
-                    -> {
-                        bufferMonitor.onSeekStarted(System.currentTimeMillis())
-                        player.seekForward()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_MEDIA_NEXT -> {
-                        actions.playNextEpisode()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                        actions.playPreviousEpisode()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_1,
-                    AndroidKeyEvent.KEYCODE_NUMPAD_1,
-                    -> {
-                        actions.playPreviousEpisode()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_3,
-                    AndroidKeyEvent.KEYCODE_NUMPAD_3,
-                    -> {
-                        actions.playNextEpisode()
-                        true
-                    }
-                    AndroidKeyEvent.KEYCODE_MENU -> {
-                        showSpeedPromptAndCycle()
-                        true
-                    }
-                    else -> false
-                }
-            }
-            .focusable(),
+            .background(Color.Black),
     ) {
         AndroidView(
             factory = { viewContext ->
                 val touchSlop = ViewConfiguration.get(viewContext).scaledTouchSlop
                 val doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout().toLong()
+                val controllerTouchAreaPx = (MEDIA3_CONTROLLER_TOUCH_AREA_DP * viewContext.resources.displayMetrics.density).toInt()
                 PlayerView(viewContext).apply {
                     this.player = player
-                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                    isFocusable = false
-                    isFocusableInTouchMode = false
+                    nativePlayerView = this
+                    isFocusable = true
+                    isFocusableInTouchMode = true
                     useController = true
                     controllerAutoShow = true
+                    controllerShowTimeoutMs = PLAYER_CONTROLLER_SHOW_TIMEOUT_MS
+                    controllerHideOnTouch = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    setOnTouchListener { _, event ->
+                    val centerControls = findViewById<View>(Media3UiR.id.exo_center_controls)
+                    setOnKeyListener { _, keyCode, keyEvent ->
+                        if (keyEvent.action != AndroidKeyEvent.ACTION_UP) return@setOnKeyListener false
+                        showControlsTemporarily()
+                        when (keyCode) {
+                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                            AndroidKeyEvent.KEYCODE_ENTER,
+                            AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                            -> {
+                                if (player.isPlaying) {
+                                    bufferMonitor.onPaused()
+                                    player.pause()
+                                } else {
+                                    player.play()
+                                }
+                                true
+                            }
+                            AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> {
+                                player.play()
+                                true
+                            }
+                            AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                bufferMonitor.onPaused()
+                                player.pause()
+                                true
+                            }
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                            AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
+                            -> {
+                                if (isControllerFullyVisible) return@setOnKeyListener false
+                                bufferMonitor.onSeekStarted(System.currentTimeMillis())
+                                player.seekBack()
+                                true
+                            }
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                            AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                            -> {
+                                if (isControllerFullyVisible) return@setOnKeyListener false
+                                bufferMonitor.onSeekStarted(System.currentTimeMillis())
+                                player.seekForward()
+                                true
+                            }
+                            AndroidKeyEvent.KEYCODE_MEDIA_NEXT,
+                            AndroidKeyEvent.KEYCODE_3,
+                            AndroidKeyEvent.KEYCODE_NUMPAD_3,
+                            -> {
+                                player.seekToNextMediaItem()
+                                true
+                            }
+                            AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                            AndroidKeyEvent.KEYCODE_1,
+                            AndroidKeyEvent.KEYCODE_NUMPAD_1,
+                            -> {
+                                player.seekToPreviousMediaItem()
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                    val gestureTouchListener = View.OnTouchListener { _, event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
+                                touchGesture.isTouchingNativeController =
+                                    isControllerFullyVisible && (
+                                        event.isTouching(centerControls) ||
+                                            event.y >= height - controllerTouchAreaPx
+                                        )
+                                if (touchGesture.isTouchingNativeController) {
+                                    return@OnTouchListener false
+                                }
                                 touchGesture.downX = event.x
                                 touchGesture.downY = event.y
                                 touchGesture.downPositionMs = player.currentPosition.coerceAtLeast(0L)
                                 touchGesture.seekTargetMs = touchGesture.downPositionMs
                                 touchGesture.seeking = false
+                                touchGesture.swipeMode = PlayerSwipeMode.None
+                                touchGesture.startBrightness = activity?.window
+                                    ?.currentScreenBrightness(context)
+                                    ?: DEFAULT_SCREEN_BRIGHTNESS
+                                touchGesture.startVolume = audioManager
+                                    ?.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                    ?: 0
+                                touchGesture.maxVolume = audioManager
+                                    ?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                    ?: 0
                                 scheduleLongPressSpeed()
                             }
                             MotionEvent.ACTION_MOVE -> {
+                                if (touchGesture.isTouchingNativeController) {
+                                    return@OnTouchListener false
+                                }
                                 val totalDx = event.x - touchGesture.downX
                                 val totalDy = event.y - touchGesture.downY
                                 val durationMs = player.duration.takeIf { it > 0L }
-                                if (
-                                    durationMs != null &&
-                                    !touchGesture.longPressActive &&
-                                    (touchGesture.seeking || (abs(totalDx) > touchSlop && abs(totalDx) > abs(totalDy)))
-                                ) {
+                                if (touchGesture.longPressActive) return@OnTouchListener true
+
+                                if (touchGesture.swipeMode == PlayerSwipeMode.None) {
+                                    when {
+                                        abs(totalDx) > touchSlop && abs(totalDx) > abs(totalDy) && durationMs != null -> {
+                                            touchGesture.swipeMode = PlayerSwipeMode.Seek
+                                        }
+                                        abs(totalDy) > touchSlop && abs(totalDy) > abs(totalDx) -> {
+                                            touchGesture.swipeMode = if (touchGesture.downX < width / 2f) {
+                                                PlayerSwipeMode.Brightness
+                                            } else {
+                                                PlayerSwipeMode.Volume
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (touchGesture.swipeMode == PlayerSwipeMode.Seek && durationMs != null) {
                                     cancelLongPressSpeed()
                                     cancelPendingSingleTap()
                                     if (!touchGesture.seeking) {
@@ -546,17 +546,43 @@ fun PlayerScreen(
                                     )
                                     touchGesture.seekTargetMs = targetPosition
                                     seekGesturePrompt = "进度 ${formatPlaybackPosition(targetPosition)} / ${formatPlaybackPosition(durationMs)}"
+                                    seekGesturePromptNonce++
+                                } else if (touchGesture.swipeMode == PlayerSwipeMode.Brightness) {
+                                    cancelLongPressSpeed()
+                                    cancelPendingSingleTap()
+                                    val brightness = (touchGesture.startBrightness - totalDy / height.toFloat())
+                                        .coerceIn(MIN_SCREEN_BRIGHTNESS, 1f)
+                                    activity?.window?.setScreenBrightness(brightness)
+                                    seekGesturePrompt = "亮度 ${(brightness * 100).roundToInt()}%"
+                                    seekGesturePromptNonce++
+                                } else if (touchGesture.swipeMode == PlayerSwipeMode.Volume && touchGesture.maxVolume > 0) {
+                                    cancelLongPressSpeed()
+                                    cancelPendingSingleTap()
+                                    val volume = (
+                                        touchGesture.startVolume -
+                                            (totalDy / height.toFloat() * touchGesture.maxVolume).roundToInt()
+                                        )
+                                        .coerceIn(0, touchGesture.maxVolume)
+                                    audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
+                                    seekGesturePrompt = "音量 $volume/${touchGesture.maxVolume}"
+                                    seekGesturePromptNonce++
                                 }
                             }
                             MotionEvent.ACTION_UP,
                             MotionEvent.ACTION_CANCEL,
                             -> {
+                                if (touchGesture.isTouchingNativeController) {
+                                    touchGesture.isTouchingNativeController = false
+                                    return@OnTouchListener false
+                                }
+                                val swipeMode = touchGesture.swipeMode
+                                touchGesture.swipeMode = PlayerSwipeMode.None
                                 val wasLongPressActive = touchGesture.longPressActive
                                 cancelLongPressSpeed()
                                 if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
                                     touchGesture.seeking = false
                                     cancelPendingSingleTap()
-                                    return@setOnTouchListener true
+                                    return@OnTouchListener true
                                 }
                                 if (touchGesture.seeking) {
                                     touchGesture.seeking = false
@@ -567,11 +593,15 @@ fun PlayerScreen(
                                         positionMs = touchGesture.seekTargetMs,
                                         durationMs = player.duration.takeIf { it > 0L } ?: 0L,
                                     )
-                                    return@setOnTouchListener true
+                                    return@OnTouchListener true
+                                }
+                                if (swipeMode == PlayerSwipeMode.Brightness || swipeMode == PlayerSwipeMode.Volume) {
+                                    cancelPendingSingleTap()
+                                    return@OnTouchListener true
                                 }
                                 if (wasLongPressActive) {
                                     cancelPendingSingleTap()
-                                    return@setOnTouchListener true
+                                    return@OnTouchListener true
                                 }
                                 val distanceFromLastTap = squaredDistance(
                                     event.x,
@@ -604,72 +634,21 @@ fun PlayerScreen(
                         }
                         true
                     }
+                    setOnTouchListener(gestureTouchListener)
+                    post { requestFocus() }
                 }
             },
             update = { it.player = player },
             modifier = Modifier.fillMaxSize(),
         )
-        if (controlsVisible || playbackError != null) {
-            PlayerChrome(
-                title = movie.name,
-                sourceName = source.name,
-                episodeTitle = episode.title,
-                playbackError = playbackError,
-                playbackNotice = playbackNotice,
-                playbackSpeed = state.playerSpeed,
-                canPrevious = state.playerEpisodeIndex > 0,
-                canNext = state.playerEpisodeIndex < source.episodes.lastIndex,
-                canSwitchLine = movie.playSources.size > 1,
-                onPrevious = {
-                    controlsInteraction++
-                    actions.playPreviousEpisode()
-                },
-                onNext = {
-                    controlsInteraction++
-                    actions.playNextEpisode()
-                },
-                onRetry = {
-                    controlsInteraction++
-                    failedSourceIndexes = emptySet()
-                    playbackNotice = null
-                    bufferingPlaybackKey = null
-                    bufferMonitor.onMediaChanged()
-                    attemptTracker.reset()
-                    reloadNonce++
-                },
-                onSpeed = {
-                    controlsInteraction++
-                    showSpeedPromptAndCycle()
-                },
-                onSwitchLine = {
-                    controlsInteraction++
-                    val currentState = latestState
-                    val decision = actions.switchToNextPlayableSource(
-                        blockedSourceIndexes = setOf(currentState.playerSourceIndex),
-                        issueType = null,
-                        autoTriggered = false,
-                    )
-                    controlsVisible = true
-                    if (decision.switched) {
-                        bufferingPlaybackKey = null
-                        bufferMonitor.onMediaChanged()
-                        attemptTracker.reset()
-                        playbackError = null
-                        playbackNotice = decision.toPlaybackNotice("播放管家：手动换线")
-                    } else {
-                        playbackNotice = "没有其它可用线路"
-                    }
-                },
-                onBack = actions::goBack,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
-        }
-        if (speedPromptVisible) {
-            PlaybackSpeedPrompt(
-                playbackSpeed = speedPromptOverride ?: state.playerSpeed,
+        val playbackStatus = playbackError ?: playbackNotice
+        if (playbackStatus != null) {
+            GesturePrompt(
+                text = playbackStatus,
+                textColor = if (playbackError != null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 148.dp),
+                    .padding(start = 24.dp, end = 24.dp, bottom = 112.dp),
             )
         }
         if (seekGesturePrompt != null) {
@@ -677,7 +656,7 @@ fun PlayerScreen(
                 text = seekGesturePrompt.orEmpty(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 212.dp),
+                    .padding(bottom = 164.dp),
             )
         }
     }
@@ -686,6 +665,7 @@ fun PlayerScreen(
 @Composable
 private fun GesturePrompt(
     text: String,
+    textColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(8.dp)
@@ -700,105 +680,8 @@ private fun GesturePrompt(
             text = text,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+            color = textColor,
         )
-    }
-}
-
-@Composable
-private fun PlaybackSpeedPrompt(
-    playbackSpeed: Float,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(8.dp)
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(Color(0xB8000000))
-            .padding(horizontal = 28.dp, vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "当前倍速 ${formatPlaybackSpeed(playbackSpeed)}",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun PlayerChrome(
-    title: String,
-    sourceName: String,
-    episodeTitle: String,
-    playbackError: String?,
-    playbackNotice: String?,
-    playbackSpeed: Float,
-    canPrevious: Boolean,
-    canNext: Boolean,
-    canSwitchLine: Boolean,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onRetry: () -> Unit,
-    onSpeed: () -> Unit,
-    onSwitchLine: () -> Unit,
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color(0xB0000000))
-            .padding(horizontal = 32.dp, vertical = 18.dp),
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = Color(0xFFFFFFFF)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "$sourceName / $episodeTitle",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (playbackError != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = playbackError, color = MaterialTheme.colorScheme.tertiary)
-        }
-        if (playbackNotice != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = playbackNotice, color = MaterialTheme.colorScheme.primary)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onPrevious, enabled = canPrevious) {
-                Text("上一集(1)")
-            }
-            Button(onClick = onNext, enabled = canNext) {
-                Text("下一集(3)")
-            }
-            Button(onClick = onSpeed) {
-                Text("倍速 ${formatPlaybackSpeed(playbackSpeed)}")
-            }
-            Button(onClick = onSwitchLine, enabled = canSwitchLine) {
-                Text("手动换线")
-            }
-            if (playbackError != null) {
-                Button(onClick = onRetry) {
-                    Text("重试播放")
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = onBack) {
-                Text("返回详情")
-            }
-        }
     }
 }
 
@@ -835,11 +718,6 @@ private fun PlaybackBufferDecision.toPlaybackIssueMessages(): PlaybackIssueMessa
             message = "当前线路累计缓冲过久",
         )
     }
-}
-
-private fun formatPlaybackSpeed(speed: Float): String {
-    val raw = speed.toString().trimEnd('0').trimEnd('.')
-    return "${raw}x"
 }
 
 private fun formatPlaybackPosition(positionMs: Long): String {
@@ -885,12 +763,59 @@ private fun squaredDistance(
     return dx * dx + dy * dy
 }
 
+private fun MotionEvent.isTouching(view: View?): Boolean {
+    val target = view ?: return false
+    val location = IntArray(2)
+    target.getLocationOnScreen(location)
+    return rawX >= location[0] && rawX <= location[0] + target.width &&
+        rawY >= location[1] && rawY <= location[1] + target.height
+}
+
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun Window.currentScreenBrightness(context: Context): Float {
+    val current = attributes.screenBrightness
+    if (current >= 0f) return current.coerceIn(MIN_SCREEN_BRIGHTNESS, 1f)
+    val systemBrightness = runCatching {
+        Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
+    }.getOrDefault(DEFAULT_SYSTEM_BRIGHTNESS)
+    return (systemBrightness / MAX_SYSTEM_BRIGHTNESS).coerceIn(MIN_SCREEN_BRIGHTNESS, 1f)
+}
+
+private fun Window.setScreenBrightness(brightness: Float) {
+    attributes = attributes.apply {
+        screenBrightness = brightness.coerceIn(MIN_SCREEN_BRIGHTNESS, 1f)
+    }
+}
+
+private fun Window.restoreScreenBrightness(brightness: Float) {
+    attributes = attributes.apply {
+        screenBrightness = brightness
+    }
+}
+
+private enum class PlayerSwipeMode {
+    None,
+    Seek,
+    Brightness,
+    Volume,
+}
+
 private class PlayerTouchGestureState {
     var downX: Float = 0f
     var downY: Float = 0f
     var downPositionMs: Long = 0L
     var seekTargetMs: Long = 0L
     var seeking: Boolean = false
+    var swipeMode: PlayerSwipeMode = PlayerSwipeMode.None
+    var startBrightness: Float = DEFAULT_SCREEN_BRIGHTNESS
+    var startVolume: Int = 0
+    var maxVolume: Int = 0
+    var isTouchingNativeController: Boolean = false
     var longPressActive: Boolean = false
     var longPressRunnable: Runnable? = null
     var singleTapRunnable: Runnable? = null
@@ -901,6 +826,12 @@ private class PlayerTouchGestureState {
 
 private const val DOUBLE_TAP_SEEK_MS = 10_000L
 private const val LONG_PRESS_PLAYBACK_SPEED = 2f
+private const val PLAYER_CONTROLLER_SHOW_TIMEOUT_MS = 4_000
+private const val MEDIA3_CONTROLLER_TOUCH_AREA_DP = 112
+private const val MIN_SCREEN_BRIGHTNESS = 0.01f
+private const val DEFAULT_SCREEN_BRIGHTNESS = 0.5f
+private const val DEFAULT_SYSTEM_BRIGHTNESS = 128
+private const val MAX_SYSTEM_BRIGHTNESS = 255f
 
 private fun PlaybackAgentDecision.toPlaybackNotice(prefix: String): String {
     val sourceName = nextSourceName
