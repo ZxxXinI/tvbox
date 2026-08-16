@@ -1,5 +1,39 @@
 ﻿# Home / Player UI - 2026-06-30
 
+## 2026-08-16 20:29 - 手机播放亮度与音量手势
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: 手机端需要常见播放器的单手亮度和音量调节能力。
+  - Purpose: 左半屏纵向滑动调节当前播放页窗口亮度，右半屏纵向滑动调节 `STREAM_MUSIC` 音量；上滑增加、下滑减少，并显示亮度百分比或音量级别。横向手势、单击、双击和长按维持原有行为，Media3 原生控件触摸优先。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次代码修改后记录开发内容。
+  - Purpose: 在项目主时间线登记本次手机端播放器手势增强。
+
+- File path: `devLog/home-player-ui.md`
+  - Reason: 本次属于播放器交互调整。
+  - Purpose: 保存实现原因、涉及文件和验证结果。
+
+## Bug Record
+
+- Time: 2026-08-16 20:25
+- Symptoms: 首次编译时，系统亮度回退值为浮点数，导致 Kotlin 无法推断亮度读取表达式的数值类型。
+- Attempted fix: 将回退值改为整型系统亮度级别，保留最终换算为 0 到 1 的窗口亮度。
+- Temporary solution: 无。
+
+## Verification
+
+- `./gradlew.bat testDebugUnitTest assembleDebug --console=plain --offline --no-daemon`：passed。
+- `./gradlew.bat assembleRelease --console=plain --offline --no-daemon`：passed。
+- ADB `emulator-5554`：正式签名 APK 覆盖安装成功；播放页左侧上滑后窗口属性 `sbrt=0.9037037`，返回详情页后该属性消失并恢复系统亮度；右侧上滑后 `STREAM_MUSIC` 从 0 调至 8/15，`dumpsys audio` 确认调用来源为 `com.tvbox.app`。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
+
 ## 2026-08-03 07:53 - 默认主题恢复初始首页结构
 
 ## File Changes
@@ -105,6 +139,45 @@
 
 - `./gradlew.bat compileDebugKotlin --console=plain`
   - Result: passed.
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
+
+## 2026-08-16 19:57 - Media3 原生播放器控制
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: 自定义底部栏与 Media3 控制器重复，并会阻碍用户使用原生播放控件。
+  - Purpose: 改为由 `PlayerView` 提供播放/暂停、时间轴、上/下一集和设置入口；保留手势和播放管家状态提示，并在控制器显示时将触摸交给原生控件、单击空白画面隐藏控制器后恢复手势。
+
+- File path: `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`
+  - Reason: Media3 原生上/下一集需要使用播放列表，并将切换结果同步回应用状态。
+  - Purpose: 增加原生切集同步和倍速状态同步，使详情页选集焦点、历史记录、播放管家和切线后的倍速保持一致。
+
+- File path: `devLog/README.md`
+  - Reason: 用户要求每次开发后记录改动。
+  - Purpose: 在主时间线加入原生播放器控制改造索引。
+
+- File path: `devLog/home-player-ui.md`
+  - Reason: 本次属于播放器 UI 与交互基础设施调整。
+  - Purpose: 记录实现原因、文件、测试过程和焦点问题修正。
+
+## Bug Record
+
+- Time: 2026-08-16 19:57
+- Symptoms: 播放页同时显示自定义操作栏和 Media3 控制器；自定义触摸层还会影响原生控件的点击。
+- Attempted fix: 移除自定义操作栏，将剧集组装为 Media3 播放列表；控制器显示时移除手势触摸监听，隐藏后恢复手势监听。
+- Temporary solution: 无。
+
+## Verification
+
+- `./gradlew.bat compileDebugKotlin --console=plain --offline --no-daemon`：passed。
+- `./gradlew.bat testDebugUnitTest assembleRelease --console=plain --offline --no-daemon`：passed。
+- ADB `emulator-5554`：安装 release 包后，验证原生控制器、原生倍速菜单、原生下一集和返回详情页后第 02 集焦点同步。
+- ADB `192.168.0.7:5555`：中途 release 包曾覆盖安装成功；最终包安装时设备状态为 `offline`，未重复尝试安装，等待设备重新连接。
 
 ## Navigation
 

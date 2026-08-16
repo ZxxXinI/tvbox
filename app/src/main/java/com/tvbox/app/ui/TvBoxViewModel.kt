@@ -52,7 +52,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 enum class TvScreen {
     Home,
@@ -1403,11 +1402,9 @@ class TvBoxViewModel(
         }
     }
 
-    fun cyclePlaybackSpeed() {
-        val currentSpeed = _state.value.playerSpeed
-        val currentIndex = playbackSpeeds.indexOfFirst { abs(it - currentSpeed) < 0.01f }
-        val nextSpeed = playbackSpeeds[(currentIndex + 1).coerceAtLeast(0) % playbackSpeeds.size]
-        _state.update { it.copy(playerSpeed = nextSpeed) }
+    fun updatePlaybackSpeed(speed: Float) {
+        if (speed <= 0f || _state.value.playerSpeed == speed) return
+        _state.update { it.copy(playerSpeed = speed) }
     }
 
     fun savePlaybackProgress(positionMs: Long, durationMs: Long) {
@@ -1525,6 +1522,26 @@ class TvBoxViewModel(
             loadDoubanHotPage(reset = reset, forceRefresh = forceRefresh)
         } else {
             launchCatalogHomePage(reset = reset)
+        }
+    }
+
+    fun syncPlayerEpisode(episodeIndex: Int) {
+        _state.update { state ->
+            val episodes = state.detailMovie
+                ?.playSources
+                ?.getOrNull(state.playerSourceIndex)
+                ?.episodes
+                .orEmpty()
+            if (episodeIndex !in episodes.indices) {
+                state
+            } else {
+                state.copy(
+                    selectedSourceIndex = state.playerSourceIndex,
+                    selectedEpisodeIndex = episodeIndex,
+                    playerEpisodeIndex = episodeIndex,
+                    playerStartPositionMs = 0L,
+                )
+            }
         }
     }
 
@@ -2101,8 +2118,6 @@ private fun customVideoApiLineId(baseUrl: String): String {
 private const val DEFAULT_ALL_CATEGORY_TYPE_ID = 13
 private const val PLATFORM_LIVE_RETRY_PER_LINE = 2
 private const val PLATFORM_LIVE_SECOND_RETRY_DELAY_MS = 1_000L
-
-private val playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
 private class DefaultAppUpdateRepositoryPlaceholder : AppUpdateRepository {
     override suspend fun checkForUpdate(currentVersionCode: Long): AppUpdate? = null
