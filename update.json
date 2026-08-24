@@ -1,13 +1,13 @@
 ﻿{
-  "versionCode": 10305,
-  "versionName": "1.3.5",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.5/TVBox-v1.3.5.apk",
-  "apkSha256": "83499f7a98a05cdae1a11366a56af49868f0c66737396261716a22a220910ed3",
-  "apkSize": 4853925,
+  "versionCode": 10306,
+  "versionName": "1.3.6",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.6/TVBox-v1.3.6.apk",
+  "apkSha256": "4fd6f30e25c96e71fd9a7653dfa38add2db4a6fc4f31ba340da5d7518532c1dc",
+  "apkSize": 4870313,
   "force": false,
   "changelog": [
-    "Media3 原生控制器支持播放、选集和倍速设置。",
-    "手机端支持亮度、音量和完整播放手势。",
-    "竖屏短剧自动适配手机竖屏，电视端完整显示。"
+    "关键词搜索最多三条来源并行，结果逐步去重显示。",
+    "详情页优先显示主来源，后台补充可播放线路。",
+    "新增来源缓存、失败冷却和近期健康度排序。"
   ]
 }

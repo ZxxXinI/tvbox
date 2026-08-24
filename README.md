@@ -2,7 +2,7 @@
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
-当前源码版本为 `1.3.5`（`versionCode=10305`）。本版本升级为 Media3 原生播放器控制，并加入手机亮度/音量手势和短剧智能横竖屏适配；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
+当前源码版本为 `1.3.6`（`versionCode=10306`）。本版本将影视搜索改为多来源受控并行，并让详情页优先展示主来源、后台渐进补齐播放线路；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
 
 > 请确保使用的影视与直播接口具备合法授权。本项目仅提供客户端能力，不内置或托管影视内容。
 
@@ -17,7 +17,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 首页影视列表：默认展示豆瓣热播剧集，支持海报、评分、分页加载、焦点高亮；点击热播卡片后才按片名从当前影视数据源查找详情与播放资源。
 - 主题切换：设置页支持“默认主题”和“影院主题”；默认主题保留原有顶部快捷入口，影院主题提供左侧图标导航和 Hero 推荐布局。
 - 视频接口管理：设置页可选择量子、如意、360 等内置资源站，也可手机扫码添加 MacCms 自定义接口作为首页、搜索和 AI 找片默认数据源。
-- 搜索与详情：支持关键词搜索、影片详情、简介、封面、播放源和选集。
+- 搜索与详情：关键词搜索最多三条来源并行，结果增量去重显示；详情页优先显示主来源，后台补齐播放源和选集。
 - AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，可在设置页用手机扫码配置大模型、模型名和 API Key。
 - 播放器：基于 Media3 ExoPlayer，支持 HLS/m3u8、原生播放控制、上一集、下一集、倍速切换、自动跳下一集和手机播放手势；竖屏短剧在手机端自动适配竖屏，电视端完整显示。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间，可从历史继续播放。
@@ -78,7 +78,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.3.5.apk
+adb install -r TVBox-v1.3.6.apk
 ```
 
 ## OTA 更新机制
@@ -93,16 +93,16 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 ```json
 {
-  "versionCode": 10305,
-  "versionName": "1.3.5",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.5/TVBox-v1.3.5.apk",
-  "apkSha256": "83499f7a98a05cdae1a11366a56af49868f0c66737396261716a22a220910ed3",
-  "apkSize": 4853925,
+  "versionCode": 10306,
+  "versionName": "1.3.6",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.6/TVBox-v1.3.6.apk",
+  "apkSha256": "4fd6f30e25c96e71fd9a7653dfa38add2db4a6fc4f31ba340da5d7518532c1dc",
+  "apkSize": 4870313,
   "force": false,
   "changelog": [
-    "Media3 原生控制器支持播放、选集和倍速设置。",
-    "手机端支持亮度、音量和完整播放手势。",
-    "竖屏短剧自动适配手机竖屏，电视端完整显示。"
+    "关键词搜索最多三条来源并行，结果逐步去重显示。",
+    "详情页优先显示主来源，后台补充可播放线路。",
+    "新增来源缓存、失败冷却和近期健康度排序。"
   ]
 }
 ```
@@ -209,8 +209,8 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 1. 修改版本号：
 
 ```kotlin
-versionCode = 10305
-versionName = "1.3.5"
+versionCode = 10306
+versionName = "1.3.6"
 ```
 
 2. 构建 release APK：
@@ -224,10 +224,10 @@ versionName = "1.3.5"
 
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src devLog
-git commit -m "Release v1.3.5"
-git tag -a v1.3.5 -m "TVBox v1.3.5"
+git commit -m "Release v1.3.6"
+git tag -a v1.3.6 -m "TVBox v1.3.6"
 git push origin main
-git push origin v1.3.5
+git push origin v1.3.6
 ```
 
 4. 更新根目录 `update.json`，其中 `apkUrl` 指向 GitHub Release APK。
@@ -235,11 +235,11 @@ git push origin v1.3.5
 5. 在 GitHub Release 上传对应版本 APK：
 
 ```text
-TVBox-v1.3.5.apk
+TVBox-v1.3.6.apk
 ```
 
 ```powershell
-gh release upload v1.3.5 app\build\outputs\apk\release\TVBox-v1.3.5.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
+gh release upload v1.3.6 app\build\outputs\apk\release\TVBox-v1.3.6.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --clobber
 ```
 
 > GitHub Release 需要包含对应版本的 APK 和 `update.json`；应用启动时从 GitHub `main` 分支读取更新清单。

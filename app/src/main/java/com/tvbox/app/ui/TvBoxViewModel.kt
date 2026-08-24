@@ -46,7 +46,9 @@ import com.tvbox.app.domain.findBestTitleMatchIndex
 import com.tvbox.app.domain.playbackHealthKey
 import com.tvbox.app.domain.toApiLines
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,9 +108,13 @@ data class TvBoxUiState(
     val searchResults: List<Movie> = emptyList(),
     val searchLoading: Boolean = false,
     val searchError: String? = null,
+    val searchCompletedSources: Int = 0,
+    val searchTotalSources: Int = 0,
     val detailMovie: Movie? = null,
     val detailLoading: Boolean = false,
     val detailError: String? = null,
+    val detailCompletedSources: Int = 0,
+    val detailTotalSources: Int = 0,
     val detailReturnScreen: TvScreen = TvScreen.Home,
     val selectedSourceIndex: Int = 0,
     val selectedEpisodeIndex: Int = 0,
@@ -904,28 +910,44 @@ class TvBoxViewModel(
         }
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            _state.update { it.copy(searchLoading = true, searchError = null) }
-            runCatching {
-                repository.getMovies(
+            _state.update {
+                it.copy(
+                    searchLoading = true,
+                    searchError = null,
+                    searchResults = emptyList(),
+                    searchCompletedSources = 0,
+                    searchTotalSources = 0,
+                )
+            }
+            try {
+                repository.searchProgressively(
                     apiLineId = _state.value.selectedApiLineId,
                     page = 1,
                     keyword = query,
-                )
-            }
-                .onSuccess { result ->
+                ).collect { update ->
                     _state.update {
                         it.copy(
-                            searchLoading = false,
-                            searchResults = result.movies,
-                            searchError = if (result.movies.isEmpty()) "没有找到相关影片" else null,
+                            searchLoading = update.completedSources < update.totalSources,
+                            searchResults = update.movies,
+                            searchCompletedSources = update.completedSources,
+                            searchTotalSources = update.totalSources,
+                            searchError = if (
+                                update.completedSources == update.totalSources && update.movies.isEmpty()
+                            ) {
+                                "没有找到相关影片"
+                            } else {
+                                null
+                            },
                         )
                     }
                 }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(searchLoading = false, searchError = error.userMessage())
-                    }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                _state.update {
+                    it.copy(searchLoading = false, searchError = error.userMessage())
                 }
+            }
         }
     }
 
@@ -944,6 +966,8 @@ class TvBoxViewModel(
                 detailMovie = null,
                 detailLoading = true,
                 detailError = null,
+                detailCompletedSources = 0,
+                detailTotalSources = 0,
                 selectedSourceIndex = 0,
                 selectedEpisodeIndex = 0,
                 playerSourceIndex = 0,
@@ -952,21 +976,30 @@ class TvBoxViewModel(
             )
         }
         detailJob = viewModelScope.launch {
-            runCatching { repository.getDetail(apiLineId = apiLineId, id = movieId) }
-                .onSuccess { movie ->
+            var receivedPrimary = false
+            try {
+                repository.getDetailProgressively(apiLineId = apiLineId, id = movieId).collect { update ->
+                    receivedPrimary = true
                     _state.update { state ->
-                        val sourceIndex = movie?.let { detailMovie ->
+                        val sourceIndex = if (state.detailMovie == null) {
                             resolveBestPlaybackSourceIndex(
                                 state = state,
-                                movie = detailMovie,
-                                requestedSourceIndex = detailMovie.preferredSourceIndex(),
+                                movie = update.movie,
+                                requestedSourceIndex = update.movie.preferredSourceIndex(),
                                 episodeIndex = 0,
                             )
-                        } ?: 0
+                        } else {
+                            state.selectedSourceIndex.coerceIn(
+                                0,
+                                update.movie.playSources.lastIndex.coerceAtLeast(0),
+                            )
+                        }
                         state.copy(
-                            detailMovie = movie,
+                            detailMovie = update.movie,
                             detailLoading = false,
-                            detailError = if (movie == null) "影片详情不存在" else null,
+                            detailError = null,
+                            detailCompletedSources = update.completedSources,
+                            detailTotalSources = update.totalSources,
                             selectedSourceIndex = sourceIndex,
                             selectedEpisodeIndex = 0,
                             playerSourceIndex = sourceIndex,
@@ -975,11 +1008,18 @@ class TvBoxViewModel(
                         )
                     }
                 }
-                .onFailure { error ->
+                if (!receivedPrimary) {
                     _state.update {
-                        it.copy(detailLoading = false, detailError = error.userMessage())
+                        it.copy(detailLoading = false, detailError = "影片详情不存在")
                     }
                 }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                _state.update {
+                    it.copy(detailLoading = false, detailError = error.userMessage())
+                }
+            }
         }
     }
 

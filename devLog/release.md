@@ -1,5 +1,47 @@
 ﻿# Release - 2026-06-25
 
+## 2026-08-25 07:46 - 发布 v1.3.6：多来源搜索与渐进补线
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 多来源加载优化需要新版本号，才能触发已安装客户端的 OTA 更新。
+  - Purpose: 将版本升级为 `1.3.6 / 10306`。
+
+- File path: `CHANGELOG.md`、`README.md`、`update.json`
+  - Reason: 版本说明、手动安装说明和 OTA 清单必须使用同一版本、下载地址、哈希与大小。
+  - Purpose: 记录多来源并行搜索、渐进补线、缓存和线路冷却，并指向 v1.3.6 Release APK。
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.6.apk`、`app/build/outputs/apk/release/update.json`
+  - Reason: GitHub Release 需要正式签名 APK 和对应 OTA 清单资产。
+  - Purpose: 提供可安装且可校验的 v1.3.6 发布资产。
+
+- File path: `devLog/README.md`、`devLog/release.md`
+  - Reason: 项目要求记录每次发布的时间线和产物信息。
+  - Purpose: 归档本次版本范围、验证和发布动作。
+
+## Bug Record
+
+- Time: 2026-08-25 07:13
+- Symptoms: 全量单测中的豆瓣热播解析和内容过滤模块各有一项失败。
+- Attempted fix: 核对失败文件与本次发布范围，确认均不位于多来源加载改动模块。
+- Temporary solution: 保留两项既有失败，新增多来源仓库测试和 ADB 真机流程均通过。
+
+## Verification
+
+- `./gradlew.bat :app:assembleRelease --console=plain --offline`：passed。
+- `apksigner verify --print-certs app\\build\\outputs\\apk\\release\\TVBox-v1.3.6.apk`：passed。Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- ADB `emulator-5554`：Debug v1.3.5 验证 8/8 条来源完成、16 个去重结果，并成功聚合量子、如意、红牛三条播放线路。
+- Release assets:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.6.apk`
+  - Size: `4870313`
+  - SHA-256: `4fd6f30e25c96e71fd9a7653dfa38add2db4a6fc4f31ba340da5d7518532c1dc`
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch docs: `devLog/release.md`、`devLog/multi-source-loading.md`
+
 ## 2026-08-16 21:02 - 发布 v1.3.5：原生播放器与智能比例适配
 
 ## File Changes
