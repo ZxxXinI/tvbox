@@ -1,5 +1,31 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-08-25 07:46 - 发布 v1.3.6：多来源搜索与渐进补线
+
+- Branch docs: `devLog/multi-source-loading.md`、`devLog/release.md`
+- Summary:
+  - 发布搜索页最多三路来源受控并行、增量去重展示，以及详情页主来源优先、后台渐进补齐播放线路。
+  - 增加分类/列表内存缓存、详情缓存、失败冷却与线路健康排序；保留首页单来源分类，避免跨站分类语义混合。
+  - 已完成正式签名 APK 构建、哈希和签名校验，OTA 清单指向 GitHub v1.3.6 Release 资产。
+  - ADB 已验证 Debug 版的 8/8 来源搜索、16 个去重结果与三条聚合播放线路；完整单测保留两项既有内容过滤失败。
+
+### 2026-08-25 07:16 - 多来源影视搜索与详情渐进加载
+
+- Branch doc: `devLog/multi-source-loading.md`
+- Summary:
+  - 搜索改为当前来源优先、最多 3 条来源并行，并在每条来源完成时增量展示、去重结果。
+  - 详情页先展示主来源，再在后台补齐替代播放线路；慢源和失败源不会阻塞首屏。
+  - 新增内存缓存、来源失败冷却和健康排序；协程取消不再被误判为线路失败。
+  - 新增仓库测试覆盖缓存、并发上限、去重和渐进补线；Debug APK 构建成功，完整既有测试保留两项无关失败。
+
+### 2026-08-19 08:00 - 影视线路接口与加载优化整理
+
+- Branch doc: `devLog/video-source-addresses.md`
+- Summary:
+  - 将 `ZIP0-十条影视线路地址.md` 更名为 `影视线路地址整理.md`，保留 ZIP0 十条线路和连通性实测记录。
+  - 从 MoonTV 视频源页面整理 32 个影视采集源、1 个直播源及 `cache_time: 7200`，标注页面原文与此前实测地址的差异。
+  - 归档小体积首屏骨架、多线路并发、渐进渲染、后端短缓存、请求合并、CDN、海报懒加载、元数据延迟加载、去重和健康监控等优化方法。
+
 ### 2026-08-16 21:02 - 发布 v1.3.5：原生播放器与智能比例适配
 
 - Branch doc: `devLog/release.md`
@@ -522,6 +548,8 @@
 - Release: `devLog/release.md`
 - Home / Player UI: `devLog/home-player-ui.md`
 - Platform Live: `devLog/platform-live.md`
+- Video Source Addresses: `devLog/video-source-addresses.md`
+- Multi-source Loading: `devLog/multi-source-loading.md`
 
 ### 2026-08-03 06:44 - 首页方案归档、图标导航与主题切换
 

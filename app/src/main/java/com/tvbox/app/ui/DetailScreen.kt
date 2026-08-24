@@ -174,6 +174,16 @@ fun DetailScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
+                    if (
+                        state.detailTotalSources > 1 &&
+                        state.detailCompletedSources < state.detailTotalSources
+                    ) {
+                        Text(
+                            text = "正在补充播放线路（${state.detailCompletedSources}/${state.detailTotalSources}）",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
                     PlaySourceTabs(
                         movie = movie,

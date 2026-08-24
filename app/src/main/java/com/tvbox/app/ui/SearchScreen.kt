@@ -68,21 +68,39 @@ fun SearchScreen(
                 }
             }
             Spacer(modifier = Modifier.height(22.dp))
+            val searchProgress = state.searchTotalSources.takeIf { it > 0 }?.let { total ->
+                "已完成 ${state.searchCompletedSources}/$total 条线路 · 找到 ${state.searchResults.size} 个结果"
+            }
             when {
-                state.searchLoading -> LoadingState(text = "正在搜索")
+                state.searchLoading && state.searchResults.isEmpty() -> LoadingState(
+                    text = searchProgress ?: "正在搜索多个影视来源",
+                )
                 state.searchError != null && state.searchResults.isEmpty() -> ErrorState(
                     message = state.searchError,
                     onRetry = actions::submitSearch,
                 )
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = TvLayout.PosterGridMinWidth),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(22.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(state.searchResults, key = { it.id }) { movie ->
-                        MoviePosterCard(movie = movie, onClick = { actions.openDetail(movie.id) })
+                else -> Column(modifier = Modifier.fillMaxSize()) {
+                    searchProgress?.let { progress ->
+                        Text(
+                            text = progress,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = TvLayout.PosterGridMinWidth),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(22.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(state.searchResults, key = { "${it.apiLineId}-${it.id}" }) { movie ->
+                            MoviePosterCard(
+                                movie = movie,
+                                onClick = { actions.openDetail(movie.id, movie.apiLineId) },
+                            )
+                        }
                     }
                 }
             }
