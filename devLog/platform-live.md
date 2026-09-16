@@ -1,5 +1,34 @@
 ﻿# 平台直播（斗鱼）- 2026-08-01
 
+## 2026-09-17 06:52 - 直播播放亮屏与房间收藏
+
+### 文件变更
+
+- `app/src/main/java/com/tvbox/app/ui/KeepScreenOnWhileVisible.kt`、`LiveScreen.kt`、`PlatformLiveScreen.kt`：直播播放页可见时保持屏幕亮起，离开后恢复原状态；收藏卡片和房间星星具备独立触控与遥控器焦点。
+- `app/src/main/java/com/tvbox/app/data/PlatformLiveFavoritesRepository.kt`：用设备私有 SharedPreferences 保存收藏房间快照，以平台和房间 ID 去重，不保存过期播放地址。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`、`app/src/main/java/com/tvbox/app/MainActivity.kt`：接入收藏仓库、收藏列表状态、播放来源返回路径和本地刷新。
+- `app/src/test/java/com/tvbox/app/data/PlatformLiveFavoritesRepositoryTest.kt`：验证跨平台同房间号不冲突、再次点击取消收藏、恢复元数据不误用旧人气。
+- `README.md`：更新用户可见功能说明。
+
+### Bug Record
+
+- Time: 2026-09-17 06:52
+- Symptoms: 手机观看直播时系统自动锁屏生效；平台直播房间无法在本机收藏并集中查看。
+- Attempted fix: 播放页通过 Compose 视图的 keepScreenOn 生命周期保持亮屏；新增本机收藏存储与 UI/导航接线，平台列表失败时保留收藏入口。
+- Temporary solution: 无。
+
+### 验证
+
+- `:app:compileDebugKotlin` 与 `:app:assembleDebug`：通过。
+- `PlatformLiveFavoritesRepositoryTest` 与 `LivePlaybackWatchdogTest` 定向测试：通过。
+- `:app:testDebugUnitTest`：59 项中 3 项失败，位于影视/豆瓣解析测试；本次未修改这些测试或相关解析代码，但未核对历史基线。
+- 未进行手机/电视实机功能测试；本次不构建或发布新版 Release。
+
+### Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/platform-live.md`
+
 ## 2026-08-02 - v1.3.0 服务端部署与构建配置
 
 ### 文件变更
