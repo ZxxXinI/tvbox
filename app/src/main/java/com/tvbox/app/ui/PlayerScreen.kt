@@ -1,4 +1,4 @@
-package com.tvbox.app.ui
+﻿package com.tvbox.app.ui
 
 import android.app.Activity
 import android.content.Context
@@ -13,11 +13,13 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -36,7 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,7 +56,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import androidx.media3.ui.R as Media3UiR
 import com.tvbox.app.domain.PlaybackAgentDecision
 import com.tvbox.app.domain.PlaybackAttemptTracker
 import com.tvbox.app.domain.PlaybackBufferDecision
@@ -95,7 +101,8 @@ fun PlayerScreen(
             playWhenReady = true
         }
     }
-    var nativePlayerView by remember { mutableStateOf<PlayerView?>(null) }
+    val playerFocusRequester = remember { FocusRequester() }
+    val remoteKeyState = remember { PlayerRemoteKeyState() }
     var videoDisplayMode by remember { mutableStateOf(VideoDisplayMode.Unknown) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var seekGesturePrompt by remember { mutableStateOf<String?>(null) }
@@ -109,7 +116,6 @@ fun PlayerScreen(
         mutableStateOf(emptySet<Int>())
     }
     val latestState by rememberUpdatedState(state)
-    val latestPlaybackError by rememberUpdatedState(playbackError)
     val latestFailedSourceIndexes by rememberUpdatedState(failedSourceIndexes)
 
     val handlePlaybackIssue = { issueType: PlaybackIssueType, switchPrefix: String, finalPrefix: String, message: String ->
@@ -126,7 +132,6 @@ fun PlayerScreen(
             issueType = issueToRecord,
             autoTriggered = true,
         )
-        nativePlayerView?.showController()
         if (decision.switched) {
             bufferingPlaybackKey = null
             playbackError = null
@@ -334,6 +339,10 @@ fun PlayerScreen(
         player.setPlaybackSpeed(state.playerSpeed)
     }
 
+    LaunchedEffect(Unit) {
+        runCatching { playerFocusRequester.requestFocus() }
+    }
+
     LaunchedEffect(seekGesturePromptNonce) {
         if (seekGesturePromptNonce == 0) return@LaunchedEffect
         delay(1_000L)
@@ -373,24 +382,13 @@ fun PlayerScreen(
             ViewConfiguration.getLongPressTimeout().toLong(),
         )
     }
-    val showControlsTemporarily = {
-        nativePlayerView?.showController()
-    }
-    val toggleControlsByTap = {
-        if (latestPlaybackError == null) {
-            nativePlayerView?.let { view ->
-                if (view.isControllerFullyVisible) {
-                    view.hideController()
-                } else {
-                    view.showController()
-                }
-            }
-        }
+    val showPlaybackStatusByTap = {
+        seekGesturePrompt = if (player.isPlaying) "播放中" else "暂停"
+        seekGesturePromptNonce++
     }
     val togglePlaybackByGesture = {
         cancelLongPressSpeed()
         cancelPendingSingleTap()
-        nativePlayerView?.showController()
         if (player.isPlaying) {
             bufferMonitor.onPaused()
             player.pause()
@@ -413,6 +411,48 @@ fun PlayerScreen(
             durationMs = player.duration.takeIf { it > 0L } ?: 0L,
         )
     }
+    val seekByRemote = { deltaMs: Long ->
+        bufferMonitor.onSeekStarted(System.currentTimeMillis())
+        val targetPosition = player.seekByOffset(deltaMs)
+        val action = if (deltaMs < 0L) "快退 10 秒" else "快进 10 秒"
+        val durationMs = player.duration.takeIf { it > 0L }
+        seekGesturePrompt = if (durationMs == null) {
+            "$action  ${formatPlaybackPosition(targetPosition)}"
+        } else {
+            "$action  ${formatPlaybackPosition(targetPosition)} / ${formatPlaybackPosition(durationMs)}"
+        }
+        seekGesturePromptNonce++
+        remoteKeyState.seekChanged = true
+    }
+    val finishRemoteSeek = {
+        if (remoteKeyState.seekChanged) {
+            actions.savePlaybackProgress(
+                positionMs = player.currentPosition.coerceAtLeast(0L),
+                durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+            )
+        }
+        remoteKeyState.resetSeek()
+    }
+    val changeEpisodeByRemote = { offset: Int ->
+        val currentIndex = player.currentMediaItemIndex
+        val targetIndex = currentIndex + offset
+        if (targetIndex in source.episodes.indices) {
+            player.seekTo(targetIndex, 0L)
+            player.play()
+            val action = if (offset < 0) "上一集" else "下一集"
+            seekGesturePrompt = "$action  ${source.episodes[targetIndex].title}"
+        } else {
+            seekGesturePrompt = if (offset < 0) "已经是第一集" else "已经是最后一集"
+        }
+        seekGesturePromptNonce++
+    }
+    val cyclePlaybackSpeedByRemote = {
+        val nextSpeed = nextPlaybackSpeed(latestState.playerSpeed)
+        player.setPlaybackSpeed(nextSpeed)
+        actions.updatePlaybackSpeed(nextSpeed)
+        seekGesturePrompt = "当前倍速 ${formatPlaybackSpeed(nextSpeed)}"
+        seekGesturePromptNonce++
+    }
 
     DisposableEffect(touchHandler, player, activity, initialScreenBrightness, isTelevision) {
         onDispose {
@@ -430,94 +470,99 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .focusRequester(playerFocusRequester)
+            .onPreviewKeyEvent { event ->
+                val nativeEvent = event.nativeKeyEvent
+                when (nativeEvent.keyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                    AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
+                    -> {
+                        when (event.type) {
+                            KeyEventType.KeyDown -> {
+                                if (remoteKeyState.shouldHandleSeek(nativeEvent.eventTime, nativeEvent.repeatCount)) {
+                                    seekByRemote(-REMOTE_SEEK_STEP_MS)
+                                }
+                            }
+                            KeyEventType.KeyUp -> finishRemoteSeek()
+                        }
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                    AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                    -> {
+                        when (event.type) {
+                            KeyEventType.KeyDown -> {
+                                if (remoteKeyState.shouldHandleSeek(nativeEvent.eventTime, nativeEvent.repeatCount)) {
+                                    seekByRemote(REMOTE_SEEK_STEP_MS)
+                                }
+                            }
+                            KeyEventType.KeyUp -> finishRemoteSeek()
+                        }
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                    AndroidKeyEvent.KEYCODE_ENTER,
+                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                    -> {
+                        if (event.type == KeyEventType.KeyUp) togglePlaybackByGesture()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> {
+                        if (event.type == KeyEventType.KeyUp) {
+                            player.play()
+                            seekGesturePrompt = "播放"
+                            seekGesturePromptNonce++
+                        }
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                        if (event.type == KeyEventType.KeyUp) {
+                            bufferMonitor.onPaused()
+                            player.pause()
+                            seekGesturePrompt = "暂停"
+                            seekGesturePromptNonce++
+                        }
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                    AndroidKeyEvent.KEYCODE_1,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_1,
+                    -> {
+                        if (event.type == KeyEventType.KeyUp) changeEpisodeByRemote(-1)
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_NEXT,
+                    AndroidKeyEvent.KEYCODE_3,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_3,
+                    -> {
+                        if (event.type == KeyEventType.KeyUp) changeEpisodeByRemote(1)
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_MENU -> {
+                        if (event.type == KeyEventType.KeyUp) cyclePlaybackSpeedByRemote()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusable(),
     ) {
         AndroidView(
             factory = { viewContext ->
                 val touchSlop = ViewConfiguration.get(viewContext).scaledTouchSlop
                 val doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout().toLong()
-                val controllerTouchAreaPx = (MEDIA3_CONTROLLER_TOUCH_AREA_DP * viewContext.resources.displayMetrics.density).toInt()
                 PlayerView(viewContext).apply {
                     this.player = player
-                    nativePlayerView = this
-                    isFocusable = true
-                    isFocusableInTouchMode = true
-                    useController = true
-                    controllerAutoShow = true
-                    controllerShowTimeoutMs = PLAYER_CONTROLLER_SHOW_TIMEOUT_MS
-                    controllerHideOnTouch = true
+                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    val centerControls = findViewById<View>(Media3UiR.id.exo_center_controls)
-                    setOnKeyListener { _, keyCode, keyEvent ->
-                        if (keyEvent.action != AndroidKeyEvent.ACTION_UP) return@setOnKeyListener false
-                        showControlsTemporarily()
-                        when (keyCode) {
-                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                            AndroidKeyEvent.KEYCODE_ENTER,
-                            AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                            -> {
-                                if (player.isPlaying) {
-                                    bufferMonitor.onPaused()
-                                    player.pause()
-                                } else {
-                                    player.play()
-                                }
-                                true
-                            }
-                            AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> {
-                                player.play()
-                                true
-                            }
-                            AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                                bufferMonitor.onPaused()
-                                player.pause()
-                                true
-                            }
-                            AndroidKeyEvent.KEYCODE_DPAD_LEFT,
-                            AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
-                            -> {
-                                if (isControllerFullyVisible) return@setOnKeyListener false
-                                bufferMonitor.onSeekStarted(System.currentTimeMillis())
-                                player.seekBack()
-                                true
-                            }
-                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
-                            AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
-                            -> {
-                                if (isControllerFullyVisible) return@setOnKeyListener false
-                                bufferMonitor.onSeekStarted(System.currentTimeMillis())
-                                player.seekForward()
-                                true
-                            }
-                            AndroidKeyEvent.KEYCODE_MEDIA_NEXT,
-                            AndroidKeyEvent.KEYCODE_3,
-                            AndroidKeyEvent.KEYCODE_NUMPAD_3,
-                            -> {
-                                player.seekToNextMediaItem()
-                                true
-                            }
-                            AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS,
-                            AndroidKeyEvent.KEYCODE_1,
-                            AndroidKeyEvent.KEYCODE_NUMPAD_1,
-                            -> {
-                                player.seekToPreviousMediaItem()
-                                true
-                            }
-                            else -> false
-                        }
-                    }
                     val gestureTouchListener = View.OnTouchListener { _, event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
-                                touchGesture.isTouchingNativeController =
-                                    isControllerFullyVisible && (
-                                        event.isTouching(centerControls) ||
-                                            event.y >= height - controllerTouchAreaPx
-                                        )
-                                if (touchGesture.isTouchingNativeController) {
-                                    return@OnTouchListener false
-                                }
                                 touchGesture.downX = event.x
                                 touchGesture.downY = event.y
                                 touchGesture.downPositionMs = player.currentPosition.coerceAtLeast(0L)
@@ -536,9 +581,6 @@ fun PlayerScreen(
                                 scheduleLongPressSpeed()
                             }
                             MotionEvent.ACTION_MOVE -> {
-                                if (touchGesture.isTouchingNativeController) {
-                                    return@OnTouchListener false
-                                }
                                 val totalDx = event.x - touchGesture.downX
                                 val totalDy = event.y - touchGesture.downY
                                 val durationMs = player.duration.takeIf { it > 0L }
@@ -564,7 +606,6 @@ fun PlayerScreen(
                                     cancelPendingSingleTap()
                                     if (!touchGesture.seeking) {
                                         touchGesture.seeking = true
-                                        showControlsTemporarily()
                                     }
                                     val targetPosition = calculateDragSeekPosition(
                                         startPositionMs = touchGesture.downPositionMs,
@@ -599,10 +640,6 @@ fun PlayerScreen(
                             MotionEvent.ACTION_UP,
                             MotionEvent.ACTION_CANCEL,
                             -> {
-                                if (touchGesture.isTouchingNativeController) {
-                                    touchGesture.isTouchingNativeController = false
-                                    return@OnTouchListener false
-                                }
                                 val swipeMode = touchGesture.swipeMode
                                 touchGesture.swipeMode = PlayerSwipeMode.None
                                 val wasLongPressActive = touchGesture.longPressActive
@@ -653,7 +690,7 @@ fun PlayerScreen(
                                     cancelPendingSingleTap()
                                     val singleTapRunnable = Runnable {
                                         touchGesture.singleTapRunnable = null
-                                        toggleControlsByTap()
+                                        showPlaybackStatusByTap()
                                     }
                                     touchGesture.singleTapRunnable = singleTapRunnable
                                     touchHandler.postDelayed(singleTapRunnable, doubleTapTimeoutMs)
@@ -663,7 +700,6 @@ fun PlayerScreen(
                         true
                     }
                     setOnTouchListener(gestureTouchListener)
-                    post { requestFocus() }
                 }
             },
             update = { it.player = player },
@@ -791,14 +827,6 @@ private fun squaredDistance(
     return dx * dx + dy * dy
 }
 
-private fun MotionEvent.isTouching(view: View?): Boolean {
-    val target = view ?: return false
-    val location = IntArray(2)
-    target.getLocationOnScreen(location)
-    return rawX >= location[0] && rawX <= location[0] + target.width &&
-        rawY >= location[1] && rawY <= location[1] + target.height
-}
-
 private fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
@@ -866,7 +894,6 @@ private class PlayerTouchGestureState {
     var startBrightness: Float = DEFAULT_SCREEN_BRIGHTNESS
     var startVolume: Int = 0
     var maxVolume: Int = 0
-    var isTouchingNativeController: Boolean = false
     var longPressActive: Boolean = false
     var longPressRunnable: Runnable? = null
     var singleTapRunnable: Runnable? = null
@@ -875,16 +902,48 @@ private class PlayerTouchGestureState {
     var lastTapY: Float = 0f
 }
 
+private class PlayerRemoteKeyState {
+    var lastSeekEventTimeMs: Long = Long.MIN_VALUE
+    var seekChanged: Boolean = false
+
+    fun shouldHandleSeek(eventTimeMs: Long, repeatCount: Int): Boolean {
+        if (
+            repeatCount == 0 ||
+            lastSeekEventTimeMs == Long.MIN_VALUE ||
+            eventTimeMs - lastSeekEventTimeMs >= REMOTE_SEEK_REPEAT_INTERVAL_MS
+        ) {
+            lastSeekEventTimeMs = eventTimeMs
+            return true
+        }
+        return false
+    }
+
+    fun resetSeek() {
+        lastSeekEventTimeMs = Long.MIN_VALUE
+        seekChanged = false
+    }
+}
+
 private const val DOUBLE_TAP_SEEK_MS = 10_000L
+private const val REMOTE_SEEK_STEP_MS = 10_000L
+private const val REMOTE_SEEK_REPEAT_INTERVAL_MS = 150L
 private const val LONG_PRESS_PLAYBACK_SPEED = 2f
-private const val PLAYER_CONTROLLER_SHOW_TIMEOUT_MS = 4_000
-private const val MEDIA3_CONTROLLER_TOUCH_AREA_DP = 112
 private const val MIN_SCREEN_BRIGHTNESS = 0.01f
 private const val DEFAULT_SCREEN_BRIGHTNESS = 0.5f
 private const val DEFAULT_SYSTEM_BRIGHTNESS = 128
 private const val MAX_SYSTEM_BRIGHTNESS = 255f
 private const val PORTRAIT_VIDEO_ASPECT_RATIO_MAX = 0.8f
 private const val LANDSCAPE_VIDEO_ASPECT_RATIO_MIN = 1.1f
+private val PLAYBACK_SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+
+private fun nextPlaybackSpeed(currentSpeed: Float): Float {
+    val currentIndex = PLAYBACK_SPEEDS.indexOfFirst { abs(it - currentSpeed) < 0.01f }
+    return PLAYBACK_SPEEDS[(currentIndex + 1).coerceAtLeast(0) % PLAYBACK_SPEEDS.size]
+}
+
+private fun formatPlaybackSpeed(speed: Float): String {
+    return "${speed.toString().trimEnd('0').trimEnd('.')}x"
+}
 
 private fun PlaybackAgentDecision.toPlaybackNotice(prefix: String): String {
     val sourceName = nextSourceName

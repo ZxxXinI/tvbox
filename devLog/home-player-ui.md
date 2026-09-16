@@ -1,5 +1,61 @@
 ﻿# Home / Player UI - 2026-06-30
 
+## 2026-09-16 11:57 - Media3 控制器移除与遥控器快捷键恢复
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: Media3 原生控制器的子控件取得焦点后，TVBox 外层监听无法稳定收到数字键和菜单键；控制器可见时左右键也被交给了原生进度条。
+  - Purpose: 设置 `useController=false`，让 `PlayerView` 只负责画面；禁止播放器及子控件获取焦点，由 Compose 根容器统一处理遥控器事件。
+  - Purpose: 左右键每次移动 10 秒，按键重复事件以 150ms 最小间隔连续执行；数字 1/3、菜单和播放暂停键只在松开时执行一次。
+  - Purpose: 菜单键恢复 `0.75x / 1x / 1.25x / 1.5x / 2x` 循环倍速，并用临时提示显示进度、切集、倍速及播放状态。
+
+## Bug Record
+
+- Time: 2026-09-16 11:57
+- Symptoms: 更换为 Media3 原生控制器后，数字 1、数字 3 和菜单键不可用，左右键依赖原生进度条焦点。
+- Attempted fix: 移除原生控制器及焦点样式代码，把遥控器处理移动到唯一可聚焦的播放页根节点，并区分 KeyDown 重复 seek 与 KeyUp 单次快捷操作。
+- Temporary solution: 无。
+
+## Verification
+
+- `./gradlew.bat :app:compileDebugKotlin --console=plain --no-daemon`：passed。
+- `./gradlew.bat :app:assembleRelease --console=plain --no-daemon`：passed。
+- 按用户要求未启动应用或执行播放功能测试。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
+
+## 2026-09-15 21:38 - 播放器与搜索页遥控器焦点增强
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: Media3 原生播放、切集和设置按钮聚焦时仅有弱反馈，进度条小圆点也不易判断是否选中。
+  - Purpose: 为原生控制按钮增加绿色底色、白色描边、图标反色和放大动画；为进度条增加聚焦背景、白色小圆点和纵向放大，并将遥控器步长固定为 10 秒以支持长按连续 seek。
+- File path: `app/src/main/java/com/tvbox/app/ui/SearchScreen.kt`
+  - Reason: 搜索按钮在遥控器聚焦时与未聚焦状态接近。
+  - Purpose: 为搜索与返回按钮增加绿色选中色、白色焦点环、放大、阴影和粗体文字。
+
+## Bug Record
+
+- Time: 2026-09-15 21:38
+- Symptoms: 播放器控制按钮、进度条圆点和搜索按钮的遥控器选中状态不够明显；进度条快进步长不固定。
+- Attempted fix: 保留 Media3 原生控制器，在运行时为原生控件增加电视焦点状态，并调用 `DefaultTimeBar.setKeyTimeIncrement(10000)` 固定方向键步长。
+- Temporary solution: 无。
+
+## Verification
+
+- `./gradlew.bat :app:assembleRelease --console=plain --no-daemon`：passed。
+- 按用户要求未启动应用，也未执行界面和播放功能测试。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
+
 ## 2026-08-16 20:52 - 播放器智能横竖屏比例适配
 
 ## File Changes

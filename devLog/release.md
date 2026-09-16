@@ -1,5 +1,84 @@
 ﻿# Release - 2026-06-25
 
+## 2026-09-16 11:57 - 正式发布 v1.3.7：播放器遥控器控制权回收
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 用户确认当前功能已完善，并要求正式版本保持为 1.3.7。
+  - Purpose: 将本地候选版本号从 `1.3.8 / 10308` 回退并固定为 `1.3.7 / 10307`。
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: Media3 原生控件截获焦点和按键。
+  - Purpose: 关闭原生控制器并恢复 TVBox 自有方向键、数字键、菜单键和播放暂停处理。
+- File path: `CHANGELOG.md`、`README.md`、`update.json`
+  - Reason: 发布说明和 OTA 清单需要与新安装包一致。
+  - Purpose: 写入 v1.3.7 的完整功能说明、下载地址、大小和 SHA-256。
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.7.apk`、`app/build/outputs/apk/release/update.json`
+  - Reason: 提供用户可继续测试的正式签名产物。
+  - Purpose: 生成最终 v1.3.7 Release APK 与配套 OTA 清单。
+
+## Bug Record
+
+- Time: 2026-09-16 11:57
+- Symptoms: 数字 1/3、菜单键失效，左右键行为受 Media3 原生控制器焦点影响。
+- Attempted fix: 关闭 `PlayerView` 控制器、阻止子控件聚焦，并由 Compose 根节点统一消费遥控器事件。
+- Temporary solution: 无。
+
+## Verification
+
+- `./gradlew.bat :app:assembleRelease --console=plain --no-daemon`：passed。
+- `apksigner verify --print-certs app\\build\\outputs\\apk\\release\\TVBox-v1.3.7.apk`：passed。Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- 按用户要求未执行功能测试。
+- Release assets:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.7.apk`
+  - Size: `4870313`
+  - SHA-256: `1d09449c9e2b5418d79db34f3db6f86e11a43b73971dee5aa6b309ea270f6011`
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch docs: `devLog/home-player-ui.md`、`devLog/release.md`
+
+## 2026-09-15 21:38 - 发布 v1.3.7：遥控器焦点与影视线路扩充
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 本次播放器交互和线路扩充需要独立可安装版本。
+  - Purpose: 将版本升级为 `1.3.7 / 10307`。
+- File path: `CHANGELOG.md`、`README.md`、`update.json`
+  - Reason: 版本说明、安装示例和 OTA 清单需要与新安装包保持一致。
+  - Purpose: 记录焦点、进度条和线路变更，并写入 v1.3.7 的下载地址、大小和 SHA-256。
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.7.apk`、`app/build/outputs/apk/release/update.json`
+  - Reason: 用户要求生成可安装的正式版本。
+  - Purpose: 提供正式签名 APK 与配套 OTA 清单。
+- File path: `devLog/README.md`、`devLog/home-player-ui.md`、`devLog/video-source-addresses.md`、`devLog/release.md`
+  - Reason: 项目要求每次代码修改具备主时间线与模块记录。
+  - Purpose: 归档变更原因、实现范围、产物和验证边界。
+
+## Bug Record
+
+- Time: 2026-09-15 21:38
+- Symptoms: 播放器与搜索操作的遥控器焦点难以辨认，进度条遥控器步长不明确；整理文档中的线路尚未全部内置。
+- Attempted fix: 增强焦点视觉状态、固定 10 秒 seek 步长、扩充视频源注册表并增加 M3U 直播回退。
+- Temporary solution: 无。
+
+## Verification
+
+- `./gradlew.bat :app:assembleRelease --console=plain --no-daemon`：passed。
+- `apksigner verify --print-certs app\\build\\outputs\\apk\\release\\TVBox-v1.3.7.apk`：passed。Certificate DN: `CN=TVBox, OU=TVBox, O=TVBox, L=Unknown, ST=Unknown, C=CN`。
+- ADB `emulator-5554`：`adb install -r` 覆盖安装成功；系统显示 `versionCode=10307`、`versionName=1.3.7`。
+- 按用户要求未启动应用、未执行播放器 UI、搜索或线路功能测试。
+- Release assets:
+  - APK: `app/build/outputs/apk/release/TVBox-v1.3.7.apk`
+  - Size: `4870313`
+  - SHA-256: `822975349e1f4ad4926a5cc1d6a1e57fc30aa466bed7370353b375ff41bbfb9b`
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch docs: `devLog/home-player-ui.md`、`devLog/video-source-addresses.md`、`devLog/release.md`
+
 ## 2026-08-25 07:46 - 发布 v1.3.6：多来源搜索与渐进补线
 
 ## File Changes

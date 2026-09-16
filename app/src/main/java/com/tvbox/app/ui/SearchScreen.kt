@@ -9,23 +9,33 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.MoviePosterCard
 import com.tvbox.app.ui.components.PageSurface
+import com.tvbox.app.ui.components.tvFocusScale
+import com.tvbox.app.ui.theme.TvColors
 import com.tvbox.app.ui.theme.TvLayout
 
 @Composable
@@ -57,15 +67,12 @@ fun SearchScreen(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { actions.submitSearch() }),
                 )
-                Button(
+                SearchActionButton(
+                    text = if (state.searchLoading) "搜索中" else "搜索",
                     onClick = actions::submitSearch,
                     enabled = !state.searchLoading,
-                ) {
-                    Text(if (state.searchLoading) "搜索中" else "搜索")
-                }
-                Button(onClick = actions::goBack) {
-                    Text("返回")
-                }
+                )
+                SearchActionButton(text = "返回", onClick = actions::goBack)
             }
             Spacer(modifier = Modifier.height(22.dp))
             val searchProgress = state.searchTotalSources.takeIf { it > 0 }?.let { total ->
@@ -105,5 +112,39 @@ fun SearchScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val shape = RoundedCornerShape(50)
+    var focused by remember { mutableStateOf(false) }
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .tvFocusScale(
+                shape = shape,
+                focusedBorder = TvColors.FocusRing,
+            )
+            .onFocusChanged { focused = enabled && (it.isFocused || it.hasFocus) },
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+        shape = shape,
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            focusedElevation = 10.dp,
+        ),
+    ) {
+        Text(
+            text = text,
+            fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+        )
     }
 }

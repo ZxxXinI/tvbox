@@ -1,5 +1,23 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-09-16 11:57 - 正式发布 v1.3.7：播放器遥控器控制权回收
+
+- Branch docs: `devLog/home-player-ui.md`、`devLog/release.md`
+- Summary:
+  - Media3 `PlayerView` 仅保留视频画面，关闭原生控制器并禁止其内部控件获取焦点。
+  - 播放页根节点统一接管遥控器：方向左/右固定 10 秒且支持长按连续 seek，数字 1/3 切集，菜单键循环倍速，确认键播放/暂停。
+  - 保留手机端双击、滑动、亮度、音量和长按 2 倍速手势；操作结果继续通过临时提示层显示。
+  - 原 `v1.3.8` 本地候选版本号按要求回退为 `v1.3.7 / 10307`；正式 Release 重新构建并完成签名校验，未执行功能测试。
+
+### 2026-09-15 21:38 - 发布 v1.3.7：遥控器焦点与影视线路扩充
+
+- Branch docs: `devLog/home-player-ui.md`、`devLog/video-source-addresses.md`、`devLog/release.md`
+- Summary:
+  - Media3 播放按钮、进度条和搜索页操作按钮增加高对比聚焦颜色、白色描边、放大与阴影反馈。
+  - 进度条遥控器步长固定为 10 秒，支持长按左右键连续快退/快进。
+  - 补齐整理文档中的 32 个视频来源，重复接口合并为备用网址，并增加 YanG M3U 直播备用源与解析。
+  - v1.3.7 正式签名 APK 已构建并覆盖安装到 `emulator-5554`；按用户要求未执行功能测试。
+
 ### 2026-08-25 07:46 - 发布 v1.3.6：多来源搜索与渐进补线
 
 - Branch docs: `devLog/multi-source-loading.md`、`devLog/release.md`
