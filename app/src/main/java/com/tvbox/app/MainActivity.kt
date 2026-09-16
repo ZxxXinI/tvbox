@@ -28,6 +28,7 @@ import com.tvbox.app.data.SharedAppSettingsRepository
 import com.tvbox.app.data.SharedDoubanHotCache
 import com.tvbox.app.data.SharedHistoryRepository
 import com.tvbox.app.data.SharedPlaybackHealthRepository
+import com.tvbox.app.data.SharedPlatformLiveFavoritesRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tvbox.app.ui.TvBoxApp
 import com.tvbox.app.ui.TvBoxViewModel
@@ -320,6 +321,7 @@ private class TvBoxViewModelFactory(
             appSettingsRepository = SharedAppSettingsRepository(activity.applicationContext),
             playbackHealthRepository = SharedPlaybackHealthRepository(activity.applicationContext),
             historyRepository = SharedHistoryRepository(activity.applicationContext),
+            platformLiveFavoritesRepository = SharedPlatformLiveFavoritesRepository(activity.applicationContext),
         ) as T
     }
 }

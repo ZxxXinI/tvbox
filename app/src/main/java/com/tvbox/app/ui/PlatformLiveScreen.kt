@@ -49,6 +49,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +85,7 @@ fun PlatformLiveScreen(
     BackHandler { actions.goBack() }
     when (state.platformLiveDestination) {
         PlatformLiveDestination.Sites -> PlatformLiveSitesScreen(state = state, actions = actions)
+        PlatformLiveDestination.Favorites -> PlatformLiveRoomsScreen(state = state, actions = actions, favoritesMode = true)
         PlatformLiveDestination.ParentCategories -> PlatformLiveParentCategoriesScreen(state = state, actions = actions)
         PlatformLiveDestination.Categories -> PlatformLiveCategoriesScreen(state = state, actions = actions)
         PlatformLiveDestination.Rooms -> PlatformLiveRoomsScreen(state = state, actions = actions)
@@ -96,24 +99,45 @@ private fun PlatformLiveSitesScreen(
     actions: TvBoxViewModel,
 ) {
     val firstCardFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(state.platformLiveSites) {
-        if (state.platformLiveSites.isNotEmpty()) firstCardFocusRequester.requestFocus()
-    }
+    LaunchedEffect(Unit) { firstCardFocusRequester.requestFocus() }
     PlatformLiveBrowseSurface(
         title = "直播",
-        subtitle = "选择直播平台",
-        loading = state.platformLiveLoading,
-        error = state.platformLiveError,
-        isEmpty = state.platformLiveSites.isEmpty(),
+        subtitle = when {
+            state.platformLiveLoading -> "正在加载直播平台，收藏仍可使用"
+            state.platformLiveError != null -> "平台加载失败：${state.platformLiveError}"
+            state.platformLiveFavoriteError != null -> "收藏读取失败：${state.platformLiveFavoriteError}"
+            else -> "选择直播平台或本机收藏"
+        },
+        loading = false,
+        error = null,
+        isEmpty = false,
         emptyMessage = "没有可用平台直播服务",
         onRetry = actions::refreshPlatformLive,
     ) {
-        itemsIndexed(state.platformLiveSites, key = { _, site -> site.id }) { index, site ->
+        item(key = "favorites") {
+            PlatformLiveTextCard(
+                title = "收藏",
+                subtitle = "本机已收藏 ${state.platformLiveFavorites.size} 个房间",
+                label = "我的收藏",
+                onClick = actions::openPlatformLiveFavorites,
+                modifier = Modifier.focusRequester(firstCardFocusRequester),
+            )
+        }
+        itemsIndexed(state.platformLiveSites, key = { _, site -> site.id }) { _, site ->
             PlatformLiveSiteCard(
                 site = site,
                 onClick = { actions.selectPlatformLiveSite(site) },
-                modifier = if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier,
             )
+        }
+        if (state.platformLiveError != null) {
+            item(key = "retry-platforms") {
+                PlatformLiveTextCard(
+                    title = "重试加载平台",
+                    subtitle = "收藏不受平台列表加载失败影响",
+                    label = "重试",
+                    onClick = actions::refreshPlatformLive,
+                )
+            }
         }
     }
 }
@@ -187,9 +211,11 @@ private fun PlatformLiveCategoriesScreen(
 private fun PlatformLiveRoomsScreen(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
+    favoritesMode: Boolean = false,
 ) {
     val gridState = rememberLazyGridState()
     val selectedRoomFocusRequester = remember { FocusRequester() }
+    val emptyFavoriteFocusRequester = remember { FocusRequester() }
     val selectedRoomIndex = state.platformLiveRoomIndex.coerceIn(
         0,
         state.platformLiveRooms.lastIndex.coerceAtLeast(0),
@@ -197,29 +223,60 @@ private fun PlatformLiveRoomsScreen(
     LaunchedEffect(
         state.platformLiveDestination,
         state.platformLiveRoomIndex,
-        state.platformLiveRooms.isNotEmpty(),
+        state.platformLiveRooms.map(PlatformLiveRoom::id),
     ) {
         if (state.platformLiveRooms.isEmpty()) return@LaunchedEffect
         gridState.scrollToItem(selectedRoomIndex)
         withFrameNanos { }
         runCatching { selectedRoomFocusRequester.requestFocus() }
     }
+    LaunchedEffect(favoritesMode, state.platformLiveRooms.isEmpty()) {
+        if (favoritesMode && state.platformLiveRooms.isEmpty()) {
+            runCatching { emptyFavoriteFocusRequester.requestFocus() }
+        }
+    }
     val category = state.platformLiveSelectedCategory
     val site = state.platformLiveSelectedSite
+    if (favoritesMode && state.platformLiveRooms.isEmpty()) {
+        PageSurface { padding ->
+            Column(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text("还没有收藏的直播房间", style = MaterialTheme.typography.titleMedium)
+                state.platformLiveFavoriteError?.let { error ->
+                    Text(text = "收藏读取失败：$error", color = MaterialTheme.colorScheme.error)
+                }
+                PlatformLiveTextCard(
+                    title = "返回直播平台",
+                    subtitle = "在主播房间卡片上选择星星即可收藏",
+                    label = "收藏",
+                    onClick = actions::goBack,
+                    modifier = Modifier.padding(top = 20.dp).width(280.dp).focusRequester(emptyFavoriteFocusRequester),
+                )
+            }
+        }
+        return
+    }
     PlatformLiveBrowseSurface(
-        title = category?.name ?: "直播间",
-        subtitle = category?.parentName?.ifBlank { site?.name ?: "直播" } ?: site?.name ?: "直播",
-        loading = state.platformLiveLoading,
-        error = state.platformLiveError,
+        title = if (favoritesMode) "收藏" else category?.name ?: "直播间",
+        subtitle = if (favoritesMode) "本机收藏的直播房间" else category?.parentName?.ifBlank { site?.name ?: "直播" } ?: site?.name ?: "直播",
+        loading = !favoritesMode && state.platformLiveLoading,
+        error = if (favoritesMode) null else state.platformLiveError,
         isEmpty = state.platformLiveRooms.isEmpty(),
-        emptyMessage = "这个分类暂时没有正在直播的房间",
+        emptyMessage = if (favoritesMode) "还没有收藏的直播房间" else "这个分类暂时没有正在直播的房间",
         onRetry = actions::refreshPlatformLive,
         gridState = gridState,
+        notice = state.platformLiveFavoriteError,
     ) {
         itemsIndexed(state.platformLiveRooms, key = { _, room -> room.id }) { index, room ->
             PlatformLiveRoomCard(
                 room = room,
                 onClick = { actions.openPlatformLiveRoom(room) },
+                isFavorite = state.platformLiveFavorites.any { it.id == room.id },
+                onToggleFavorite = { actions.togglePlatformLiveFavorite(room) },
+                favoritesMode = favoritesMode,
                 modifier = if (index == selectedRoomIndex) {
                     Modifier.focusRequester(selectedRoomFocusRequester)
                 } else {
@@ -227,7 +284,7 @@ private fun PlatformLiveRoomsScreen(
                 },
             )
         }
-        if (state.platformLiveRoomPage < state.platformLiveRoomPageCount) {
+        if (!favoritesMode && state.platformLiveRoomPage < state.platformLiveRoomPageCount) {
             item(key = "load-more") {
                 PlatformLiveLoadMoreCard(
                     loading = state.platformLiveLoadingMore,
@@ -249,6 +306,7 @@ private fun PlatformLiveBrowseSurface(
     emptyMessage: String,
     onRetry: () -> Unit,
     gridState: LazyGridState? = null,
+    notice: String? = null,
     content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit,
 ) {
     PageSurface { padding ->
@@ -278,6 +336,9 @@ private fun PlatformLiveBrowseSurface(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
+                            if (notice != null) {
+                                Text(text = notice, color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                     LazyVerticalGrid(
@@ -346,13 +407,22 @@ private fun PlatformLiveCategoryCard(
 private fun PlatformLiveRoomCard(
     room: PlatformLiveRoom,
     onClick: () -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    favoritesMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     PlatformLiveImageCard(
         title = room.title,
-        subtitle = listOf(room.anchor, formatOnline(room.online)).filter { it.isNotBlank() }.joinToString(" / "),
+        subtitle = if (favoritesMode) {
+            listOf(room.anchor, room.site.uppercase()).filter { it.isNotBlank() }.joinToString(" / ")
+        } else {
+            listOf(room.anchor, formatOnline(room.online)).filter { it.isNotBlank() }.joinToString(" / ")
+        },
         imageUrl = room.cover,
         onClick = onClick,
+        favorite = isFavorite,
+        onFavoriteClick = onToggleFavorite,
         modifier = modifier,
     )
 }
@@ -399,56 +469,82 @@ private fun PlatformLiveImageCard(
     subtitle: String,
     imageUrl: String,
     onClick: () -> Unit,
+    favorite: Boolean? = null,
+    onFavoriteClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = MaterialTheme.shapes.medium
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .tvFocusScale(shape = shape)
-            .clip(shape)
-            .onFocusChanged { focused = it.isFocused || it.hasFocus }
-            .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .focusable(),
-    ) {
-        Box(
-            modifier = Modifier
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .tvFocusScale(shape = shape)
+                .clip(shape)
+                .onFocusChanged { focused = it.isFocused || it.hasFocus }
+                .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
+                .clickable(onClick = onClick)
+                .focusable(),
         ) {
-            if (imageUrl.isNotBlank()) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                if (imageUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(
+                        text = "直播",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                text = title,
+                modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = if (favorite == null) 12.dp else 62.dp),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = subtitle.ifBlank { "正在直播" },
+                modifier = Modifier.padding(start = 12.dp, top = 3.dp, end = if (favorite == null) 12.dp else 62.dp, bottom = 12.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (favorite != null && onFavoriteClick != null) {
+            var starFocused by remember { mutableStateOf(false) }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 8.dp, bottom = 8.dp)
+                    .size(44.dp)
+                    .tvFocusScale(shape = MaterialTheme.shapes.small, focusedBorder = Color.White)
+                    .clip(MaterialTheme.shapes.small)
+                    .onFocusChanged { starFocused = it.isFocused }
+                    .background(if (starFocused) MaterialTheme.colorScheme.primary else Color(0xCC101010))
+                    .semantics { contentDescription = if (favorite) "取消收藏 $title" else "收藏 $title" }
+                    .clickable(onClick = onFavoriteClick),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text(
-                    text = "直播",
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = if (favorite) "★" else "☆",
+                    color = if (starFocused) MaterialTheme.colorScheme.onPrimary else Color.White,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
             }
         }
-        Text(
-            text = title,
-            modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = 12.dp),
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = subtitle.ifBlank { "正在直播" },
-            modifier = Modifier.padding(start = 12.dp, top = 3.dp, end = 12.dp, bottom = 12.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -491,6 +587,7 @@ private fun PlatformLivePlayerScreen(
         }
         return
     }
+    KeepScreenOnWhileVisible()
     val stream = state.platformLiveStream?.takeIf { it.channelId == room.id }
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember(stream?.url, stream?.headers) {

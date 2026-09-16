@@ -1,5 +1,59 @@
 ﻿# Release - 2026-06-25
 
+## 2026-09-17 07:24 - 发布 v1.3.8：内容过滤修复与直播收藏
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 新功能与内容过滤修复需要高于正式 v1.3.7 的版本号，以支持 OTA 检测。
+  - Purpose: 设置 `versionCode=10308`、`versionName=1.3.8`。
+- File path: `CHANGELOG.md`、`README.md`、`update.json`
+  - Reason: 发布说明、安装示例和 OTA 下载信息必须与签名 APK 一致。
+  - Purpose: 记录过滤修复、直播亮屏与收藏功能，并写入 v1.3.8 的地址、大小和 SHA-256。
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.8.apk`、`app/build/outputs/apk/release/update.json`
+  - Reason: 提供正式发布可用的配套产物。
+  - Purpose: 构建签名 APK 与相同版本的 OTA 清单。
+
+## Verification
+
+- `:app:testDebugUnitTest`：passed，61 项测试通过。
+- `:app:assembleRelease`：passed。
+- APK 签名：passed；签名证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`。
+- APK 包内版本：`10308 / 1.3.8`；最低 API 28；平台直播服务地址已在 Release 配置中设置。
+- APK 大小：`4903077` 字节；SHA-256：`84a9dbeb2ec0c64983545d044cfbecc87dc4b8803a7d0e3a9f7c2e8c542e0d30`。
+- 按用户之前的测试分工，未执行设备功能测试。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch docs: `devLog/content-filter.md`、`devLog/platform-live.md`、`devLog/release.md`
+
+## 2026-09-17 07:01 - 直播收藏功能 Release 测试包
+
+## File Changes
+
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.7-live-favorites-test.apk`
+  - Reason: 用户希望自行测试直播亮屏和平台房间本机收藏功能。
+  - Purpose: 提供已签名的 Release 测试包，不覆盖已发布同名产物。
+- File path: `devLog/README.md`、`devLog/release.md`
+  - Reason: 记录构建产物与验证边界。
+  - Purpose: 区分本地测试包与 GitHub 已发布的 v1.3.7。
+
+## Verification
+
+- `:app:assembleRelease`：passed。
+- `apksigner verify --print-certs`：passed；签名证书与正式 v1.3.7 相同。
+- APK 包内版本：`versionCode=10307`、`versionName=1.3.7`、最低 API 28。
+- 平台直播服务地址已在 Release 构建配置中设置（未在此记录具体地址）。
+- 测试 APK：`4903081` 字节，SHA-256 `0fef430c1f02bd312153bb7882ea6917c62272439478446f8497e207664ac895`。
+- 正式 v1.3.7 APK 从 GitHub Release 恢复至原本地文件名并核对 SHA-256 `1d09449c9e2b5418d79db34f3db6f86e11a43b73971dee5aa6b309ea270f6011`；线上 Release 未更改。
+- 没有上传、打 tag、修改 `update.json` 或执行设备功能测试；由于版本号未提高，OTA 不会把此测试包识别为更新。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/release.md`
+
 ## 2026-09-16 11:57 - 正式发布 v1.3.7：播放器遥控器控制权回收
 
 ## File Changes

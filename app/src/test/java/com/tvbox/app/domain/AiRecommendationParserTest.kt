@@ -1,9 +1,27 @@
-package com.tvbox.app.domain
+﻿package com.tvbox.app.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class AiRecommendationParserTest {
+    @Test
+    fun `filters blocked recommendations even when the model ignores the prompt`() {
+        val result = parseAiRecommendationContent(
+            """
+            {
+              "items": [
+                {"name": "正常影片 X", "type": "剧情"},
+                {"name": "伦理故事", "type": "电影"},
+                {"name": "热门作品", "type": "电影解说"},
+                {"name": "另一个作品", "searchKeyword": "电影解说合集"}
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("正常影片 X"), result.items.map { it.name })
+    }
+
     @Test
     fun `parses plain recommendation json`() {
         val result = parseAiRecommendationContent(

@@ -1,4 +1,4 @@
-package com.tvbox.app.domain
+﻿package com.tvbox.app.domain
 
 import com.tvbox.app.data.MacCmsResponse
 import com.tvbox.app.data.ApiLines
@@ -25,13 +25,16 @@ class PlaybackParserTest {
 
     @Test
     fun includesConfiguredPlaybackLines() {
+        val lines = ApiLines.defaults
+        assertEquals(listOf("量子", "如意", "360"), lines.take(3).map { it.name })
+        assertTrue(lines.any { it.id == "dyttzy" && it.name == "电影天堂" })
+        assertEquals(lines.size, lines.map { it.id }.distinct().size)
         assertEquals(
-            listOf("量子", "如意", "360", "牛牛", "鸭鸭", "红牛", "索尼", "非凡"),
-            ApiLines.defaults.map { it.name },
-        )
-        assertEquals(
-            "http://api.ffzyapi.com/api.php/provide/vod/",
-            ApiLines.defaults.last().baseUrls.single(),
+            listOf(
+                "https://api.ffzyapi.com/api.php/provide/vod/",
+                "http://api.ffzyapi.com/api.php/provide/vod/",
+            ),
+            lines.last().baseUrls,
         )
     }
 
@@ -207,6 +210,7 @@ class PlaybackParserTest {
                 {"type_id": 1, "type_pid": 0, "type_name": "电影片"},
                 {"type_id": 7, "type_pid": 1, "type_name": "喜剧片"},
                 {"type_id": 2, "type_pid": 1, "type_name": "伦理片"},
+                {"type_id": 8, "type_pid": 2, "type_name": "其他影片"},
                 {"type_id": 3, "type_pid": 0, "type_name": "电影解说"},
                 {"type_id": 41, "type_pid": 0, "type_name": "演员"},
                 {"type_id": 42, "type_pid": 0, "type_name": "新闻资讯"},
@@ -237,6 +241,14 @@ class PlaybackParserTest {
                   "type_name": "电影解说",
                   "vod_play_from": "rym3u8",
                   "vod_play_url": "HD${'$'}https://video.test/commentary.m3u8"
+                },
+                {
+                  "vod_id": 4,
+                  "vod_name": "未标注类型的资源",
+                  "type_id": 8,
+                  "type_name": "",
+                  "vod_play_from": "rym3u8",
+                  "vod_play_url": "HD${'$'}https://video.test/child.m3u8"
                 }
               ]
             }

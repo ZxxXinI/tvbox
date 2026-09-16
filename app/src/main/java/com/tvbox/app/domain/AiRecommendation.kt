@@ -1,4 +1,4 @@
-package com.tvbox.app.domain
+﻿package com.tvbox.app.domain
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -35,14 +35,17 @@ internal fun parseAiRecommendationContent(
             val item = element.jsonObject
             val name = item.stringField("name").ifBlank { item.stringField("title") }
             if (name.isBlank()) return@mapNotNull null
+            val genre = item.stringField("type").ifBlank { item.stringField("genre") }
+            val searchKeyword = item.stringField("searchKeyword").ifBlank { name }
+            if (isBlockedContent(name, genre, searchKeyword)) return@mapNotNull null
             AiRecommendationItem(
                 name = name,
                 year = item.stringField("year"),
                 area = item.stringField("area"),
-                genre = item.stringField("type").ifBlank { item.stringField("genre") },
+                genre = genre,
                 reason = item.stringField("reason"),
                 score = item.stringField("score"),
-                searchKeyword = item.stringField("searchKeyword").ifBlank { name },
+                searchKeyword = searchKeyword,
             )
         }
         .take(MAX_AI_RECOMMENDATION_ITEMS)

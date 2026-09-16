@@ -19,6 +19,7 @@ import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.data.PlaybackHealthRepository
 import com.tvbox.app.data.DefaultPlatformLiveRepository
 import com.tvbox.app.data.PlatformLiveRepository
+import com.tvbox.app.data.PlatformLiveFavoritesRepository
 import com.tvbox.app.data.VideoApiConfigServer
 import com.tvbox.app.domain.AiRecommendationItem
 import com.tvbox.app.domain.AppSettings
@@ -54,6 +55,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 enum class TvScreen {
     Home,
@@ -74,6 +77,7 @@ enum class HomeFeedMode {
 
 enum class PlatformLiveDestination {
     Sites,
+    Favorites,
     ParentCategories,
     Categories,
     Rooms,
@@ -129,6 +133,9 @@ data class TvBoxUiState(
     val liveError: String? = null,
     val platformLiveDestination: PlatformLiveDestination = PlatformLiveDestination.Sites,
     val platformLiveSites: List<PlatformLiveSite> = emptyList(),
+    val platformLiveFavorites: List<PlatformLiveRoom> = emptyList(),
+    val platformLiveFavoriteError: String? = null,
+    val platformLivePlayerReturnDestination: PlatformLiveDestination = PlatformLiveDestination.Rooms,
     val platformLiveSelectedSite: PlatformLiveSite? = null,
     val platformLiveParentCategories: List<PlatformLiveParentCategory> = emptyList(),
     val platformLiveSelectedParentCategory: PlatformLiveParentCategory? = null,
@@ -191,6 +198,7 @@ class TvBoxViewModel(
     private val appSettingsRepository: AppSettingsRepository = DefaultAppSettingsRepositoryPlaceholder(),
     private val playbackHealthRepository: PlaybackHealthRepository = DefaultPlaybackHealthRepositoryPlaceholder(),
     private val historyRepository: HistoryRepository,
+    private val platformLiveFavoritesRepository: PlatformLiveFavoritesRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(TvBoxUiState())
     val state: StateFlow<TvBoxUiState> = _state.asStateFlow()
@@ -205,6 +213,7 @@ class TvBoxViewModel(
     private var platformLiveResolveJob: Job? = null
     private var platformLiveRecoveryCount = 0
     private var platformLiveRecoveryInProgress = false
+    private val platformLiveFavoritesMutex = Mutex()
     private var aiJob: Job? = null
     private var updateJob: Job? = null
     private var updateDownloadJob: Job? = null
@@ -220,6 +229,7 @@ class TvBoxViewModel(
                 selectedApiLineId = defaultApiLineId,
             )
         }
+        loadPlatformLiveFavorites()
         viewModelScope.launch {
             val settings = runCatching { appSettingsRepository.getSettings() }
                 .getOrDefault(AppSettings())
@@ -413,6 +423,7 @@ class TvBoxViewModel(
     fun refreshPlatformLive() {
         when (_state.value.platformLiveDestination) {
             PlatformLiveDestination.Sites -> loadPlatformLiveSites()
+            PlatformLiveDestination.Favorites -> loadPlatformLiveFavorites()
             PlatformLiveDestination.ParentCategories -> _state.value.platformLiveSelectedSite?.let(::loadPlatformLiveCategories)
             PlatformLiveDestination.Categories -> _state.value.platformLiveSelectedSite?.let(::loadPlatformLiveCategories)
             PlatformLiveDestination.Rooms -> _state.value.platformLiveSelectedCategory?.let {
@@ -1285,6 +1296,47 @@ class TvBoxViewModel(
         loadPlatformLiveCategories(site)
     }
 
+    fun openPlatformLiveFavorites() {
+        platformLiveJob?.cancel()
+        _state.update {
+            it.copy(
+                screen = TvScreen.PlatformLive,
+                platformLiveDestination = PlatformLiveDestination.Favorites,
+                platformLiveRooms = it.platformLiveFavorites,
+                platformLiveRoomIndex = 0,
+                platformLiveLoading = false,
+                platformLiveError = null,
+                platformLiveStream = null,
+            )
+        }
+    }
+
+    fun togglePlatformLiveFavorite(room: PlatformLiveRoom) {
+        viewModelScope.launch {
+            platformLiveFavoritesMutex.withLock {
+                runCatching { platformLiveFavoritesRepository.toggleFavorite(room) }
+                    .onSuccess { favorites ->
+                        _state.update { current ->
+                            if (current.platformLiveDestination == PlatformLiveDestination.Favorites) {
+                                current.copy(
+                                    platformLiveFavorites = favorites,
+                                    platformLiveRooms = favorites,
+                                    platformLiveRoomIndex = current.platformLiveRoomIndex.coerceAtMost(favorites.lastIndex.coerceAtLeast(0)),
+                                    platformLiveFavoriteError = null,
+                                )
+                            } else {
+                                current.copy(platformLiveFavorites = favorites, platformLiveFavoriteError = null)
+                            }
+                        }
+                    }
+                    .onFailure { error ->
+                        if (error is CancellationException) throw error
+                        _state.update { it.copy(platformLiveFavoriteError = error.userMessage()) }
+                    }
+            }
+        }
+    }
+
     fun selectPlatformLiveParentCategory(parentCategory: PlatformLiveParentCategory) {
         val hasCategories = _state.value.platformLiveCategories.any { it.parentId == parentCategory.id }
         _state.update {
@@ -1336,6 +1388,7 @@ class TvBoxViewModel(
             it.copy(
                 screen = TvScreen.PlatformLive,
                 platformLiveDestination = PlatformLiveDestination.Player,
+                platformLivePlayerReturnDestination = it.platformLiveDestination,
                 platformLiveRoomIndex = index,
                 platformLiveError = null,
                 platformLiveStream = null,
@@ -1522,7 +1575,7 @@ class TvBoxViewModel(
                 when (current.platformLiveDestination) {
                     PlatformLiveDestination.Player -> _state.update {
                         it.copy(
-                            platformLiveDestination = PlatformLiveDestination.Rooms,
+                            platformLiveDestination = it.platformLivePlayerReturnDestination,
                             platformLiveResolving = false,
                             platformLiveError = null,
                             platformLiveStream = null,
@@ -1532,6 +1585,13 @@ class TvBoxViewModel(
                         it.copy(
                             platformLiveDestination = PlatformLiveDestination.Categories,
                             platformLiveSelectedCategory = null,
+                            platformLiveError = null,
+                        )
+                    }
+                    PlatformLiveDestination.Favorites -> _state.update {
+                        it.copy(
+                            platformLiveDestination = PlatformLiveDestination.Sites,
+                            platformLiveRooms = emptyList(),
                             platformLiveError = null,
                         )
                     }
@@ -1883,7 +1943,7 @@ class TvBoxViewModel(
             runCatching { platformLiveRepository.getSites(serviceUrl) }
                 .onSuccess { sites ->
                     _state.update {
-                        it.copy(
+                        if (it.platformLiveDestination != PlatformLiveDestination.Sites) it else it.copy(
                             platformLiveSites = sites,
                             platformLiveLoading = false,
                             platformLiveError = if (sites.isEmpty()) "没有可用平台直播服务" else null,
@@ -1891,13 +1951,35 @@ class TvBoxViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) return@onFailure
                     _state.update {
-                        it.copy(
+                        if (it.platformLiveDestination != PlatformLiveDestination.Sites) it else it.copy(
                             platformLiveLoading = false,
                             platformLiveError = error.userMessage(),
                         )
                     }
                 }
+        }
+    }
+
+    private fun loadPlatformLiveFavorites() {
+        viewModelScope.launch {
+            platformLiveFavoritesMutex.withLock {
+                runCatching { platformLiveFavoritesRepository.getFavorites() }
+                    .onSuccess { favorites ->
+                        _state.update { current ->
+                            if (current.platformLiveDestination == PlatformLiveDestination.Favorites) {
+                                current.copy(platformLiveFavorites = favorites, platformLiveRooms = favorites, platformLiveFavoriteError = null)
+                            } else {
+                                current.copy(platformLiveFavorites = favorites, platformLiveFavoriteError = null)
+                            }
+                        }
+                    }
+                    .onFailure { error ->
+                        if (error is CancellationException) throw error
+                        _state.update { it.copy(platformLiveFavoriteError = error.userMessage()) }
+                    }
+            }
         }
     }
 

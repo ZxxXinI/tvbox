@@ -1,4 +1,4 @@
-package com.tvbox.app.ui
+﻿package com.tvbox.app.ui
 
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
@@ -96,6 +96,7 @@ private fun LivePlayerScreen(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
 ) {
+    KeepScreenOnWhileVisible()
     val channels = state.liveChannels
     val currentChannel = channels[state.liveChannelIndex.coerceIn(0, channels.lastIndex)]
     val currentLine = currentChannel.lines[state.liveLineIndex.coerceIn(0, currentChannel.lines.lastIndex)]

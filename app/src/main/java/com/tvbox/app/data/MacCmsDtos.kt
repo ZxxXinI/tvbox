@@ -25,13 +25,27 @@ data class MacCmsResponse(
     val list: List<VodDto> = emptyList(),
 ) {
     fun toPagedMovies(apiLine: ApiLine): PagedMovies {
+        val blockedCategoryIds = mutableSetOf<Int>()
+        var addedBlockedCategory: Boolean
+        do {
+            addedBlockedCategory = false
+            categories.forEach { category ->
+                if (
+                    category.typeId > 0 &&
+                    (isBlockedContent(cleanHtml(category.typeName)) || category.typePid in blockedCategoryIds)
+                ) {
+                    addedBlockedCategory = blockedCategoryIds.add(category.typeId) || addedBlockedCategory
+                }
+            }
+        } while (addedBlockedCategory)
+
         return PagedMovies(
             page = page.asInt(defaultValue = 1).coerceAtLeast(1),
             pageCount = pagecount.asInt(defaultValue = 1).coerceAtLeast(1),
             total = total.asInt(defaultValue = 0).coerceAtLeast(0),
             apiLine = apiLine,
-            categories = categories.mapNotNull { it.toDomainOrNull() },
-            movies = list.mapNotNull { it.toDomainOrNull(apiLine) },
+            categories = categories.filterNot { it.typeId in blockedCategoryIds }.mapNotNull { it.toDomainOrNull() },
+            movies = list.filterNot { it.typeId in blockedCategoryIds }.mapNotNull { it.toDomainOrNull(apiLine) },
         )
     }
 }

@@ -1,14 +1,13 @@
 ﻿{
-  "versionCode": 10307,
-  "versionName": "1.3.7",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.7/TVBox-v1.3.7.apk",
-  "apkSha256": "1d09449c9e2b5418d79db34f3db6f86e11a43b73971dee5aa6b309ea270f6011",
-  "apkSize": 4870313,
+  "versionCode": 10308,
+  "versionName": "1.3.8",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.8/TVBox-v1.3.8.apk",
+  "apkSha256": "84a9dbeb2ec0c64983545d044cfbecc87dc4b8803a7d0e3a9f7c2e8c542e0d30",
+  "apkSize": 4903077,
   "force": false,
   "changelog": [
-    "关闭 Media3 原生控制器，由 TVBox 统一接管遥控器按键。",
-    "方向左/右每次快退/快进 10 秒，并支持长按连续执行。",
-    "恢复数字 1/3 切集、菜单键切换倍速和确认键播放暂停。",
-    "增强搜索按钮焦点，并扩充影视与 M3U 直播线路。"
+    "修复伦理与电影解说过滤，避免误伤英文片名。",
+    "直播播放期间保持亮屏，退出后恢复自动锁屏。",
+    "平台直播房间支持本机收藏和从收藏列表播放。"
   ]
 }
