@@ -1,5 +1,37 @@
 ﻿# Home / Player UI - 2026-06-30
 
+## 2026-09-21 18:22 - 电视(4)手机页面兼容
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/LiveScreen.kt`
+  - Reason: “电视(4)”普通电视直播页面沿用电视盒子布局，手机端频道面板固定在左侧且频道行不能直接点击。
+  - Purpose: 手机竖屏使用底部频道面板，横屏使用自适应左侧面板；增加触摸选台、频道浏览保持和手机操作栏。
+  - Purpose: 仅在普通电视直播页面临时放开手机方向，退出页面后恢复进入前的方向；电视设备继续保持横屏和原有遥控器事件处理。
+- File path: `devLog/README.md`
+  - Reason: 记录本次“电视(4)”页面适配并保持主时间线可导航。
+  - Purpose: 登记本次修改的范围和验证结果。
+- File path: `devLog/home-player-ui.md`
+  - Reason: 本次修改属于普通电视直播页面 UI 和触摸交互。
+  - Purpose: 记录实现边界、缺陷和验证结果。
+
+## Bug Record
+
+- Time: 2026-09-21 18:22
+- Symptoms: 手机进入“电视(4)”时只能使用固定电视盒子布局，频道触摸选取和常用播放操作不够直接。
+- Attempted fix: 在 `LiveScreen.kt` 内增加手机横竖屏布局、点击选台、触摸控制栏和页面级方向管理；保留电视端遥控器路径。
+- Temporary solution: 无。
+
+## Verification
+
+- `.\\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`：passed。
+- Lint：0 errors；未执行手机或电视设备功能测试。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
+
 ## 2026-09-16 11:57 - Media3 控制器移除与遥控器快捷键恢复
 
 ## File Changes

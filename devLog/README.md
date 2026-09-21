@@ -1,5 +1,20 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-09-21 19:03 - 发布 v1.3.9：电视(4)手机页面兼容
+
+- Branch docs: `devLog/home-player-ui.md`、`devLog/release.md`
+- Summary:
+  - 将已由用户验证通过的“电视(4)”手机适配纳入正式 v1.3.9，版本号为 `10309 / 1.3.9`。
+  - 61 项单元测试和 Release 构建通过，签名与 OTA 清单校验通过；未重复执行设备测试。
+
+### 2026-09-21 18:22 - 电视(4)手机页面兼容
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 仅调整主工程“电视(4)”普通电视直播页面，未修改 Android 4.4/Android 6 工程、平台直播或全局应用方向设置。
+  - 手机端增加竖屏底部频道面板、横屏左侧自适应面板、触摸选台和手机操作栏；电视遥控器逻辑保持不变。
+  - Debug 单元测试、Debug APK 和 Android Lint 通过；未执行设备功能测试。
+
 ### 2026-09-17 07:24 - 发布 v1.3.8：内容过滤修复与直播收藏
 
 - Branch docs: `devLog/content-filter.md`、`devLog/platform-live.md`、`devLog/release.md`
