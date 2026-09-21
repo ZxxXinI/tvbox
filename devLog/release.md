@@ -1,5 +1,33 @@
 ﻿# Release - 2026-06-25
 
+## 2026-09-21 19:03 - 发布 v1.3.9：电视(4)手机页面兼容
+
+## File Changes
+
+- File path: `app/build.gradle.kts`
+  - Reason: 用户已完成“电视(4)”手机适配验收，需要发布新版本。
+  - Purpose: 设置 `versionCode=10309`、`versionName=1.3.9`。
+- File path: `CHANGELOG.md`、`README.md`、`update.json`
+  - Reason: 发布说明、安装示例和 OTA 信息必须与 v1.3.9 签名 APK 一致。
+  - Purpose: 写入“电视(4)”手机适配说明、Release 地址、SHA-256 和 APK 大小。
+- File path: `app/build/outputs/apk/release/TVBox-v1.3.9.apk`
+  - Reason: 提供正式发布的签名安装包。
+  - Purpose: 发布 v1.3.9 APK。
+
+## Verification
+
+- `:app:testDebugUnitTest`：passed，61 项测试通过。
+- `:app:assembleRelease`：passed。
+- APK 包内版本：`10309 / 1.3.9`；最低 API 28。
+- APK 签名：passed；证书为项目现有 TVBox Release 证书。
+- APK 大小：`4919465` 字节；SHA-256：`51feda6cb53005d8681fcaac3bc9833bb47eb2111e4efa9fc599d222d0a26c20`。
+- 设备功能由用户已完成测试，本次未重复执行设备测试。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch docs: `devLog/home-player-ui.md`、`devLog/release.md`
+
 ## 2026-09-17 07:24 - 发布 v1.3.8：内容过滤修复与直播收藏
 
 ## File Changes

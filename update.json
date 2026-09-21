@@ -1,9 +1,9 @@
 ﻿{
-  "versionCode": 10308,
-  "versionName": "1.3.8",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.8/TVBox-v1.3.8.apk",
-  "apkSha256": "84a9dbeb2ec0c64983545d044cfbecc87dc4b8803a7d0e3a9f7c2e8c542e0d30",
-  "apkSize": 4903077,
+  "versionCode": 10309,
+  "versionName": "1.3.9",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.9/TVBox-v1.3.9.apk",
+  "apkSha256": "51feda6cb53005d8681fcaac3bc9833bb47eb2111e4efa9fc599d222d0a26c20",
+  "apkSize": 4919465,
   "force": false,
   "changelog": [
     "修复伦理与电影解说过滤，避免误伤英文片名。",
