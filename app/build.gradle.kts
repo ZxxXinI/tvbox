@@ -46,8 +46,8 @@ android {
         applicationId = "com.tvbox.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10309
-        versionName = "1.3.9"
+        versionCode = 10310
+        versionName = "1.3.10"
         buildConfigField("String", "AI_API_KEY", aiApiKey.toBuildConfigString())
         buildConfigField("String", "PLATFORM_LIVE_SERVICE_URL", platformLiveServiceUrl.toBuildConfigString())
     }
@@ -64,6 +64,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (hasReleaseSigning && configProperty("TVBOX_SIGN_DEBUG_WITH_RELEASE") == "true") {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")

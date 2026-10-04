@@ -1,15 +1,65 @@
-package com.tvbox.app.data
+﻿package com.tvbox.app.data
 
 import com.tvbox.app.domain.ApiLine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MovieRepositoryTest {
+    @Test
+    fun resumeOnlyRequestsOriginalSourceWithoutWaitingForSlowAlternatives() = runBlocking {
+        val primary = line("primary")
+        val backup = line("backup")
+        var backupRequests = 0
+        val repo = repository(listOf(primary, backup), mapOf(
+            primary.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                response(vod(1, "续播测试", sourceName = "m3u8", episodeUrl = "https://primary.test/play.m3u8"))
+            },
+            backup.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                backupRequests++
+                delay(60_000)
+                response()
+            },
+        ))
+        val movie = withTimeout(1_500) { repo.getResumeDetail("primary", 1) }
+        assertEquals("续播测试", movie?.name)
+        assertEquals(0, backupRequests)
+    }
+
+    @Test
+    fun slowAlternativeTimeoutDoesNotCancelSuccessfulPrimaryDetail() = runBlocking {
+        val primary = line("primary")
+        val backup = line("backup")
+        val repo = repository(listOf(primary, backup), mapOf(
+            primary.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                response(vod(1, "慢源测试", sourceName = "m3u8", episodeUrl = "https://primary.test/play.m3u8"))
+            },
+            backup.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> delay(60_000); response() },
+        ))
+        val updates = withTimeout(7_000) { repo.getDetailProgressively("primary", 1).toList() }
+        assertEquals(2, updates.last().completedSources)
+        assertEquals("慢源测试", updates.last().movie.name)
+        assertEquals(1, updates.last().movie.playSources.size)
+    }
+
+    @Test
+    fun callerCancellationStillCancelsSourceWork() = runBlocking {
+        val primary = line("primary")
+        val repo = repository(listOf(primary), mapOf(
+            primary.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> delay(60_000); response() },
+        ))
+        var cancelled = false
+        try { withTimeout(50) { repo.getResumeDetail("primary", 1) } }
+        catch (_: CancellationException) { cancelled = true }
+        assertTrue(cancelled)
+    }
+
     @Test
     fun progressiveSearchDeduplicatesMoviesAndKeepsPrimarySourceFirst() = runBlocking {
         val primary = line("primary")

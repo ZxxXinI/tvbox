@@ -8,3 +8,7 @@ local.properties
 signing/
 *.jks
 *.keystore
+
+# Python acceptance tooling caches
+__pycache__/
+*.py[cod]

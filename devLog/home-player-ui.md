@@ -1,5 +1,36 @@
 ﻿# Home / Player UI - 2026-06-30
 
+## 2026-09-30 08:27 - 所有播放页面保持亮屏
+
+## File Changes
+
+- File path: `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`
+  - Reason: MacCms 电影和电视剧点播页未启用播放页面亮屏保护，系统自动锁屏仍会在观看过程中生效。
+  - Purpose: 复用 `KeepScreenOnWhileVisible()`，让点播页与普通电视直播、平台直播保持一致；离开页面后恢复进入前的 `keepScreenOn` 状态。
+- File path: `devLog/README.md`
+  - Reason: 本次播放页亮屏修复需要进入主开发时间线。
+  - Purpose: 记录修改范围并链接播放器分支日志。
+- File path: `devLog/home-player-ui.md`
+  - Reason: 本次修改属于点播播放器页面行为修复。
+  - Purpose: 记录原因、实现方式和验证结果。
+
+## Bug Record
+
+- Time: 2026-09-30 08:27
+- Symptoms: 使用 MacCms 接口观看电影或电视剧时，设备自动锁屏设置仍会生效并导致屏幕熄灭。
+- Attempted fix: 在 `PlayerScreen` 进入组合时启用统一亮屏组件，并由组件在页面销毁时恢复原状态。
+- Temporary solution: 无。
+
+## Verification
+
+- `.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`：passed，61 项测试通过，Lint 0 errors。
+- 未执行设备功能测试。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/home-player-ui.md`
+
 ## 2026-09-21 18:22 - 电视(4)手机页面兼容
 
 ## File Changes

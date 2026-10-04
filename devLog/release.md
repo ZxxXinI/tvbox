@@ -1,5 +1,28 @@
 ﻿# Release - 2026-06-25
 
+## 2026-10-04 10:08 - 发布 v1.3.10：播放体验与继续观看
+
+## File Changes
+
+- `app/build.gradle.kts`：将版本升级至 `10310 / 1.3.10`，支持正式 OTA 更新。
+- `CHANGELOG.md`、`README.md`、`update.json`：同步本轮播放亮屏、中断暂停、轻量控制栏、继续观看及焦点修复，更新正式下载地址与 APK 校验信息。
+- `app/src/main`、`app/src/test`、`app/src/debug`：纳入本轮主工程代码、回归用例和仅 Debug 打包的验收入口。
+- `tools`、`docs/validation/2026-10-03-playback-experience.md`：归档可重复验收工具和验证边界；缓存文件不入库。
+- `devLog/README.md`、`devLog/home-player-ui.md`、`devLog/playback-experience.md`：记录本轮改动与发布导航，开发日志中的无关记录保留在工作区。
+
+## Verification
+
+- 执行签名 Release 构建，核对包内版本、证书、附件大小及 SHA-256，并与 OTA 清单一致性校验。
+- 历史回归用例为 69 项通过；本次遵循用户要求不执行设备功能测试，不将未完成的设备续播复测或模拟器自动熄屏检查记为通过。
+- Release 构建通过；APK 包内版本 `10310 / 1.3.10`，最低 API 28，v2 签名校验通过；证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`。
+- APK `TVBox-v1.3.10.apk`：`4985005` 字节；SHA-256 `6c788fecf8c96ae8373a8b2ccb640eeeb7e7703c95338eb082cac14871e08ec0`。OTA 清单与 APK 一致；Release 不包含 Debug 验收 Activity。
+- 先公开 Release，再推送 main，使 OTA 指向已公开的资产。
+
+## Navigation
+
+- Master doc: `devLog/README.md`
+- Branch doc: `devLog/playback-experience.md`
+
 ## 2026-09-21 19:03 - 发布 v1.3.9：电视(4)手机页面兼容
 
 ## File Changes

@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,7 +48,14 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.SaveableStateHolder
+import com.tvbox.app.domain.continueWatching
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -95,6 +103,7 @@ fun TvBoxApp(
     onStartUpdateDownload: () -> Unit = actions::startUpdateDownload,
     onInstallUpdate: (String) -> Unit = {},
 ) {
+    val screenStateHolder = rememberSaveableStateHolder()
     Box(modifier = Modifier.fillMaxSize()) {
         val showNavigationRail = state.appSettings.theme == TvTheme.Cinema &&
             state.screen != TvScreen.Player &&
@@ -117,6 +126,7 @@ fun TvBoxApp(
                 )
                 Box(modifier = Modifier.weight(1f)) {
                     TvBoxScreen(
+                        holder = screenStateHolder,
                         state = state,
                         actions = actions,
                         onStartAiVoiceInput = onStartAiVoiceInput,
@@ -125,6 +135,7 @@ fun TvBoxApp(
             }
         } else {
             TvBoxScreen(
+                holder = screenStateHolder,
                 state = state,
                 actions = actions,
                 onStartAiVoiceInput = onStartAiVoiceInput,
@@ -141,10 +152,12 @@ fun TvBoxApp(
 
 @Composable
 private fun TvBoxScreen(
+    holder: SaveableStateHolder,
     state: TvBoxUiState,
     actions: TvBoxViewModel,
     onStartAiVoiceInput: () -> Unit,
 ) {
+    holder.SaveableStateProvider(state.screen.name) {
     when (state.screen) {
         TvScreen.Home -> HomeScreen(state = state, actions = actions)
         TvScreen.History -> HistoryScreen(state = state, actions = actions)
@@ -160,6 +173,7 @@ private fun TvBoxScreen(
             onStartVoiceInput = onStartAiVoiceInput,
         )
     }
+}
 }
 
 @Composable
@@ -266,21 +280,31 @@ private fun HomeScreen(
             else -> "$apiLineName 数据 / 共 ${state.total} 部影片"
         }
         val allCategoryFocusRequester = remember { FocusRequester() }
+        val navigationFocusRequester = remember { FocusRequester() }
+        val navigationScope = rememberCoroutineScope()
+        var forceNavigationVisible by remember { mutableStateOf(false) }
+        var movingToNavigation by remember { mutableStateOf(false) }
+        var navigationUpHeld by remember { mutableStateOf(false) }
         val movieGridState = rememberLazyGridState()
+        val homeFocus = rememberReturnFocus()
         val homeTopContentVisible by remember {
             derivedStateOf {
                 movieGridState.firstVisibleItemIndex == 0 &&
                     movieGridState.firstVisibleItemScrollOffset == 0
             }
         }
-        val showHomeTopContent = homeTopContentVisible || state.homeLoading || state.homeError != null
+        val showHomeTopContent = forceNavigationVisible || homeTopContentVisible || state.homeLoading || state.homeError != null
         LaunchedEffect(Unit) {
-            runCatching { allCategoryFocusRequester.requestFocus() }
+            if (homeFocus.lastKey == null) runCatching { allCategoryFocusRequester.requestFocus() }
         }
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .onPreviewKeyEvent { event ->
+                    if (event.nativeKeyEvent.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP && navigationUpHeld) {
+                        if (event.type == KeyEventType.KeyUp) navigationUpHeld = false
+                        return@onPreviewKeyEvent true
+                    }
                     if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
                     when (event.nativeKeyEvent.keyCode) {
                         AndroidKeyEvent.KEYCODE_1,
@@ -336,6 +360,7 @@ private fun HomeScreen(
                         onPlatformLive = actions::openPlatformLive,
                         onSettings = actions::openSettings,
                         showShortcutActions = !cinemaTheme,
+                        firstActionModifier = Modifier.focusRequester(navigationFocusRequester),
                     )
                     if (cinemaTheme && !state.isShowingDoubanHot) {
                         state.movies.firstOrNull()?.let { featuredMovie ->
@@ -372,6 +397,28 @@ private fun HomeScreen(
                     onMovieClick = actions::openDetail,
                     onDoubanHotClick = actions::openDoubanHotDetail,
                     onLoadMore = actions::loadNextPage,
+                    focus = homeFocus,
+                    onContinue = { actions.resumeHistory(it, TvScreen.Home) },
+                    onMoveToNavigation = {
+                        navigationUpHeld = true
+                        forceNavigationVisible = true
+                        if (!movingToNavigation) {
+                            movingToNavigation = true
+                            navigationScope.launch {
+                                try {
+                                    movieGridState.scrollToItem(0, 0)
+                                    // The navigation can be outside composition until AnimatedVisibility expands it.
+                                    for (attempt in 0..20) {
+                                        withFrameNanos { }
+                                        if (runCatching { navigationFocusRequester.requestFocus() }.getOrDefault(false)) break
+                                    }
+                                } finally {
+                                    movingToNavigation = false
+                                }
+                            }
+                        }
+                    },
+                    onContentFocused = { if (!movingToNavigation) forceNavigationVisible = false },
                     showSectionHeader = cinemaTheme,
                     modifier = Modifier.weight(1f),
                 )
@@ -471,6 +518,9 @@ private fun HistoryScreen(
 ) {
     PageSurface { padding ->
         var confirmClearHistory by remember { mutableStateOf(false) }
+        val historyGrid = rememberLazyGridState()
+        val historyFocus = rememberReturnFocus()
+        RestoreGridFocus(historyFocus, historyGrid, state.historyItems.mapIndexed { index, item -> "${item.apiLineId}:${item.movieId}" to index })
         if (confirmClearHistory) {
             AlertDialog(
                 onDismissRequest = { confirmClearHistory = false },
@@ -541,13 +591,18 @@ private fun HistoryScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = TvLayout.HistoryGridMinWidth),
+                    state = historyGrid,
                     contentPadding = PaddingValues(bottom = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(18.dp),
                     verticalArrangement = Arrangement.spacedBy(22.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(state.historyItems, key = { "${it.apiLineId}-${it.movieId}-${it.updatedAtEpochMs}" }) { item ->
-                        HistoryItemCard(item = item, onClick = { actions.resumeHistory(item) })
+                    items(state.historyItems, key = { "${it.apiLineId}:${it.movieId}" }) { item ->
+                        HistoryItemCard(item = item, onClick = {
+                            historyFocus.mark("${item.apiLineId}:${item.movieId}", state.historyItems.indexOf(item))
+                            actions.resumeHistory(item, TvScreen.History)
+                        },
+                            modifier = historyFocus.modifier("${item.apiLineId}:${item.movieId}", state.historyItems.indexOf(item)))
                     }
                 }
             }
@@ -1187,13 +1242,29 @@ private fun MovieGrid(
     onDoubanHotClick: (com.tvbox.app.domain.DoubanHotItem) -> Unit,
     onLoadMore: () -> Unit,
     showSectionHeader: Boolean,
+    focus: ReturnFocus,
+    onContinue: (com.tvbox.app.domain.WatchHistoryItem) -> Unit,
+    onMoveToNavigation: () -> Unit,
+    onContentFocused: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var loadMoreFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(state.homeFeedMode, state.selectedParentCategoryId, state.selectedCategoryId) {
-        gridState.scrollToItem(0)
+    val contextKey = "${state.selectedApiLineId}:${state.homeFeedMode}:${state.selectedParentCategoryId}:${state.selectedCategoryId}"
+    var savedContext by rememberSaveable { mutableStateOf(contextKey) }
+    LaunchedEffect(contextKey) {
+        if (savedContext != contextKey) {
+            focus.reset()
+            gridState.scrollToItem(0)
+            savedContext = contextKey
+        }
         loadMoreFocused = false
     }
+    val recent = state.historyItems.continueWatching()
+    val itemOffset = (if (recent.isNotEmpty()) 1 else 0) + (if (state.homeNotice != null) 1 else 0)
+    val focusItems = recent.map { "continue:${it.apiLineId}:${it.movieId}" to 0 } +
+        if (state.isShowingDoubanHot) state.doubanHotMovies.mapIndexed { index, item -> "douban:${item.doubanId}" to index + itemOffset }
+        else state.movies.mapIndexed { index, movie -> "${movie.apiLineId}:${movie.id}" to index + itemOffset }
+    RestoreGridFocus(focus, gridState, focusItems)
     Column(modifier = modifier.fillMaxSize()) {
         if (showSectionHeader) {
             Row(
@@ -1222,6 +1293,33 @@ private fun MovieGrid(
             verticalArrangement = Arrangement.spacedBy(22.dp),
             modifier = Modifier.weight(1f),
         ) {
+            if (recent.isNotEmpty()) {
+                item(key = "continue-watching", span = { GridItemSpan(maxLineSpan) }) {
+                    Column(Modifier.padding(bottom = 16.dp)) {
+                        Text("继续观看", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(8.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.onPreviewKeyEvent { event ->
+                                if (event.nativeKeyEvent.keyCode != AndroidKeyEvent.KEYCODE_DPAD_UP) false
+                                else {
+                                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) onMoveToNavigation()
+                                    true
+                                }
+                            }.focusGroup(),
+                        ) {
+                            items(recent, key = { "${it.apiLineId}:${it.movieId}" }) { history ->
+                                HistoryItemCard(history, {
+                                    focus.mark("continue:${history.apiLineId}:${history.movieId}", 0)
+                                    onContinue(history)
+                                },
+                                    Modifier.width(220.dp).then(focus.modifier("continue:${history.apiLineId}:${history.movieId}", 0))
+                                        .onFocusChanged { if (it.hasFocus) onContentFocused() })
+                            }
+                        }
+                    }
+                }
+            }
             state.homeNotice?.let { notice ->
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Surface(
@@ -1245,7 +1343,12 @@ private fun MovieGrid(
                     DoubanHotPosterCard(
                         item = item,
                         resolving = state.resolvingDoubanHotId == item.doubanId,
-                        onClick = { onDoubanHotClick(item) },
+                        onClick = {
+                            focus.mark("douban:${item.doubanId}", state.doubanHotMovies.indexOf(item) + itemOffset)
+                            onDoubanHotClick(item)
+                        },
+                        modifier = focus.modifier("douban:${item.doubanId}", state.doubanHotMovies.indexOf(item) + itemOffset)
+                            .onFocusChanged { if (it.hasFocus) onContentFocused() },
                         posterAspectRatio = 0.78f,
                     )
                 }
@@ -1253,7 +1356,12 @@ private fun MovieGrid(
                 items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
                     MoviePosterCard(
                         movie = movie,
-                        onClick = { onMovieClick(movie.id) },
+                        onClick = {
+                            focus.mark("${movie.apiLineId}:${movie.id}", state.movies.indexOf(movie) + itemOffset)
+                            onMovieClick(movie.id)
+                        },
+                        modifier = focus.modifier("${movie.apiLineId}:${movie.id}", state.movies.indexOf(movie) + itemOffset)
+                            .onFocusChanged { if (it.hasFocus) onContentFocused() },
                         posterAspectRatio = 0.78f,
                     )
                 }

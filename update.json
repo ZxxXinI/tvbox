@@ -1,13 +1,15 @@
 ﻿{
-  "versionCode": 10309,
-  "versionName": "1.3.9",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.9/TVBox-v1.3.9.apk",
-  "apkSha256": "51feda6cb53005d8681fcaac3bc9833bb47eb2111e4efa9fc599d222d0a26c20",
-  "apkSize": 4919465,
+  "versionCode": 10310,
+  "versionName": "1.3.10",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.10/TVBox-v1.3.10.apk",
+  "apkSha256": "6c788fecf8c96ae8373a8b2ccb640eeeb7e7703c95338eb082cac14871e08ec0",
+  "apkSize": 4985005,
   "force": false,
   "changelog": [
-    "修复伦理与电影解说过滤，避免误伤英文片名。",
-    "直播播放期间保持亮屏，退出后恢复自动锁屏。",
-    "平台直播房间支持本机收藏和从收藏列表播放。"
+    "所有播放页保持亮屏，后台或音频中断后由用户手动恢复。",
+    "新增轻量点播控制栏，统一电视(4)控制界面。",
+    "首页增加继续观看，修复备用来源造成的4秒续播超时。",
+    "恢复页面滚动位置与焦点，修复继续观看上键无法返回导航。",
+    "保留数字切集、菜单倍速与连续快进，修复返回键及临时倍速恢复。"
   ]
 }

@@ -1,5 +1,48 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-10-04 10:08 - 发布 v1.3.10：播放体验与继续观看
+
+- Branch docs: `devLog/playback-experience.md`、`devLog/release.md`
+- Summary:
+  - 发布所有播放页亮屏、手动恢复播放、轻量控制栏、继续观看和首页焦点导航修复。
+  - 版本升级至 `10310 / 1.3.10`，同步正式签名 APK 和 OTA 清单。
+
+### 2026-10-04 09:44 - 继续观看向上返回导航
+
+- Branch doc: `devLog/playback-experience.md`
+- Summary:
+  - 修复继续观看焦点被困：上键展开导航、回到顶部并聚焦导航入口。
+  - 构建签名安装包并覆盖安装到 192.168.0.8，由用户自行测试。
+
+### 2026-10-03 21:44 - 电视(4)轻量界面统一
+
+- Branch doc: `devLog/playback-experience.md`
+- Summary:
+  - 普通电视直播的控制栏、频道面板和提示层统一轻量样式，保留手机横竖屏布局与电视遥控操作。
+  - 构建现有版本号的签名安装包，覆盖安装到 192.168.0.8，由用户自行验收。
+
+### 2026-10-03 21:35 - 控制栏重绘与续播超时修复
+
+- Branch doc: `devLog/playback-experience.md`
+- Summary:
+  - 点播控制栏改为轻量样式；续播先请求原来源，备用源超时不再取消主请求。
+  - 69 项单元测试通过，签名 Release 已覆盖安装到 192.168.0.8，由用户自行验收。
+
+### 2026-10-03 - 播放体验、返回定位与继续观看
+
+- Branch doc: `devLog/playback-experience.md`
+- Summary:
+  - 三类播放页统一后台/音频中断后的手动恢复，MacCms 点播加入 TVBox 自有操作栏。
+  - 首页、搜索和历史返回恢复滚动位置与原内容焦点；首页新增最近六部未看完的继续观看。
+  - 使用本地可控媒体进行 ADB 验收，交付现有版本号的签名 Release 测试包和测试报告。
+
+### 2026-09-30 08:27 - 所有播放页面保持亮屏
+
+- Branch doc: `devLog/home-player-ui.md`
+- Summary:
+  - 为 MacCms 电影和电视剧点播页补齐播放期间保持亮屏，避免系统自动锁屏中断观看。
+  - 普通电视直播和平台直播继续沿用现有亮屏逻辑；退出任一播放页后恢复进入前的系统锁屏状态。
+
 ### 2026-09-21 19:03 - 发布 v1.3.9：电视(4)手机页面兼容
 
 - Branch docs: `devLog/home-player-ui.md`、`devLog/release.md`

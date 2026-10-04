@@ -126,6 +126,7 @@ data class TvBoxUiState(
     val playerEpisodeIndex: Int = 0,
     val playerStartPositionMs: Long = 0L,
     val playerSpeed: Float = 1f,
+    val playerPlayWhenReady: Boolean = true,
     val liveChannels: List<LiveChannel> = emptyList(),
     val liveChannelIndex: Int = 0,
     val liveLineIndex: Int = 0,
@@ -214,6 +215,7 @@ class TvBoxViewModel(
     private var platformLiveRecoveryCount = 0
     private var platformLiveRecoveryInProgress = false
     private val platformLiveFavoritesMutex = Mutex()
+    private val historyWriteMutex = Mutex()
     private var aiJob: Job? = null
     private var updateJob: Job? = null
     private var updateDownloadJob: Job? = null
@@ -963,10 +965,13 @@ class TvBoxViewModel(
     }
 
     fun openDetail(movieId: Int, apiLineId: String = _state.value.selectedApiLineId) {
+        historyResumeJob?.cancel()
         detailJob?.cancel()
         val current = _state.value
         val returnScreen = when (current.screen) {
             TvScreen.AiRecommend -> TvScreen.AiRecommend
+            TvScreen.Search -> TvScreen.Search
+            TvScreen.History -> TvScreen.History
             TvScreen.Detail -> current.detailReturnScreen
             else -> TvScreen.Home
         }
@@ -1074,6 +1079,7 @@ class TvBoxViewModel(
                 playerSourceIndex = selectedSourceIndex,
                 playerEpisodeIndex = selectedEpisodeIndex,
                 playerStartPositionMs = startPositionMs.coerceAtLeast(0L),
+                playerPlayWhenReady = true,
             )
         }
     }
@@ -1087,12 +1093,13 @@ class TvBoxViewModel(
         }
     }
 
-    fun resumeHistory(item: WatchHistoryItem) {
+    fun resumeHistory(item: WatchHistoryItem, returnScreen: TvScreen = TvScreen.Home) {
         historyResumeJob?.cancel()
+        detailJob?.cancel()
         _state.update {
             it.copy(
                 screen = TvScreen.Detail,
-                detailReturnScreen = TvScreen.Home,
+                detailReturnScreen = returnScreen,
                 detailMovie = null,
                 detailLoading = true,
                 detailError = null,
@@ -1101,34 +1108,45 @@ class TvBoxViewModel(
             )
         }
         historyResumeJob = viewModelScope.launch {
-            runCatching { repository.getDetail(apiLineId = item.apiLineId, id = item.movieId) }
-                .onSuccess { movie ->
-                    if (movie == null) {
-                        _state.update {
-                            it.copy(detailLoading = false, detailError = "影片详情不存在")
+            var opened = false
+            try {
+                val movie = repository.getResumeDetail(item.apiLineId, item.movieId)
+                if (movie == null || movie.playSources.none { it.episodes.isNotEmpty() }) {
+                    _state.update { it.copy(detailLoading = false, detailError = "暂时无法获取播放地址，请稍后重试") }
+                    return@launch
+                }
+                val (sourceIndex, episodeIndex) = resolveHistoryPosition(movie, item)
+                _state.update {
+                    it.copy(
+                        detailMovie = movie, detailLoading = false, detailError = null,
+                        selectedSourceIndex = sourceIndex, selectedEpisodeIndex = episodeIndex,
+                        playerSourceIndex = sourceIndex, playerEpisodeIndex = episodeIndex,
+                        playerStartPositionMs = item.positionMs.coerceAtLeast(0L),
+                        playerPlayWhenReady = true, screen = TvScreen.Player,
+                    )
+                }
+                opened = true
+                // Append alternatives without replacing the playing source or resetting its playlist.
+                repository.getDetailProgressively(item.apiLineId, item.movieId).collect { update ->
+                    _state.update { current ->
+                        val active = current.detailMovie
+                        if (active == null || active.id != movie.id || active.apiLineId != movie.apiLineId ||
+                            current.screen !in listOf(TvScreen.Player, TvScreen.Detail)) current
+                        else {
+                            val sources = (active.playSources + update.movie.playSources)
+                                .distinctBy { source -> source.episodes.map { it.url } }
+                            current.copy(detailMovie = active.copy(playSources = sources),
+                                detailCompletedSources = update.completedSources, detailTotalSources = update.totalSources)
                         }
-                        return@onSuccess
-                    }
-                    val (sourceIndex, episodeIndex) = resolveHistoryPosition(movie, item)
-                    _state.update {
-                        it.copy(
-                            detailMovie = movie,
-                            detailLoading = false,
-                            detailError = null,
-                            selectedSourceIndex = sourceIndex,
-                            selectedEpisodeIndex = episodeIndex,
-                            playerSourceIndex = sourceIndex,
-                            playerEpisodeIndex = episodeIndex,
-                            playerStartPositionMs = item.positionMs.coerceAtLeast(0L),
-                            screen = TvScreen.Player,
-                        )
                     }
                 }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(detailLoading = false, detailError = error.userMessage())
-                    }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                if (!opened) _state.update {
+                    it.copy(detailLoading = false, detailError = "续播加载失败，请稍后重试或从搜索重新打开影片")
                 }
+            }
         }
     }
 
@@ -1495,13 +1513,38 @@ class TvBoxViewModel(
         }
     }
 
+    fun switchPlayerSource(index: Int, positionMs: Long, playWhenReady: Boolean): Boolean {
+        val current = _state.value
+        val movie = current.detailMovie ?: return false
+        val episode = movie.playSources.getOrNull(current.playerSourceIndex)
+            ?.episodes?.getOrNull(current.playerEpisodeIndex) ?: return false
+        val next = movie.playSources.getOrNull(index) ?: return false
+        val episodeIndex = com.tvbox.app.domain.correspondingEpisodeIndex(next, episode.title, current.playerEpisodeIndex)
+            ?: return false
+        _state.update {
+            it.copy(
+                playerSourceIndex = index,
+                selectedSourceIndex = index,
+                playerEpisodeIndex = episodeIndex,
+                selectedEpisodeIndex = episodeIndex,
+                playerStartPositionMs = positionMs.coerceAtLeast(0),
+                playerPlayWhenReady = playWhenReady,
+            )
+        }
+        return true
+    }
+
     fun updatePlaybackSpeed(speed: Float) {
         if (speed <= 0f || _state.value.playerSpeed == speed) return
         _state.update { it.copy(playerSpeed = speed) }
     }
 
-    fun savePlaybackProgress(positionMs: Long, durationMs: Long) {
-        val current = _state.value
+    fun updatePlayerPlayIntent(playWhenReady: Boolean) {
+        _state.update { it.copy(playerPlayWhenReady = playWhenReady) }
+    }
+
+    fun savePlaybackProgress(positionMs: Long, durationMs: Long, snapshot: TvBoxUiState = _state.value) {
+        val current = snapshot
         val movie = current.detailMovie ?: return
         val source = movie.playSources.getOrNull(current.playerSourceIndex) ?: return
         val episode = source.episodes.getOrNull(current.playerEpisodeIndex) ?: return
@@ -1525,10 +1568,12 @@ class TvBoxViewModel(
             updatedAtEpochMs = System.currentTimeMillis(),
         )
         viewModelScope.launch {
-            runCatching { historyRepository.saveProgress(item) }
-                .onSuccess { history ->
-                    _state.update { it.copy(historyItems = history) }
-                }
+            historyWriteMutex.withLock {
+                runCatching { historyRepository.saveProgress(item) }
+                    .onSuccess { history ->
+                        _state.update { it.copy(historyItems = history) }
+                    }
+            }
         }
     }
 
@@ -1560,6 +1605,8 @@ class TvBoxViewModel(
                 true
             }
             TvScreen.Detail -> {
+                historyResumeJob?.cancel()
+                detailJob?.cancel()
                 _state.update { it.copy(screen = it.detailReturnScreen) }
                 true
             }
