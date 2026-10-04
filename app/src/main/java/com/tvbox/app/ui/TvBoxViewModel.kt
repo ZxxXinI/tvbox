@@ -157,6 +157,7 @@ data class TvBoxUiState(
     val updateDownloading: Boolean = false,
     val updateDownloadProgress: Int? = null,
     val updateDownloadedApkPath: String? = null,
+    val updateAutoInstallPath: String? = null,
     val updateError: String? = null,
     val appSettings: AppSettings = AppSettings(),
     val playbackHealth: PlaybackHealthSnapshot = PlaybackHealthSnapshot(),
@@ -224,6 +225,7 @@ class TvBoxViewModel(
     private val playbackAgent = PlaybackAgent()
 
     init {
+        restorePendingUpdateDownload()
         val defaultApiLineId = repository.apiLines.firstOrNull()?.id.orEmpty()
         _state.update {
             it.copy(
@@ -444,6 +446,8 @@ class TvBoxViewModel(
                     _state.update {
                         if (update == null) {
                             it.copy(updateChecking = false)
+                        } else if (it.updateDownloading || it.updateDownloadedApkPath != null) {
+                            it.copy(updateChecking = false)
                         } else {
                             it.copy(
                                 availableUpdate = update,
@@ -478,41 +482,45 @@ class TvBoxViewModel(
         val update = _state.value.availableUpdate ?: return
         if (_state.value.updateDownloading) return
         updateDownloadJob?.cancel()
-        updateDownloadJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    updateDownloading = true,
-                    updateDownloadProgress = 0,
-                    updateDownloadedApkPath = null,
-                    updateError = null,
-                )
-            }
-            runCatching {
-                appUpdateRepository.downloadUpdate(update) { progress ->
-                    _state.update { it.copy(updateDownloadProgress = progress) }
-                }
-            }
-                .onSuccess { apkFile ->
-                    _state.update {
-                        it.copy(
-                            updateDownloading = false,
-                            updateDownloadProgress = 100,
-                            updateDownloadedApkPath = apkFile.absolutePath,
-                            updateError = null,
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(
-                            updateDownloading = false,
-                            updateDownloadProgress = null,
-                            updateDownloadedApkPath = null,
-                            updateError = error.userMessage(),
-                        )
-                    }
-                }
+        _state.update {
+            it.copy(updateDialogVisible = false, updateDownloading = true,
+                updateDownloadProgress = 0, updateDownloadedApkPath = null,
+                updateAutoInstallPath = null, updateError = null)
         }
+        updateDownloadJob = viewModelScope.launch {
+            try {
+                val apkFile = appUpdateRepository.downloadUpdate(update) { progress ->
+                    _state.update { it.copy(updateDownloadProgress = progress.takeIf { value -> value >= 0 }) }
+                }
+                val autoInstall = appUpdateRepository.shouldAutoInstall(apkFile.absolutePath)
+                _state.update {
+                    it.copy(updateDownloading = false, updateDownloadProgress = 100,
+                        updateDownloadedApkPath = apkFile.absolutePath,
+                        updateAutoInstallPath = apkFile.absolutePath.takeIf { autoInstall }, updateError = null)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                _state.update {
+                    it.copy(updateDownloading = false, updateDownloadProgress = null,
+                        updateDownloadedApkPath = null, updateAutoInstallPath = null, updateError = error.userMessage())
+                }
+            }
+        }
+    }
+
+    private fun restorePendingUpdateDownload() {
+        viewModelScope.launch {
+            val pending = runCatching { appUpdateRepository.pendingDownload() }.getOrNull() ?: return@launch
+            if (_state.value.updateDownloading) return@launch
+            _state.update { it.copy(availableUpdate = pending, updateDialogVisible = false) }
+            startUpdateDownload()
+        }
+    }
+
+    fun markUpdateInstallPrompted(apkPath: String) {
+        _state.update { it.copy(updateAutoInstallPath = null, updateDialogVisible = false) }
+        viewModelScope.launch { runCatching { appUpdateRepository.markInstallPrompted(apkPath) } }
     }
 
     fun openHistory() {

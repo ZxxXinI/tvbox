@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
@@ -22,6 +23,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -147,6 +151,51 @@ fun TvBoxApp(
             onStartUpdateDownload = onStartUpdateDownload,
             onInstallUpdate = onInstallUpdate,
         )
+        UpdateDownloadCard(
+            state = state,
+            onRetry = onStartUpdateDownload,
+            onInstall = onInstallUpdate,
+            modifier = Modifier.align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun UpdateDownloadCard(
+    state: TvBoxUiState,
+    onRetry: () -> Unit,
+    onInstall: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val update = state.availableUpdate ?: return
+    if (state.updateDialogVisible || (!state.updateDownloading && state.updateDownloadedApkPath == null && state.updateError == null)) return
+    Surface(
+        modifier = modifier.width(240.dp), shape = RoundedCornerShape(14.dp),
+        color = Color(0xEE151C19), contentColor = Color.White,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), shadowElevation = 6.dp,
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("更新 ${update.versionName}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                if (state.updateDownloading) Text(state.updateDownloadProgress?.let { "$it%" } ?: "下载中",
+                    style = MaterialTheme.typography.labelMedium, color = Color(0xFF7AE2BA))
+            }
+            if (state.updateDownloading) {
+                val progress = state.updateDownloadProgress
+                if (progress == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                else LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFF7AE2BA), trackColor = Color.White.copy(alpha = 0.15f))
+                Text("可继续使用，完成后打开安装界面", style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.65f))
+            } else if (state.updateDownloadedApkPath != null) {
+                Text("下载完成", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { onInstall(state.updateDownloadedApkPath) }) { Text("安装更新", color = Color.White) }
+            } else {
+                Text(state.updateError.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                TextButton(onClick = onRetry) { Text("重新下载", color = Color.White) }
+            }
+        }
     }
 }
 

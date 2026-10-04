@@ -26,7 +26,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 平台直播：支持斗鱼、虎牙、哔哩哔哩、抖音和快手，统一提供平台、一级分类、二级分类、直播间和播放器流程，并按平台返回结果优先选择最高画质；直播间可在本机收藏，在直播入口的“收藏”卡片中直接打开。
 - 播放亮屏：所有播放页在前台保持亮屏，暂停时同样生效；退出播放页或切到后台后恢复原设置。
 - 播放中断：切到后台或发生音频焦点中断后暂停，返回后由用户手动恢复播放。
-- OTA 更新：启动后检查 GitHub 仓库中的 `update.json`，发现新版本后可下载 APK 并跳转系统安装器。
+- OTA 更新：启动后检查 GitHub 仓库中的 `update.json`；系统后台下载 APK，应用内小型进度卡片不阻挡操作，校验完成后在前台自动打开系统安装器。
 - 内容过滤：过滤伦理、电影解说、演员、新闻资讯等不需要的分类或资源。
 
 ## 遥控器快捷键
@@ -101,10 +101,11 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
   "versionCode": 10310,
   "versionName": "1.3.10",
   "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.10/TVBox-v1.3.10.apk",
-  "apkSha256": "6c788fecf8c96ae8373a8b2ccb640eeeb7e7703c95338eb082cac14871e08ec0",
-  "apkSize": 4985005,
+  "apkSha256": "cde557c130b3ea1b2045a0ea89f421bc3ef71756584232b5059127bee7701f87",
+  "apkSize": 5001469,
   "force": false,
   "changelog": [
+    "更新支持系统后台下载与小型进度卡片，校验完成后在前台自动打开安装界面。",
     "所有播放页保持亮屏，后台或音频中断后由用户手动恢复。",
     "新增轻量点播控制栏，统一电视(4)控制界面。",
     "首页增加继续观看，修复备用来源造成的4秒续播超时。",
@@ -117,6 +118,8 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 说明：
 
 - `versionCode` 必须大于当前应用版本，才会提示更新。
+- 本次重新上传仍为 `10310 / 1.3.10`；已安装 1.3.10 的用户需手动下载新版 APK 覆盖安装，不会收到同版本 OTA 提示。
+- 下载开始后关闭弹窗或按返回不取消任务；后台下载完成时，回到应用后打开安装界面。系统安装仍需用户确认，取消后可从小型进度卡片手动安装；无需悬浮窗权限。
 - `apkUrl` 是 APK 下载地址，目前通过 `gh-proxy.org` 转发 GitHub Release 附件。
 - `apkSha256` 用于下载完成后的完整性校验。
 - `force` 预留强制更新能力，当前普通更新可选择稍后再说。

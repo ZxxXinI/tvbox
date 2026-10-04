@@ -21,6 +21,13 @@ import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 import com.tvbox.app.data.DefaultAppUpdateRepository
 import com.tvbox.app.data.DefaultDoubanHotRepository
 import com.tvbox.app.data.DefaultMovieRepository
@@ -60,6 +67,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingInstallPermissionAction = savedInstanceState?.getString("pendingUpdateApk")
+            ?.let { InstallPermissionAction.InstallDownloadedApk(it) }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                viewModel.state.map { it.updateAutoInstallPath }.distinctUntilChanged().collect { path ->
+                    if (path != null) installUpdateApk(path)
+                }
+            }
+        }
         setContent {
             val state = viewModel.state.collectAsStateWithLifecycle().value
             TVBoxTheme(
@@ -73,7 +89,7 @@ class MainActivity : ComponentActivity() {
                     state = state,
                     actions = viewModel,
                     onStartAiVoiceInput = ::startAiVoiceInput,
-                    onStartUpdateDownload = ::startUpdateDownloadWithPermission,
+                    onStartUpdateDownload = ::startBackgroundUpdateDownload,
                     onInstallUpdate = ::installUpdateApk,
                 )
             }
@@ -204,18 +220,12 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun startUpdateDownloadWithPermission() {
-        if (canInstallUnknownApps()) {
-            viewModel.startUpdateDownload()
-            return
-        }
-        requestInstallPermission(
-            action = InstallPermissionAction.StartUpdateDownload,
-            message = "请先允许 TVBox 安装未知应用，允许后将开始下载更新。",
-        )
+    private fun startBackgroundUpdateDownload() {
+        viewModel.startUpdateDownload()
     }
 
     private fun installUpdateApk(apkPath: String) {
+        viewModel.markUpdateInstallPrompted(apkPath)
         val apkFile = File(apkPath)
         if (!apkFile.exists()) {
             Toast.makeText(this, "安装包不存在，请重新下载", Toast.LENGTH_SHORT).show()
@@ -278,22 +288,24 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val message = when (action) {
-            InstallPermissionAction.StartUpdateDownload -> "未获得安装权限，暂不下载更新。"
-            is InstallPermissionAction.InstallDownloadedApk -> "未获得安装权限，暂不安装更新。"
-        }
+        val message = "未获得安装权限，暂不安装更新。"
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     private fun handleInstallPermissionGranted(action: InstallPermissionAction) {
         when (action) {
-            InstallPermissionAction.StartUpdateDownload -> viewModel.startUpdateDownload()
             is InstallPermissionAction.InstallDownloadedApk -> installUpdateApk(action.apkPath)
         }
     }
 
     private fun canInstallUnknownApps(): Boolean {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        val action = pendingInstallPermissionAction as? InstallPermissionAction.InstallDownloadedApk
+        outState.putString("pendingUpdateApk", action?.apkPath)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -303,7 +315,6 @@ class MainActivity : ComponentActivity() {
 }
 
 private sealed class InstallPermissionAction {
-    data object StartUpdateDownload : InstallPermissionAction()
     data class InstallDownloadedApk(val apkPath: String) : InstallPermissionAction()
 }
 
