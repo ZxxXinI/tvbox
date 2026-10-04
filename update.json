@@ -2,10 +2,11 @@
   "versionCode": 10310,
   "versionName": "1.3.10",
   "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.10/TVBox-v1.3.10.apk",
-  "apkSha256": "6c788fecf8c96ae8373a8b2ccb640eeeb7e7703c95338eb082cac14871e08ec0",
-  "apkSize": 4985005,
+  "apkSha256": "cde557c130b3ea1b2045a0ea89f421bc3ef71756584232b5059127bee7701f87",
+  "apkSize": 5001469,
   "force": false,
   "changelog": [
+    "更新支持系统后台下载与小型进度卡片，校验完成后在前台自动打开安装界面。",
     "所有播放页保持亮屏，后台或音频中断后由用户手动恢复。",
     "新增轻量点播控制栏，统一电视(4)控制界面。",
     "首页增加继续观看，修复备用来源造成的4秒续播超时。",

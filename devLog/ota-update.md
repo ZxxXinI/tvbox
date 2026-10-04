@@ -1,4 +1,35 @@
-# OTA 更新 - 2026-06-25
+﻿# OTA 更新 - 2026-06-25
+
+## 2026-10-04 11:33 - 合入正式 v1.3.10
+
+- 应用户要求保留版本号，将下述后台更新能力合入正式 1.3.10，重新上传现有 Release 的 APK 和配套 OTA 清单。
+- 签名 Release 重新构建通过；产物 SHA-256 与此前已安装的测试包一致，未重复安装或执行设备功能测试。
+- 同版本已安装用户不会再次收到 OTA 提示，需手动下载覆盖安装；发布详情见 `devLog/release.md`，主日志见 `devLog/README.md`。
+
+## 2026-10-04 10:59 - 系统后台下载、进度卡片与自动安装入口
+
+### 文件修改
+
+- `app/src/main/java/com/tvbox/app/data/AppUpdateRepository.kt`：使用 Android DownloadManager，保存任务 ID、版本及文件位置；重新进入应用继续观察同一任务，校验大小与 SHA-256 后才报告完成。UI 观察被取消时不移除系统下载任务。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`：立即更新后关闭对话框、保持下载状态，启动时恢复任务；检查更新不再重置正在下载或已完成的状态，维护一次性自动安装事件。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`：独立于页面显示应用内小型进度卡片，支持失败重试和完成后手动安装；无需系统悬浮窗权限。
+- `app/src/main/java/com/tvbox/app/MainActivity.kt`：仅在 RESUMED 状态自动打开安装界面；安装阶段检查未知来源权限，保留授权返回后的待安装路径，避免每次返回前台重复弹出。
+- `app/src/main/res/xml/update_file_paths.xml`：允许 FileProvider 共享应用专属下载目录下的 APK。
+
+### 缺陷记录
+
+- 时间：2026-10-04 10:59。
+- 现象：更新弹窗关闭后看不到下载状态，下载完成没有自动进入安装流程。
+- 修复：系统管理下载，独立进度卡片显示状态；完成事件在前台触发系统安装，后台完成等待回到应用。安装仍需用户在系统界面确认。
+- 临时方案：无。
+
+### 验证与产物
+
+- 签名 Release 构建和签名校验通过；按用户要求未执行设备功能测试。
+- 已覆盖安装到 `192.168.0.8:5555`，返回 Success，保留数据，版本为 `10310 / 1.3.10`。
+- APK：`app/build/outputs/apk/release/TVBox-v1.3.10-background-update-test.apk`；SHA-256 `cde557c130b3ea1b2045a0ea89f421bc3ef71756584232b5059127bee7701f87`。
+- 本地测试包未发布；此功能用于后续应用内更新。
+- 主日志：`devLog/README.md`。
 
 ## 2026-07-08 19:35 - 取消启动安装权限请求
 

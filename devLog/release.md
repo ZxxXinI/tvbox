@@ -1,5 +1,26 @@
 ﻿# Release - 2026-06-25
 
+## 2026-10-04 11:33 - 正式 v1.3.10 同版本重新上传
+
+### 文件修改及目的
+
+- `app/src/main/java/com/tvbox/app/MainActivity.kt`、`data/AppUpdateRepository.kt`、`ui/TvBoxViewModel.kt`、`ui/TvBoxApp.kt`、`app/src/main/res/xml/update_file_paths.xml`：将系统后台下载、应用内进度卡片、任务恢复与一次性自动安装入口纳入正式版本，解决更新弹窗关闭后缺少状态和安装入口的问题；详细缺陷记录见 `devLog/ota-update.md`。
+- `CHANGELOG.md`、`README.md`、`update.json`：保持 `10310 / 1.3.10`，同步说明、实际 APK 大小及 SHA-256；明确已安装同版本用户需手动下载覆盖安装。
+- `devLog/README.md`、`devLog/ota-update.md`、`devLog/release.md`：关联开发与正式重打包记录，原发布记录保留。
+
+### 构建与发布校验
+
+- `:app:assembleRelease` 构建通过（包含 Release vital lint），未执行设备功能测试。
+- APK `TVBox-v1.3.10.apk`：`5001469` 字节；SHA-256 `cde557c130b3ea1b2045a0ea89f421bc3ef71756584232b5059127bee7701f87`。
+- 包内版本 `10310 / 1.3.10`，最低 API 28；v2 签名校验通过，证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`。
+- 替换现有 v1.3.10 Release 的 APK 和配套清单，核对远程附件后同步 main 分支 OTA；同版本标签随源码更新，旧提交保留在历史中。
+- 本次不重复安装：重新构建产物与此前已覆盖安装到 192.168.0.8 的后台更新测试包 SHA-256 相同。
+- 排除 Android 4.4 / Android 6 独立工程及主日志中的无关 Android 4.4 条目。
+
+### 导航
+
+- 主日志：`devLog/README.md`；模块日志：`devLog/ota-update.md`。
+
 ## 2026-10-04 10:08 - 发布 v1.3.10：播放体验与继续观看
 
 ## File Changes
