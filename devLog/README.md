@@ -1,5 +1,12 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-10-04 16:22 - README 增加友情链接
+
+- Branch doc: `devLog/readme-maintenance.md`
+- Summary:
+  - 按用户提供的文案在 README 末尾增加 LINUX DO 友情链接，并同步 GitHub main 分支。
+  - 仅更新文档，不改动版本号、APK、Release 附件或兼容工程。
+
 ### 2026-10-04 11:33 - 重新发布正式 v1.3.10：后台更新下载
 
 - Branch docs: `devLog/ota-update.md`、`devLog/release.md`
