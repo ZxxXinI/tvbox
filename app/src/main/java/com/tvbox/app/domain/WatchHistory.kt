@@ -1,4 +1,4 @@
-package com.tvbox.app.domain
+﻿package com.tvbox.app.domain
 
 import kotlinx.serialization.Serializable
 
@@ -26,3 +26,9 @@ data class WatchHistoryItem(
             return ((positionMs * 100) / durationMs).coerceIn(0, 100).toInt()
         }
 }
+
+fun List<WatchHistoryItem>.continueWatching(limit: Int = 6): List<WatchHistoryItem> =
+    sortedByDescending { it.updatedAtEpochMs }
+        .distinctBy { "${it.apiLineId}:${it.movieId}" }
+        .filter { it.positionMs > 0 && (it.durationMs <= 0 || it.positionMs.toDouble() / it.durationMs < 0.95) }
+        .take(limit.coerceAtLeast(0))

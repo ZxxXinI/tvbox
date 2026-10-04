@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -21,6 +22,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +46,17 @@ fun SearchScreen(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
 ) {
+    val grid = rememberLazyGridState()
+    val returnFocus = rememberReturnFocus()
+    var savedQuery by rememberSaveable { mutableStateOf(state.searchQuery) }
+    LaunchedEffect(state.searchQuery) {
+        if (savedQuery != state.searchQuery) {
+            returnFocus.reset()
+            grid.scrollToItem(0)
+            savedQuery = state.searchQuery
+        }
+    }
+    RestoreGridFocus(returnFocus, grid, state.searchResults.mapIndexed { index, item -> "${item.apiLineId}:${item.id}" to index })
     PageSurface { padding ->
         Column(
             modifier = Modifier
@@ -97,6 +111,7 @@ fun SearchScreen(
                     }
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = TvLayout.PosterGridMinWidth),
+                        state = grid,
                         contentPadding = PaddingValues(bottom = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(18.dp),
                         verticalArrangement = Arrangement.spacedBy(22.dp),
@@ -105,7 +120,11 @@ fun SearchScreen(
                         items(state.searchResults, key = { "${it.apiLineId}-${it.id}" }) { movie ->
                             MoviePosterCard(
                                 movie = movie,
-                                onClick = { actions.openDetail(movie.id, movie.apiLineId) },
+                                onClick = {
+                                    returnFocus.mark("${movie.apiLineId}:${movie.id}", state.searchResults.indexOf(movie))
+                                    actions.openDetail(movie.id, movie.apiLineId)
+                                },
+                                modifier = returnFocus.modifier("${movie.apiLineId}:${movie.id}", state.searchResults.indexOf(movie)),
                             )
                         }
                     }

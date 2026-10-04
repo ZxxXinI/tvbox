@@ -1,4 +1,4 @@
-package com.tvbox.app.ui
+﻿package com.tvbox.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -264,12 +264,15 @@ private fun EpisodeGrid(
     }
     val safeSelectedEpisodeIndex = selectedEpisodeIndex.coerceIn(0, episodes.lastIndex)
     val gridState = rememberLazyGridState()
-    val focusRequesters = remember(episodes) {
+    val focusRequesters = remember(episodes.map { it.title }) {
         List(episodes.size) { FocusRequester() }
     }
 
-    LaunchedEffect(episodes, safeSelectedEpisodeIndex) {
-        gridState.scrollToItem(safeSelectedEpisodeIndex)
+    LaunchedEffect(safeSelectedEpisodeIndex) {
+        withFrameNanos { }
+        if (gridState.layoutInfo.visibleItemsInfo.none { it.index == safeSelectedEpisodeIndex }) {
+            gridState.scrollToItem(safeSelectedEpisodeIndex)
+        }
         withFrameNanos { }
         runCatching {
             focusRequesters[safeSelectedEpisodeIndex].requestFocus()

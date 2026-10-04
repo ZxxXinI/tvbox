@@ -74,13 +74,11 @@ fun PlayerScreen(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
 ) {
+    KeepScreenOnWhileVisible()
     val movie = state.detailMovie
     val source = movie?.playSources?.getOrNull(state.playerSourceIndex)
     val episode = source?.episodes?.getOrNull(state.playerEpisodeIndex)
 
-    BackHandler {
-        actions.goBack()
-    }
 
     if (movie == null || source == null || episode == null) {
         ErrorState(message = "播放地址不存在", onRetry = actions::goBack)
@@ -101,7 +99,54 @@ fun PlayerScreen(
             playWhenReady = true
         }
     }
+    val session = rememberPlaybackSession()
+    var loadedState by remember { mutableStateOf(state) }
+    fun saveCurrentProgress(positionMs: Long, durationMs: Long) {
+        actions.savePlaybackProgress(positionMs, durationMs,
+            loadedState.copy(playerEpisodeIndex = player.currentMediaItemIndex.coerceAtLeast(0)))
+    }
+    BindPlaybackSession(session, player) {
+        saveCurrentProgress(player.currentPosition, player.duration.takeIf { it > 0 } ?: 0)
+    }
     val playerFocusRequester = remember { FocusRequester() }
+    var controlsVisible by remember { mutableStateOf(false) }
+    var controlsPanel by remember { mutableStateOf(PlayerPanel.None) }
+    var controlsInteraction by remember { mutableIntStateOf(0) }
+    var scrubbing by remember { mutableStateOf(false) }
+    var uiPosition by remember { mutableStateOf(0L) }
+    var uiDuration by remember { mutableStateOf(0L) }
+    var uiPlaying by remember { mutableStateOf(true) }
+    BackHandler {
+        when {
+            controlsPanel != PlayerPanel.None -> controlsPanel = PlayerPanel.None
+            controlsVisible -> { controlsVisible = false; playerFocusRequester.requestFocus() }
+            else -> actions.goBack()
+        }
+    }
+    LaunchedEffect(player) {
+        while (true) {
+            uiPosition = player.currentPosition.coerceAtLeast(0)
+            uiDuration = player.duration.takeIf { it > 0 } ?: 0
+            uiPlaying = player.playWhenReady
+            delay(250)
+        }
+    }
+    LaunchedEffect(controlsVisible, controlsPanel, controlsInteraction, uiPlaying, scrubbing) {
+        if (controlsVisible && controlsPanel == PlayerPanel.None && uiPlaying && !scrubbing) {
+            delay(5_000)
+            controlsVisible = false
+            playerFocusRequester.requestFocus()
+        }
+    }
+    LaunchedEffect(session.interrupted) {
+        if (session.interrupted) controlsVisible = true
+    }
+    LaunchedEffect(controlsVisible) {
+        if (!controlsVisible) {
+            androidx.compose.runtime.withFrameNanos { }
+            playerFocusRequester.requestFocus()
+        }
+    }
     val remoteKeyState = remember { PlayerRemoteKeyState() }
     var videoDisplayMode by remember { mutableStateOf(VideoDisplayMode.Unknown) }
     var playbackError by remember { mutableStateOf<String?>(null) }
@@ -118,8 +163,9 @@ fun PlayerScreen(
     val latestState by rememberUpdatedState(state)
     val latestFailedSourceIndexes by rememberUpdatedState(failedSourceIndexes)
 
-    val handlePlaybackIssue = { issueType: PlaybackIssueType, switchPrefix: String, finalPrefix: String, message: String ->
+    val handlePlaybackIssue = issue@ { issueType: PlaybackIssueType, switchPrefix: String, finalPrefix: String, message: String ->
         val currentState = latestState
+        if (!session.canPlay) return@issue
         val failedSources = latestFailedSourceIndexes + currentState.playerSourceIndex
         failedSourceIndexes = failedSources
         val issueToRecord = if (attemptTracker.shouldRecordIssue(currentState.currentPlaybackKey(), issueType)) {
@@ -173,6 +219,7 @@ fun PlayerScreen(
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                actions.updatePlayerPlayIntent(playWhenReady)
                 if (!playWhenReady) {
                     bufferMonitor.onPaused()
                     bufferingPlaybackKey = null
@@ -192,9 +239,9 @@ fun PlayerScreen(
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val episodeIndex = player.currentMediaItemIndex
-                val episodes = latestState.detailMovie
+                val episodes = loadedState.detailMovie
                     ?.playSources
-                    ?.getOrNull(latestState.playerSourceIndex)
+                    ?.getOrNull(loadedState.playerSourceIndex)
                     ?.episodes
                     .orEmpty()
                 if (episodeIndex in episodes.indices && episodeIndex != latestState.playerEpisodeIndex) {
@@ -219,7 +266,7 @@ fun PlayerScreen(
                 val currentActivity = activity ?: return
                 if (currentActivity.requestedOrientation == requestedOrientation) return
 
-                actions.savePlaybackProgress(
+                saveCurrentProgress(
                     positionMs = player.currentPosition,
                     durationMs = player.duration.takeIf { it > 0L } ?: 0L,
                 )
@@ -265,7 +312,7 @@ fun PlayerScreen(
                     }
                     Player.STATE_ENDED -> {
                         bufferingPlaybackKey = null
-                        actions.savePlaybackProgress(
+                        saveCurrentProgress(
                             positionMs = player.currentPosition,
                             durationMs = player.duration.takeIf { it > 0L } ?: 0L,
                         )
@@ -275,7 +322,7 @@ fun PlayerScreen(
         }
         player.addListener(listener)
         onDispose {
-            actions.savePlaybackProgress(
+            saveCurrentProgress(
                 positionMs = player.currentPosition,
                 durationMs = player.duration.takeIf { it > 0L } ?: 0L,
             )
@@ -285,6 +332,7 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(state.playerSourceIndex, source.episodes) {
+        loadedState = state
         playbackError = null
         bufferingPlaybackKey = null
         bufferMonitor.onMediaChanged()
@@ -296,8 +344,8 @@ fun PlayerScreen(
         )
         player.prepare()
         player.setPlaybackSpeed(state.playerSpeed)
-        player.play()
-        actions.savePlaybackProgress(
+        if (!state.playerPlayWhenReady) session.pause(player) else session.preparePlayback(player)
+        saveCurrentProgress(
             positionMs = state.playerStartPositionMs,
             durationMs = 0L,
         )
@@ -328,7 +376,7 @@ fun PlayerScreen(
     LaunchedEffect(player) {
         while (true) {
             delay(5_000L)
-            actions.savePlaybackProgress(
+            saveCurrentProgress(
                 positionMs = player.currentPosition,
                 durationMs = player.duration.takeIf { it > 0L } ?: 0L,
             )
@@ -365,10 +413,11 @@ fun PlayerScreen(
         if (touchGesture.longPressActive) {
             touchGesture.longPressActive = false
             seekGesturePrompt = null
-            player.setPlaybackSpeed(latestState.playerSpeed)
+            player.setPlaybackSpeed(touchGesture.originalSpeed)
         }
     }
     val scheduleLongPressSpeed = {
+        touchGesture.originalSpeed = player.playbackParameters.speed
         touchGesture.longPressRunnable?.let(touchHandler::removeCallbacks)
         touchGesture.longPressActive = false
         val runnable = Runnable {
@@ -383,18 +432,18 @@ fun PlayerScreen(
         )
     }
     val showPlaybackStatusByTap = {
-        seekGesturePrompt = if (player.isPlaying) "播放中" else "暂停"
-        seekGesturePromptNonce++
+        controlsVisible = !controlsVisible
+        controlsInteraction++
     }
     val togglePlaybackByGesture = {
         cancelLongPressSpeed()
         cancelPendingSingleTap()
-        if (player.isPlaying) {
+        if (player.playWhenReady) {
             bufferMonitor.onPaused()
-            player.pause()
+            session.pause(player)
             seekGesturePrompt = "暂停"
         } else {
-            player.play()
+            session.play(player)
             seekGesturePrompt = "播放"
         }
         seekGesturePromptNonce++
@@ -406,7 +455,7 @@ fun PlayerScreen(
         val targetPosition = player.seekByOffset(deltaMs)
         seekGesturePrompt = "$label  ${formatPlaybackPosition(targetPosition)}"
         seekGesturePromptNonce++
-        actions.savePlaybackProgress(
+        saveCurrentProgress(
             positionMs = targetPosition,
             durationMs = player.duration.takeIf { it > 0L } ?: 0L,
         )
@@ -426,7 +475,7 @@ fun PlayerScreen(
     }
     val finishRemoteSeek = {
         if (remoteKeyState.seekChanged) {
-            actions.savePlaybackProgress(
+            saveCurrentProgress(
                 positionMs = player.currentPosition.coerceAtLeast(0L),
                 durationMs = player.duration.takeIf { it > 0L } ?: 0L,
             )
@@ -438,7 +487,7 @@ fun PlayerScreen(
         val targetIndex = currentIndex + offset
         if (targetIndex in source.episodes.indices) {
             player.seekTo(targetIndex, 0L)
-            player.play()
+            session.play(player)
             val action = if (offset < 0) "上一集" else "下一集"
             seekGesturePrompt = "$action  ${source.episodes[targetIndex].title}"
         } else {
@@ -474,7 +523,21 @@ fun PlayerScreen(
             .focusRequester(playerFocusRequester)
             .onPreviewKeyEvent { event ->
                 val nativeEvent = event.nativeKeyEvent
+                if (controlsVisible) controlsInteraction++
+                if (controlsVisible && nativeEvent.keyCode in listOf(
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                    AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN
+                )) return@onPreviewKeyEvent false
                 when (nativeEvent.keyCode) {
+                    AndroidKeyEvent.KEYCODE_BACK -> {
+                        if (controlsVisible || controlsPanel != PlayerPanel.None) {
+                            if (event.type == KeyEventType.KeyUp) {
+                                if (controlsPanel != PlayerPanel.None) controlsPanel = PlayerPanel.None
+                                else controlsVisible = false
+                            }
+                            true
+                        } else false
+                    }
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT,
                     AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
                     -> {
@@ -503,14 +566,19 @@ fun PlayerScreen(
                     }
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER,
                     AndroidKeyEvent.KEYCODE_ENTER,
-                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                     -> {
+                        if (controlsVisible) false else {
+                            if (event.type == KeyEventType.KeyUp) { controlsVisible = true; controlsInteraction++ }
+                            true
+                        }
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         if (event.type == KeyEventType.KeyUp) togglePlaybackByGesture()
                         true
                     }
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY -> {
                         if (event.type == KeyEventType.KeyUp) {
-                            player.play()
+                            session.play(player)
                             seekGesturePrompt = "播放"
                             seekGesturePromptNonce++
                         }
@@ -519,7 +587,7 @@ fun PlayerScreen(
                     AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
                         if (event.type == KeyEventType.KeyUp) {
                             bufferMonitor.onPaused()
-                            player.pause()
+                            session.pause(player)
                             seekGesturePrompt = "暂停"
                             seekGesturePromptNonce++
                         }
@@ -654,7 +722,7 @@ fun PlayerScreen(
                                     bufferMonitor.onSeekStarted(System.currentTimeMillis())
                                     player.seekTo(touchGesture.seekTargetMs)
                                     seekGesturePromptNonce++
-                                    actions.savePlaybackProgress(
+                                    saveCurrentProgress(
                                         positionMs = touchGesture.seekTargetMs,
                                         durationMs = player.duration.takeIf { it > 0L } ?: 0L,
                                     )
@@ -705,6 +773,37 @@ fun PlayerScreen(
             update = { it.player = player },
             modifier = Modifier.fillMaxSize(),
         )
+        if (controlsVisible) {
+            PlayerControls(
+                title = movie.name, sources = movie.playSources,
+                sourceIndex = state.playerSourceIndex, episodeIndex = player.currentMediaItemIndex.coerceIn(0, source.episodes.lastIndex),
+                positionMs = uiPosition, durationMs = uiDuration, playing = uiPlaying,
+                speed = state.playerSpeed, panel = controlsPanel,
+                onPanel = { controlsPanel = it; controlsInteraction++ },
+                onToggle = { togglePlaybackByGesture(); controlsInteraction++ },
+                onEpisode = { index ->
+                    if (index in source.episodes.indices) {
+                        saveCurrentProgress(player.currentPosition, uiDuration)
+                        player.seekTo(index, 0)
+                        session.play(player)
+                        controlsInteraction++
+                    }
+                },
+                onSource = { index ->
+                    saveCurrentProgress(player.currentPosition, uiDuration)
+                    actions.switchPlayerSource(index, player.currentPosition, player.playWhenReady)
+                    controlsInteraction++
+                },
+                onSpeed = { speed -> player.setPlaybackSpeed(speed); actions.updatePlaybackSpeed(speed); controlsInteraction++ },
+                onSeek = { position ->
+                    bufferMonitor.onSeekStarted(System.currentTimeMillis())
+                    player.seekTo(position)
+                    saveCurrentProgress(position, uiDuration)
+                },
+                onInteraction = { controlsInteraction++ },
+                onScrubbing = { scrubbing = it },
+            )
+        }
         val playbackStatus = playbackError ?: playbackNotice
         if (playbackStatus != null) {
             GesturePrompt(
@@ -885,6 +984,7 @@ private enum class VideoDisplayMode(
 }
 
 private class PlayerTouchGestureState {
+    var originalSpeed: Float = 1f
     var downX: Float = 0f
     var downY: Float = 0f
     var downPositionMs: Long = 0L

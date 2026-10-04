@@ -604,6 +604,8 @@ private fun PlatformLivePlayerScreen(
         }
     }
     val playerFocusRequester = remember { FocusRequester() }
+    val session = rememberPlaybackSession()
+    BindPlaybackSession(session, player)
     var playbackError by remember(stream?.url) { mutableStateOf<String?>(null) }
     var playerState by remember(stream?.url) { mutableIntStateOf(Player.STATE_IDLE) }
     var badgeVisible by remember { mutableStateOf(true) }
@@ -614,6 +616,7 @@ private fun PlatformLivePlayerScreen(
         } else {
             val listener = object : androidx.media3.common.Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
+                    if (!session.canPlay) return
                     playbackError = error.localizedMessage ?: "平台直播播放失败"
                     badgeVisible = true
                     actions.recoverPlatformLiveChannel()
@@ -637,13 +640,13 @@ private fun PlatformLivePlayerScreen(
         badgeVisible = true
         player.setMediaItem(MediaItem.fromUri(stream.url))
         player.prepare()
-        player.play()
+        session.preparePlayback(player)
         delay(PLATFORM_LIVE_BADGE_HIDE_DELAY_MS)
         badgeVisible = false
     }
 
-    LaunchedEffect(playerState, player, stream?.url) {
-        if (player == null || stream == null) return@LaunchedEffect
+    LaunchedEffect(playerState, player, stream?.url, session.canPlay) {
+        if (player == null || stream == null || !session.canPlay) return@LaunchedEffect
         when (playerState) {
             Player.STATE_ENDED -> actions.recoverPlatformLiveChannel()
             Player.STATE_BUFFERING -> {
@@ -679,7 +682,10 @@ private fun PlatformLivePlayerScreen(
                     AndroidKeyEvent.KEYCODE_ENTER,
                     AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                     -> {
-                        if (state.platformLiveError != null) actions.reconnectPlatformLiveChannel()
+                        if (session.interrupted && player != null) {
+                            session.play(player)
+                            actions.reconnectPlatformLiveChannel()
+                        } else if (state.platformLiveError != null) actions.reconnectPlatformLiveChannel()
                         badgeVisible = true
                         true
                     }
@@ -703,6 +709,12 @@ private fun PlatformLivePlayerScreen(
                 update = { it.player = player },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+        if (session.interrupted && player != null) {
+            ControlButton("继续播放", {
+                session.play(player)
+                actions.reconnectPlatformLiveChannel()
+            }, Modifier.align(Alignment.Center))
         }
         if (badgeVisible || state.platformLiveResolving || state.platformLiveError != null) {
             PlatformLivePlayerBadge(

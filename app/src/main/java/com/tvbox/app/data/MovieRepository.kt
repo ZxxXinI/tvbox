@@ -1,4 +1,4 @@
-package com.tvbox.app.data
+﻿package com.tvbox.app.data
 
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
@@ -18,7 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 
 data class MultiSourceSearchUpdate(
@@ -40,6 +40,7 @@ interface MovieRepository {
     suspend fun getMovies(apiLineId: String, page: Int, typeId: Int? = null, keyword: String? = null): PagedMovies
     suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies
     suspend fun getDetail(apiLineId: String, id: Int): Movie?
+    suspend fun getResumeDetail(apiLineId: String, id: Int): Movie? = getDetail(apiLineId, id)
 
     fun searchProgressively(apiLineId: String, page: Int, keyword: String): Flow<MultiSourceSearchUpdate> = flow {
         val result = getMovies(apiLineId = apiLineId, page = page, keyword = keyword)
@@ -146,6 +147,11 @@ class DefaultMovieRepository(
         return getDetailProgressively(apiLineId = apiLineId, id = id).lastOrNull()?.movie
     }
 
+    override suspend fun getResumeDetail(apiLineId: String, id: Int): Movie? = withContext(Dispatchers.IO) {
+        require(apiLines.any { it.id == apiLineId }) { "原影视接口已不可用，请从搜索重新打开影片" }
+        loadPrimaryDetail(apiLineId, id)
+    }
+
     override fun searchProgressively(apiLineId: String, page: Int, keyword: String): Flow<MultiSourceSearchUpdate> = channelFlow {
         val requestedPage = page.coerceAtLeast(1)
         val lines = prioritizedLines(apiLineId)
@@ -165,8 +171,12 @@ class DefaultMovieRepository(
                     var completedNormally = true
                     val result = try {
                         semaphore.withPermit {
-                            withTimeout(SEARCH_TIMEOUT_MS) {
+                            withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
                                 loadMovies(line = line, page = requestedPage, keyword = keyword).movies
+                            } ?: run {
+                                completedNormally = false
+                                sourceHealth.recordFailure(line.id)
+                                emptyList()
                             }
                         }
                     } catch (error: CancellationException) {
@@ -224,9 +234,14 @@ class DefaultMovieRepository(
                         var completedNormally = true
                         val matched = try {
                             semaphore.withPermit {
-                                withTimeout(DETAIL_SOURCE_TIMEOUT_MS) {
-                                    findSameMovie(line, primary.name)?.toLinePlaySource()
+                                val response = withTimeoutOrNull(DETAIL_SOURCE_TIMEOUT_MS) {
+                                    Result.success(findSameMovie(line, primary.name)?.toLinePlaySource())
                                 }
+                                if (response == null) {
+                                    completedNormally = false
+                                    sourceHealth.recordFailure(line.id)
+                                }
+                                response?.getOrThrow()
                             }
                     } catch (error: CancellationException) {
                         throw error

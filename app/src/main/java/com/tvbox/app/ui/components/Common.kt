@@ -69,6 +69,7 @@ fun AppHeader(
     onPlatformLive: () -> Unit = {},
     onSettings: () -> Unit = {},
     showShortcutActions: Boolean = false,
+    firstActionModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -106,14 +107,14 @@ fun AppHeader(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (showShortcutActions) {
-                HeaderActionButton(text = "历史(1)", onClick = onHistory, legacyStyle = true)
+                HeaderActionButton(text = "历史(1)", onClick = onHistory, legacyStyle = true, modifier = firstActionModifier)
                 HeaderActionButton(text = "搜索(2)", onClick = onSearch, legacyStyle = true)
                 HeaderActionButton(text = "推荐(3)", onClick = onAiRecommend, legacyStyle = true)
                 HeaderActionButton(text = "电视(4)", onClick = onLive, legacyStyle = true)
                 HeaderActionButton(text = "直播(5)", onClick = onPlatformLive, legacyStyle = true)
                 HeaderActionButton(text = "设置(6)", onClick = onSettings, legacyStyle = true)
             } else {
-                HeaderActionButton(text = "搜索", onClick = onSearch)
+                HeaderActionButton(text = "搜索", onClick = onSearch, modifier = firstActionModifier)
                 HeaderActionButton(text = "历史", onClick = onHistory)
             }
         }
@@ -628,7 +629,8 @@ fun HistoryItemCard(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = "${item.sourceName} / ${formatPlaybackPosition(item.positionMs)}",
+            text = if (item.durationMs > 0) "${item.sourceName} / ${formatPlaybackPosition(item.positionMs)} / ${item.progressPercent}%"
+                else "${item.sourceName} / 已看到 ${formatPlaybackPosition(item.positionMs)}",
             modifier = Modifier.padding(start = 10.dp, top = 3.dp, end = 10.dp, bottom = 12.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,

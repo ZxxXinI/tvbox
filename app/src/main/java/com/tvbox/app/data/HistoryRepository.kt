@@ -5,6 +5,8 @@ import com.tvbox.app.domain.WatchHistoryItem
 import com.tvbox.app.domain.isBlockedContent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -17,36 +19,37 @@ interface HistoryRepository {
 class SharedHistoryRepository(context: Context) : HistoryRepository {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("watch_history", Context.MODE_PRIVATE)
+    private val mutex = Mutex()
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
     override suspend fun getHistory(): List<WatchHistoryItem> = withContext(Dispatchers.IO) {
-        readHistory()
+        mutex.withLock { readHistory() }
     }
 
     override suspend fun saveProgress(item: WatchHistoryItem): List<WatchHistoryItem> = withContext(Dispatchers.IO) {
-        val updatedItem = item.copy(updatedAtEpochMs = System.currentTimeMillis())
-        val updated = buildList {
-            add(updatedItem)
-            readHistory()
-                .filterNot { it.apiLineId == item.apiLineId && it.movieId == item.movieId }
-                .forEach(::add)
-        }.take(MAX_HISTORY_ITEMS)
-
-        prefs.edit()
-            .putString(KEY_ITEMS, json.encodeToString(updated))
-            .apply()
-
-        updated
+        mutex.withLock {
+            val updatedItem = item.copy(updatedAtEpochMs = System.currentTimeMillis())
+            val updated = buildList {
+                add(updatedItem)
+                readHistory()
+                    .filterNot { it.apiLineId == item.apiLineId && it.movieId == item.movieId }
+                    .forEach(::add)
+            }.take(MAX_HISTORY_ITEMS)
+            check(prefs.edit().putString(KEY_ITEMS, json.encodeToString(updated)).commit()) {
+                "Unable to save watch history"
+            }
+            updated
+        }
     }
 
     override suspend fun clearHistory(): List<WatchHistoryItem> = withContext(Dispatchers.IO) {
-        prefs.edit()
-            .remove(KEY_ITEMS)
-            .apply()
-        emptyList()
+        mutex.withLock {
+            check(prefs.edit().remove(KEY_ITEMS).commit()) { "Unable to clear watch history" }
+            emptyList()
+        }
     }
 
     private fun readHistory(): List<WatchHistoryItem> {
