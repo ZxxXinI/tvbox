@@ -266,5 +266,7 @@ app/src/main/java/com/tvbox/app
 
 详细变更见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 🔗 友情链接 / Friends
 
+- [LINUX DO](https://linux.do/) — 新的理想型社区 / A new ideal community
 
