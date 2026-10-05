@@ -1,5 +1,29 @@
 ﻿# Release - 2026-06-25
 
+## 2026-10-05 20:07 - 发布 v1.3.11：自动换线与点播画面
+
+### 文件修改、原因与目的
+
+- `app/build.gradle.kts`：用户确认本地测试没有明显问题，版本升级至 `10311 / 1.3.11`，允许旧版正常 OTA 更新。
+- `app/src/main/java/com/tvbox/app/domain/PlaybackRecovery.kt`、`PlaybackAgent.kt`、`PlaybackBufferMonitor.kt`、`ui/PlayerScreen.kt`、`ui/TvBoxViewModel.kt`：正式纳入 Issue #3 的自动换线进度、对应集数和缓冲恢复提示修复，详细缺陷记录见模块日志。
+- `domain/AppSettings.kt`、`data/AppSettingsRepository.kt`、`ui/PlayerViewport.kt`、`ui/PlayerControls.kt`：纳入点播画面模式持久化和仅播放页的沉浸式窗口；不改变普通直播或独立兼容工程。
+- `app/src/test/java/com/tvbox/app/domain/PlaybackRecoveryTest.kt`、`PlaybackBufferMonitorTest.kt`：纳入此前新增/调整的回归用例；本轮不重复执行测试。
+- `CHANGELOG.md`、`README.md`、`update.json`：同步正式版本、修复说明、下载示例与实际 APK 校验信息，保留现有友情链接。
+- `devLog/README.md`、`devLog/playback-experience.md`、本日志：关联用户验收、构建产物和正式发布流程，主日志中的无关兼容条目不提交。
+
+### 验证与交付
+
+- 用户已自行测试并反馈“没什么问题”；按要求不重复运行单元或设备测试，不操作 ADB。
+- `:app:assembleRelease` 构建通过；包内版本 `10311 / 1.3.11`，最低 API 28，v2 签名校验通过；证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`。
+- APK `TVBox-v1.3.11.apk`：`5001469` 字节；SHA-256 `4ab85ed43e9d5fe91b0a2b525161dd6eaff1334de590a369899b395916848333`。根清单、Release 清单和 README 示例必须与 APK 一致。
+- 仅暂存主工程与对应文档；先推送新标签，创建草稿 Release 并校验附件，公开 Release 后推送 main，使 OTA 不指向尚未公开的附件。
+- 发布地址：[TVBox v1.3.11](https://github.com/ZxxXinI/tvbox/releases/tag/v1.3.11)；完成公开发布后回复 [Issue #3](https://github.com/ZxxXinI/tvbox/issues/3)，说明修复与升级入口，保留 Issue 开放供反馈。
+- 发布流程不覆盖已有 v1.3.10 资产或修改旧标签；不上传 Android 4.4 / Android 6 工程及无关文件。
+
+### 导航
+
+- 主日志：`devLog/README.md`；模块日志：`devLog/playback-experience.md`。
+
 ## 2026-10-04 11:33 - 正式 v1.3.10 同版本重新上传
 
 ### 文件修改及目的

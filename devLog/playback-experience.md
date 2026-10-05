@@ -1,5 +1,66 @@
 ﻿# 播放体验、返回定位与继续观看
 
+## 2026-10-05 20:07 - 用户验收后发布 v1.3.11
+
+- 用户已测试并反馈没有明显问题，授权发布新版本并回复 Issue #3；本轮不重复执行测试或操作 ADB。
+- 两项修复纳入 `10311 / 1.3.11`，构建签名正式包并同步 Release 与 OTA 清单；原本地测试记录保留，不与正式版本混淆。
+- 构建、签名、大小与 SHA-256 详见 `devLog/release.md`；发布后回复 Issue #3，不自动关闭 Issue。
+
+## 2026-10-05 19:13 - 论坛反馈：点播全屏窗口与画面比例选择
+
+### 文件修改、原因与目的
+
+- `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`、`app/src/main/java/com/tvbox/app/data/AppSettingsRepository.kt`：新增本机持久化的自适应、裁剪铺满和拉伸铺满三种画面模式，旧数据缺少该项时默认自适应，不迁移或覆盖其他设置。
+- `app/src/main/java/com/tvbox/app/ui/PlayerViewport.kt`：仅点播页进入沉浸式播放窗口，隐藏状态栏和导航栏，回到前台重新应用，退出时恢复进入前的可见性与行为；将画面模式映射为 Media3 FIT / ZOOM / FILL。
+- `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`：明确播放器窗口匹配可用区域；在 AndroidView 更新阶段实时应用缩放模式，不重建播放器，不影响进度、暂停状态、倍速和播放管家逻辑。
+- `app/src/main/java/com/tvbox/app/ui/PlayerControls.kt`：新增“画面”选择面板，显示当前模式、选中标记及裁剪/变形提示；窄窗口操作栏可横向滚动，保留遥控器及触摸操作。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`：即时更新画面选择并通过现有设置仓库保存。
+- `devLog/README.md`、本日志：关联论坛反馈、实现范围和交付边界。
+
+### 缺陷记录与边界
+
+- 时间：2026-10-05 19:13；现象：论坛用户反馈同盒子播放电影时画面不满屏、四周黑框。
+- 已定位的限制：点播仅固定 FIT 缩放策略，缺少铺满选项；没有发现硬编码视频分辨率或固定尺寸播放窗口。四周黑框的具体设备/片源原因尚无截图或日志，不能声称已复现。
+- 实现：补齐仅播放页的沉浸式窗口和可记忆的画面模式；自适应完整保留比例，裁剪铺满可能丢失边缘，拉伸铺满可能变形，不强制改变所有影片比例。
+- 片源自带黑边不等同于播放器留边，不能保证用这三种模式自动消除；同片源设备实际效果由用户验收。
+- 临时方案：无；参考 [Media3 缩放模式](https://developer.android.com/reference/androidx/media3/ui/AspectRatioFrameLayout) 和 [Android 沉浸式播放窗口](https://developer.android.com/develop/ui/views/layout/immersive)。
+
+### 构建交付
+
+- 用户在 Issue #3 修复后追加论坛反馈修复，并要求自行完成全部功能测试；之后仅构建签名 Release 本地包，不再运行单元或设备测试，不连接或操作 ADB。
+- 保持版本 `10310 / 1.3.10`；不更新正式 Release 附件、OTA 清单，不提交或推送，不修改普通直播、平台直播及独立兼容工程。
+- `:app:assembleRelease` 构建通过；包内版本 `10310 / 1.3.10`，最低 API 28，v2 签名校验通过，使用现有 Release 证书，可覆盖安装保留数据。
+- APK：`app/build/outputs/apk/release/TVBox-v1.3.10-issue3-picture-test.apk`；大小 `5001469` 字节，SHA-256 `c3a15736624dd0067e9b8933320ca8ce3fda63d3c7cf79801fd2eb7fb6b904ab`。
+- APK 同时包含 Issue #3 与画面模式改动；后续未运行功能或单元测试，未安装设备，论坛设备黑框的实际消除效果仍待用户验收。
+- 编码：中文源码/日志使用 UTF-8 BOM 并读回验证；主日志 `devLog/README.md`。
+
+## 2026-10-05 19:07 - Issue #3 自动换线保留进度与缓冲提示恢复
+
+### 文件修改、原因与目的
+
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt`：自动换线必须接收当前播放位置和播放意图，并复用手动换线入口，不再把起播位置置零。
+- `app/src/main/java/com/tvbox/app/domain/PlaybackRecovery.kt`：统一换线目标解析、对应集匹配与空地址校验；使用进度锚点避免未就绪备用源的零进度覆盖原续播位置；区分缓冲提示和真正播放错误。
+- `app/src/main/java/com/tvbox/app/domain/PlaybackAgent.kt`：自动候选按集名匹配对应集，健康评分使用对应集下标，排除缺集及空地址，避免顺序不同的线路切错集。
+- `app/src/main/java/com/tvbox/app/ui/PlayerScreen.kt`：换线前保存实际进度；播放恢复清除缓冲提示和换线通知；媒体身份与当前状态校验阻止旧线路事件再次触发换线，连续失败时保留尝试过的线路集合。
+- `app/src/main/java/com/tvbox/app/domain/PlaybackBufferMonitor.kt`：就绪回调不再触发换线；频繁及累计卡顿在下一次实际缓冲时判断，过期记录清理，保留暂停和拖动保护。
+- `app/src/test/java/com/tvbox/app/domain/PlaybackRecoveryTest.kt`、`PlaybackBufferMonitorTest.kt`：覆盖自动换线进度、顺序不同的集数、缺集/空地址、暂停意图、连续换线零进度、快退/归零以及恢复时不换线和提示清理。
+- `devLog/README.md`、本日志：记录缺陷、修复范围与验证边界。
+
+### 缺陷记录
+
+- 时间：2026-10-05 19:07；反馈：[GitHub Issue #3](https://github.com/ZxxXinI/tvbox/issues/3)。
+- 现象：播放管家自动换线从头播放，已经恢复播放时仍显示缓冲提示。
+- 原因：自动换线起播位置硬编码为零；缓冲失败提示被写入持久错误但就绪时不清理；就绪回调也可能根据刚结束的卡顿触发换线。
+- 修复：统一换线、进度锚点、按集名匹配、缓冲提示类型区分及当前媒体事件校验。
+- 临时方案：无。
+
+### 验证与范围
+
+- 在用户追加“不需要测试”要求前启动的检查已完成：83 项单元测试通过，Debug 构建通过，Android Lint 为 0 error / 54 warning / 3 hint。该结果仅覆盖当时 Issue #3 修复代码，不代表后续论坛画面改动通过测试。
+- 本轮仅处理 Issue #3，不修改画面缩放、版本号、OTA 清单或 Release 附件；不安装、不执行设备功能测试，不关闭或评论 Issue。
+- Android 4.4 / Android 6 独立工程及主日志中已有无关记录保持不变，未提交或推送。
+- 主日志：`devLog/README.md`；模块日志：`devLog/playback-experience.md`。
+
 ## 2026-10-04 09:44 - 继续观看向上返回导航
 
 - 文件：`app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt`、`app/src/main/java/com/tvbox/app/ui/components/Common.kt`。

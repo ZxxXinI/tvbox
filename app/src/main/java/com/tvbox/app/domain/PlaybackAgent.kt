@@ -156,18 +156,21 @@ class PlaybackAgent(
     ): PlaybackAgentDecision {
         val sources = movie.playSources
         if (sources.size <= 1) return PlaybackAgentDecision(nextSourceIndex = null)
+        val episode = sources.getOrNull(currentSourceIndex)?.episodes?.getOrNull(episodeIndex)
+            ?: return PlaybackAgentDecision(nextSourceIndex = null)
+        val episodeIndexes = sources.map { correspondingEpisodeIndex(it, episode.title, episodeIndex) }
 
         val candidates = (1..sources.size)
             .map { offset -> (currentSourceIndex + offset) % sources.size }
             .filter { sourceIndex ->
                 sourceIndex !in blockedSourceIndexes &&
-                    sources[sourceIndex].episodes.getOrNull(episodeIndex)?.url?.isNotBlank() == true
+                    episodeIndexes[sourceIndex]?.let { sources[sourceIndex].episodes[it].url.isNotBlank() } == true
             }
 
         if (candidates.isEmpty()) return PlaybackAgentDecision(nextSourceIndex = null)
 
         val healthyCandidates = candidates.filterNot { sourceIndex ->
-            val key = playbackHealthKey(movie.id, episodeIndex, sources[sourceIndex])
+            val key = playbackHealthKey(movie.id, episodeIndexes[sourceIndex]!!, sources[sourceIndex])
             healthSnapshot.entryFor(key)?.isRecentlyUnhealthy(nowMs, unhealthyCooldownMs) == true
         }
         val selectedIndex = candidates
@@ -176,7 +179,7 @@ class PlaybackAgent(
                     sourceHealthScore(
                         movie = movie,
                         sourceIndex = sourceIndex,
-                        episodeIndex = episodeIndex,
+                        episodeIndex = episodeIndexes[sourceIndex]!!,
                         requestedSourceIndex = currentSourceIndex,
                         healthSnapshot = healthSnapshot,
                         nowMs = nowMs,

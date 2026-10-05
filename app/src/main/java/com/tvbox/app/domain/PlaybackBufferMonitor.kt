@@ -78,17 +78,19 @@ class PlaybackBufferMonitor(
 
         val startedAtMs = currentBufferStartedAtMs ?: return null
         val durationMs = nowMs - startedAtMs
-        if (!currentBufferIssueReported && durationMs >= continuousBufferThresholdMs) {
-            currentBufferIssueReported = true
-            return PlaybackBufferDecision(
-                reason = if (currentBufferIsStartup) {
-                    SlowBufferReason.StartupTooLong
-                } else {
-                    SlowBufferReason.ContinuousBufferTooLong
-                },
-            )
-        }
-        return null
+        if (currentBufferIssueReported) return null
+        pruneCompletedBuffers(nowMs)
+        val reason = when {
+            durationMs >= continuousBufferThresholdMs -> if (currentBufferIsStartup) {
+                SlowBufferReason.StartupTooLong
+            } else SlowBufferReason.ContinuousBufferTooLong
+            !currentBufferFromSeek && completedBuffers.size >= frequentBufferCount -> SlowBufferReason.FrequentBuffering
+            !currentBufferFromSeek && completedBuffers.sumOf { it.durationMs } >= cumulativeBufferThresholdMs ->
+                SlowBufferReason.CumulativeBufferTooLong
+            else -> null
+        } ?: return null
+        currentBufferIssueReported = true
+        return PlaybackBufferDecision(reason)
     }
 
     fun onReady(playWhenReady: Boolean, nowMs: Long): PlaybackBufferReadyResult {
@@ -115,39 +117,23 @@ class PlaybackBufferMonitor(
         }
 
         val durationMs = nowMs - startedAtMs
-        if (durationMs >= continuousBufferThresholdMs) {
-            return PlaybackBufferReadyResult(
-                decision = PlaybackBufferDecision(
-                    reason = if (wasStartup) {
-                        SlowBufferReason.StartupTooLong
-                    } else {
-                        SlowBufferReason.ContinuousBufferTooLong
-                    },
-                ),
-            )
-        }
-
         if (wasStartup) {
             return PlaybackBufferReadyResult(shouldRecordPlaybackSuccess = true)
         }
 
         recordCompletedBuffer(endedAtMs = nowMs, durationMs = durationMs.coerceAtLeast(0L))
-        val windowCount = completedBuffers.size
-        val cumulativeMs = completedBuffers.sumOf { it.durationMs }
-        return when {
-            windowCount >= frequentBufferCount -> PlaybackBufferReadyResult(
-                decision = PlaybackBufferDecision(SlowBufferReason.FrequentBuffering),
-            )
-            cumulativeMs >= cumulativeBufferThresholdMs -> PlaybackBufferReadyResult(
-                decision = PlaybackBufferDecision(SlowBufferReason.CumulativeBufferTooLong),
-            )
-            else -> PlaybackBufferReadyResult(shouldRecordPlaybackSuccess = true)
-        }
+        // Do not switch a source that has just recovered. Historical penalties are
+        // evaluated only if another buffering interval actually begins.
+        return PlaybackBufferReadyResult(shouldRecordPlaybackSuccess = true)
     }
 
     private fun recordCompletedBuffer(endedAtMs: Long, durationMs: Long) {
         completedBuffers.addLast(CompletedBuffer(endedAtMs = endedAtMs, durationMs = durationMs))
-        val earliestKeptAtMs = endedAtMs - frequentBufferWindowMs
+        pruneCompletedBuffers(endedAtMs)
+    }
+
+    private fun pruneCompletedBuffers(nowMs: Long) {
+        val earliestKeptAtMs = nowMs - frequentBufferWindowMs
         while (completedBuffers.peekFirst()?.endedAtMs?.let { it < earliestKeptAtMs } == true) {
             completedBuffers.removeFirst()
         }

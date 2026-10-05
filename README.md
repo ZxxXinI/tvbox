@@ -2,7 +2,7 @@
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
-当前源码版本为 `1.3.10`（`versionCode=10310`）。本版本完善播放控制、继续观看和首页焦点导航，统一点播与电视直播的轻量控制界面；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
+当前源码版本为 `1.3.11`（`versionCode=10311`）。本版本修复播放管家自动换线进度丢失及缓冲提示残留，新增点播全屏和可记忆的画面比例选择；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
 
 > 请确保使用的影视与直播接口具备合法授权。本项目仅提供客户端能力，不内置或托管影视内容。
 
@@ -20,6 +20,7 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 搜索与详情：关键词搜索最多三条来源并行，结果增量去重显示；详情页优先显示主来源，后台补齐播放源和选集。
 - AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，可在设置页用手机扫码配置大模型、模型名和 API Key。
 - 播放器：基于 Media3 ExoPlayer，仅使用其视频解码与画面窗口；TVBox 自行处理遥控器快退/快进、切集、倍速、播放暂停、自动跳下一集和手机播放手势。
+- 画面比例：点播操作栏“画面”支持自适应、裁剪铺满和拉伸铺满，本机记忆并实时生效；播放页隐藏系统栏，退出后恢复。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间；首页显示最近六部未看完的“继续观看”，原来源优先续播，备用线路后台补齐。
 - 返回定位：首页、搜索和历史页面恢复滚动位置与影片焦点；“继续观看”卡片可用方向上返回顶部导航。
 - 电视直播：支持 TVBox 文本与 M3U 直播源，主源不可用时自动尝试备用源；支持分组、左右切台、上下切换线路、数字选台，以及线路异常时自动换线。
@@ -83,7 +84,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.3.10.apk
+adb install -r TVBox-v1.3.11.apk
 ```
 
 ## OTA 更新机制
@@ -98,19 +99,18 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 ```json
 {
-  "versionCode": 10310,
-  "versionName": "1.3.10",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.10/TVBox-v1.3.10.apk",
-  "apkSha256": "cde557c130b3ea1b2045a0ea89f421bc3ef71756584232b5059127bee7701f87",
+  "versionCode": 10311,
+  "versionName": "1.3.11",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.11/TVBox-v1.3.11.apk",
+  "apkSha256": "4ab85ed43e9d5fe91b0a2b525161dd6eaff1334de590a369899b395916848333",
   "apkSize": 5001469,
   "force": false,
   "changelog": [
-    "更新支持系统后台下载与小型进度卡片，校验完成后在前台自动打开安装界面。",
-    "所有播放页保持亮屏，后台或音频中断后由用户手动恢复。",
-    "新增轻量点播控制栏，统一电视(4)控制界面。",
-    "首页增加继续观看，修复备用来源造成的4秒续播超时。",
-    "恢复页面滚动位置与焦点，修复继续观看上键无法返回导航。",
-    "保留数字切集、菜单倍速与连续快进，修复返回键及临时倍速恢复。"
+    "修复播放管家自动换线丢进度，保留当前集数与实际播放位置。",
+    "自动换线匹配对应集，跳过缺集与空地址，连续备用线路失败不丢续播位置。",
+    "恢复播放后清除缓冲提示，不在就绪回调换线，忽略旧线路事件。",
+    "点播增加可记忆的自适应、裁剪铺满和拉伸铺满，切换不重启播放器。",
+    "点播使用沉浸式全屏窗口，退出恢复系统栏，保留遥控器快捷键。"
   ]
 }
 ```
@@ -118,7 +118,7 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 说明：
 
 - `versionCode` 必须大于当前应用版本，才会提示更新。
-- 本次重新上传仍为 `10310 / 1.3.10`；已安装 1.3.10 的用户需手动下载新版 APK 覆盖安装，不会收到同版本 OTA 提示。
+- v1.3.11 可通过旧版应用的 OTA 提示更新，也可手动下载 APK 覆盖安装，保留本机数据。
 - 下载开始后关闭弹窗或按返回不取消任务；后台下载完成时，回到应用后打开安装界面。系统安装仍需用户确认，取消后可从小型进度卡片手动安装；无需悬浮窗权限。
 - `apkUrl` 是 APK 下载地址，目前通过 `gh-proxy.org` 转发 GitHub Release 附件。
 - `apkSha256` 用于下载完成后的完整性校验。
@@ -222,21 +222,21 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src\main app\src\test app\src\debug devLog\home-player-ui.md devLog\playback-experience.md devLog\release.md
 git add -p devLog\README.md
-git commit -m "Release v1.3.10"
-git tag -a v1.3.10 -m "TVBox v1.3.10"
-git push origin v1.3.10
+git commit -m "Release v1.3.11"
+git tag -a v1.3.11 -m "TVBox v1.3.11"
+git push origin v1.3.11
 ```
 
 3. 创建草稿 Release 并上传 APK 与相同版本的 OTA 清单，检查附件完整性。
 
 ```powershell
-gh release create v1.3.10 app\build\outputs\apk\release\TVBox-v1.3.10.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --verify-tag --draft --title "TVBox v1.3.10" --notes-file app\build\outputs\apk\release\release-notes.md
+gh release create v1.3.11 app\build\outputs\apk\release\TVBox-v1.3.11.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --verify-tag --draft --title "TVBox v1.3.11" --notes-file app\build\outputs\apk\release\release-notes.md
 ```
 
 4. 公开 Release 后推送主分支，使 OTA 清单指向已经可下载的附件。
 
 ```powershell
-gh release edit v1.3.10 --repo ZxxXinI/tvbox --draft=false --latest
+gh release edit v1.3.11 --repo ZxxXinI/tvbox --draft=false --latest
 git push origin main
 ```
 

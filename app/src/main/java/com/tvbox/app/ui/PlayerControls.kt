@@ -31,9 +31,10 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.PlaySource
+import com.tvbox.app.domain.VideoScaleMode
 import com.tvbox.app.domain.correspondingEpisodeIndex
 
-internal enum class PlayerPanel { None, Episodes, Sources, Speeds }
+internal enum class PlayerPanel { None, Episodes, Sources, Speeds, Picture }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,18 +48,20 @@ internal fun PlayerControls(
     playing: Boolean,
     speed: Float,
     panel: PlayerPanel,
+    videoScaleMode: VideoScaleMode,
     onPanel: (PlayerPanel) -> Unit,
     onToggle: () -> Unit,
     onEpisode: (Int) -> Unit,
     onSource: (Int) -> Unit,
     onSpeed: (Float) -> Unit,
+    onVideoScale: (VideoScaleMode) -> Unit,
     onSeek: (Long) -> Unit,
     onInteraction: () -> Unit,
     onScrubbing: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val source = sources[sourceIndex]
-    val compact = LocalConfiguration.current.screenWidthDp < 600
+    val compact = LocalConfiguration.current.screenWidthDp < 800
     val buttonScroll = rememberScrollState()
     var progressFocused by remember { mutableStateOf(false) }
     val playFocus = remember { FocusRequester() }
@@ -136,6 +139,7 @@ internal fun PlayerControls(
                     ControlButton("选集", { onPanel(PlayerPanel.Episodes) })
                     ControlButton("线路", { onPanel(PlayerPanel.Sources) })
                     ControlButton("${speed.toString().trimEnd('0').trimEnd('.')}x", { onPanel(PlayerPanel.Speeds) })
+                    ControlButton("画面", { onPanel(PlayerPanel.Picture) })
                 }
             }
         }
@@ -144,12 +148,14 @@ internal fun PlayerControls(
                 PlayerPanel.Episodes -> source.episodes.map { it.title }
                 PlayerPanel.Sources -> sources.map { it.name }
                 PlayerPanel.Speeds -> playerSpeeds.map { "${it}x" }
+                PlayerPanel.Picture -> VideoScaleMode.entries.map { it.displayName }
                 PlayerPanel.None -> emptyList()
             }
             val selected = when (panel) {
                 PlayerPanel.Episodes -> episodeIndex
                 PlayerPanel.Sources -> sourceIndex
                 PlayerPanel.Speeds -> playerSpeeds.indexOf(speed).coerceAtLeast(0)
+                PlayerPanel.Picture -> VideoScaleMode.entries.indexOf(videoScaleMode)
                 PlayerPanel.None -> 0
             }
             val pickerFocus = remember(panel, labels.size) { List(labels.size) { FocusRequester() } }
@@ -162,8 +168,17 @@ internal fun PlayerControls(
                 color = Color(0xFA202020), contentColor = Color.White, shape = RoundedCornerShape(12.dp)) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(when (panel) { PlayerPanel.Episodes -> "选择集数"; PlayerPanel.Sources -> "选择线路"; else -> "播放倍速" }, Modifier.weight(1f))
+                        Text(when (panel) {
+                            PlayerPanel.Episodes -> "选择集数"
+                            PlayerPanel.Sources -> "选择线路"
+                            PlayerPanel.Picture -> "画面比例 · ${videoScaleMode.displayName}"
+                            else -> "播放倍速"
+                        }, Modifier.weight(1f))
                         ControlButton("关闭", { onPanel(PlayerPanel.None) })
+                    }
+                    if (panel == PlayerPanel.Picture) {
+                        Text(videoScaleMode.description, style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(bottom = 12.dp))
                     }
                     LazyVerticalGrid(GridCells.Adaptive(130.dp), state = grid,
                         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -176,6 +191,7 @@ internal fun PlayerControls(
                                     PlayerPanel.Episodes -> onEpisode(index)
                                     PlayerPanel.Sources -> onSource(index)
                                     PlayerPanel.Speeds -> onSpeed(playerSpeeds[index])
+                                    PlayerPanel.Picture -> onVideoScale(VideoScaleMode.entries[index])
                                     else -> Unit
                                 }
                                 onPanel(PlayerPanel.None)

@@ -5,6 +5,7 @@ import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.CustomVideoApiLine
 import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.TvTheme
+import com.tvbox.app.domain.VideoScaleMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -39,6 +40,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
                 ?: AppSettings().aiApiKey,
             checkUpdatesOnStartup = prefs.getBoolean(KEY_CHECK_UPDATES_ON_STARTUP, true),
             playbackAgentAutoSwitchEnabled = prefs.getBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, true),
+            videoScaleMode = VideoScaleMode.fromStorageKey(prefs.getString(KEY_VIDEO_SCALE_MODE, null)),
         )
     }
 
@@ -53,6 +55,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             .putString(KEY_AI_API_KEY, settings.aiApiKey)
             .putBoolean(KEY_CHECK_UPDATES_ON_STARTUP, settings.checkUpdatesOnStartup)
             .putBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, settings.playbackAgentAutoSwitchEnabled)
+            .putString(KEY_VIDEO_SCALE_MODE, settings.videoScaleMode.storageKey)
             .apply()
         settings
     }
@@ -74,5 +77,6 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
         const val KEY_AI_API_KEY = "ai_api_key"
         const val KEY_CHECK_UPDATES_ON_STARTUP = "check_updates_on_startup"
         const val KEY_PLAYBACK_AGENT_AUTO_SWITCH = "playback_agent_auto_switch"
+        const val KEY_VIDEO_SCALE_MODE = "video_scale_mode"
     }
 }
