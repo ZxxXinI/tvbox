@@ -39,7 +39,7 @@ class PlaybackBufferMonitorTest {
     }
 
     @Test
-    fun continuousBufferOverThresholdReportsSlowBufferAfterReady() {
+    fun continuousBufferThatHasRecoveredDoesNotTriggerLateSwitch() {
         val monitor = monitor()
         monitor.onBuffering(playWhenReady = true, nowMs = 0L)
         monitor.onReady(playWhenReady = true, nowMs = 1_000L)
@@ -47,12 +47,12 @@ class PlaybackBufferMonitorTest {
         monitor.onBuffering(playWhenReady = true, nowMs = 10_000L)
         val result = monitor.onReady(playWhenReady = true, nowMs = 15_100L)
 
-        assertEquals(SlowBufferReason.ContinuousBufferTooLong, result.decision?.reason)
-        assertFalse(result.shouldRecordPlaybackSuccess)
+        assertNull(result.decision)
+        assertTrue(result.shouldRecordPlaybackSuccess)
     }
 
     @Test
-    fun frequentShortBuffersReportSlowBuffer() {
+    fun frequentShortBuffersSwitchOnlyWhenBufferingAgain() {
         val monitor = monitor()
         monitor.onBuffering(playWhenReady = true, nowMs = 0L)
         monitor.onReady(playWhenReady = true, nowMs = 500L)
@@ -67,12 +67,14 @@ class PlaybackBufferMonitorTest {
         monitor.onBuffering(playWhenReady = true, nowMs = 30_000L)
         val result = monitor.onReady(playWhenReady = true, nowMs = 31_000L)
 
-        assertEquals(SlowBufferReason.FrequentBuffering, result.decision?.reason)
-        assertFalse(result.shouldRecordPlaybackSuccess)
+        assertNull(result.decision)
+        assertTrue(result.shouldRecordPlaybackSuccess)
+        assertEquals(SlowBufferReason.FrequentBuffering,
+            monitor.onBuffering(playWhenReady = true, nowMs = 40_000L)?.reason)
     }
 
     @Test
-    fun cumulativeShortBuffersReportSlowBuffer() {
+    fun cumulativeShortBuffersSwitchOnlyWhenBufferingAgain() {
         val monitor = PlaybackBufferMonitor(
             continuousBufferThresholdMs = 5_000L,
             seekGraceMs = 3_000L,
@@ -88,7 +90,9 @@ class PlaybackBufferMonitorTest {
         monitor.onBuffering(playWhenReady = true, nowMs = 20_000L)
         val result = monitor.onReady(playWhenReady = true, nowMs = 24_100L)
 
-        assertEquals(SlowBufferReason.CumulativeBufferTooLong, result.decision?.reason)
+        assertNull(result.decision)
+        assertEquals(SlowBufferReason.CumulativeBufferTooLong,
+            monitor.onBuffering(playWhenReady = true, nowMs = 30_000L)?.reason)
     }
 
     @Test
@@ -164,5 +168,50 @@ class PlaybackBufferMonitorTest {
 
         assertNull(result.decision)
         assertFalse(result.shouldRecordPlaybackSuccess)
+    }
+
+    @Test
+    fun startupRecoveredAfterThresholdDoesNotTriggerLateSwitch() {
+        val monitor = monitor()
+        monitor.onBuffering(true, 0)
+        val result = monitor.onReady(true, 6_000)
+        assertNull(result.decision)
+        assertTrue(result.shouldRecordPlaybackSuccess)
+    }
+
+    @Test
+    fun alreadyReportedTimeoutIsNotReportedAgainOnRecovery() {
+        val monitor = monitor()
+        monitor.onBuffering(true, 0)
+        assertEquals(SlowBufferReason.StartupTooLong, monitor.onBuffering(true, 5_000)?.reason)
+        assertNull(monitor.onBuffering(true, 5_100))
+        assertNull(monitor.onReady(true, 6_000).decision)
+    }
+
+    @Test
+    fun previousShortBuffersExpireBeforeTheNextBuffer() {
+        val monitor = monitor()
+        monitor.onReady(true, 0)
+        repeat(3) { index ->
+            val time = (index + 1) * 10_000L
+            monitor.onBuffering(true, time)
+            monitor.onReady(true, time + 1_000)
+        }
+        assertNull(monitor.onBuffering(true, 100_000))
+    }
+
+    @Test
+    fun seekAndPauseDoNotTriggerDeferredFrequentBufferSwitch() {
+        val monitor = monitor()
+        monitor.onReady(true, 0)
+        repeat(3) { index ->
+            val time = (index + 1) * 10_000L
+            monitor.onBuffering(true, time)
+            monitor.onReady(true, time + 1_000)
+        }
+        assertNull(monitor.onBuffering(false, 32_000))
+        monitor.onSeekStarted(33_000)
+        assertNull(monitor.onBuffering(true, 34_000))
+        assertNull(monitor.onReady(true, 40_000).decision)
     }
 }

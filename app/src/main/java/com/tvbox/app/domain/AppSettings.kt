@@ -12,7 +12,20 @@ data class AppSettings(
     val aiApiKey: String = "",
     val checkUpdatesOnStartup: Boolean = true,
     val playbackAgentAutoSwitchEnabled: Boolean = true,
+    val videoScaleMode: VideoScaleMode = VideoScaleMode.Fit,
 )
+
+enum class VideoScaleMode(val storageKey: String, val displayName: String, val description: String) {
+    Fit("fit", "自适应", "保持原始比例并完整显示；影片与屏幕比例不同时可能留黑边。"),
+    Zoom("zoom", "裁剪铺满", "保持原始比例铺满屏幕；画面边缘可能被裁剪。"),
+    Fill("fill", "拉伸铺满", "铺满屏幕并完整显示；人物和画面比例可能变形。"),
+    ;
+
+    companion object {
+        fun fromStorageKey(value: String?): VideoScaleMode =
+            entries.firstOrNull { it.storageKey == value } ?: Fit
+    }
+}
 
 enum class TvTheme(
     val storageKey: String,

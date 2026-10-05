@@ -549,6 +549,12 @@ class TvBoxViewModel(
         _state.update { it.copy(appSettings = settings) }
     }
 
+    fun updateVideoScaleMode(mode: com.tvbox.app.domain.VideoScaleMode) {
+        val settings = _state.value.appSettings.copy(videoScaleMode = mode)
+        saveSettings(settings)
+        _state.update { it.copy(appSettings = settings) }
+    }
+
     fun updateAiProvider(providerId: String) {
         val provider = AiProviders.find(providerId)
         val settings = _state.value.appSettings.copy(
@@ -1194,6 +1200,8 @@ class TvBoxViewModel(
 
     fun switchToNextPlayableSource(
         blockedSourceIndexes: Set<Int>,
+        positionMs: Long,
+        playWhenReady: Boolean,
         issueType: PlaybackIssueType? = null,
         autoTriggered: Boolean = true,
     ): PlaybackAgentDecision {
@@ -1214,13 +1222,8 @@ class TvBoxViewModel(
         )
         val nextSourceIndex = decision.nextSourceIndex ?: return decision
 
-        _state.update {
-            it.copy(
-                selectedSourceIndex = nextSourceIndex,
-                selectedEpisodeIndex = it.playerEpisodeIndex,
-                playerSourceIndex = nextSourceIndex,
-                playerStartPositionMs = 0L,
-            )
+        if (!switchPlayerSource(nextSourceIndex, positionMs, playWhenReady)) {
+            return PlaybackAgentDecision(nextSourceIndex = null)
         }
         return decision
     }
@@ -1524,19 +1527,17 @@ class TvBoxViewModel(
     fun switchPlayerSource(index: Int, positionMs: Long, playWhenReady: Boolean): Boolean {
         val current = _state.value
         val movie = current.detailMovie ?: return false
-        val episode = movie.playSources.getOrNull(current.playerSourceIndex)
-            ?.episodes?.getOrNull(current.playerEpisodeIndex) ?: return false
-        val next = movie.playSources.getOrNull(index) ?: return false
-        val episodeIndex = com.tvbox.app.domain.correspondingEpisodeIndex(next, episode.title, current.playerEpisodeIndex)
-            ?: return false
+        val target = com.tvbox.app.domain.resolvePlaybackSourceSwitch(
+            movie, current.playerSourceIndex, current.playerEpisodeIndex, index, positionMs, playWhenReady,
+        ) ?: return false
         _state.update {
             it.copy(
-                playerSourceIndex = index,
-                selectedSourceIndex = index,
-                playerEpisodeIndex = episodeIndex,
-                selectedEpisodeIndex = episodeIndex,
-                playerStartPositionMs = positionMs.coerceAtLeast(0),
-                playerPlayWhenReady = playWhenReady,
+                playerSourceIndex = target.sourceIndex,
+                selectedSourceIndex = target.sourceIndex,
+                playerEpisodeIndex = target.episodeIndex,
+                selectedEpisodeIndex = target.episodeIndex,
+                playerStartPositionMs = target.positionMs,
+                playerPlayWhenReady = target.playWhenReady,
             )
         }
         return true

@@ -54,13 +54,14 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.tvbox.app.domain.PlaybackAgentDecision
 import com.tvbox.app.domain.PlaybackAttemptTracker
 import com.tvbox.app.domain.PlaybackBufferDecision
 import com.tvbox.app.domain.PlaybackBufferMonitor
 import com.tvbox.app.domain.PlaybackIssueType
+import com.tvbox.app.domain.PlaybackIssueNotice
+import com.tvbox.app.domain.PlaybackResumeAnchor
 import com.tvbox.app.domain.SlowBufferReason
 import com.tvbox.app.ui.components.ErrorState
 import kotlinx.coroutines.delay
@@ -87,6 +88,7 @@ fun PlayerScreen(
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    FullscreenWhilePlayingPageVisible(activity)
     val isTelevision = remember(context) { context.isTelevision() }
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -101,8 +103,14 @@ fun PlayerScreen(
     }
     val session = rememberPlaybackSession()
     var loadedState by remember { mutableStateOf(state) }
+    val resumeAnchor = remember { PlaybackResumeAnchor() }
+    fun isCurrentPlayback(): Boolean = player.currentMediaItem?.mediaId?.let {
+        it == actions.state.value.currentPlaybackKey()
+    } == true
     fun saveCurrentProgress(positionMs: Long, durationMs: Long) {
-        actions.savePlaybackProgress(positionMs, durationMs,
+        val position = if (player.playbackState == Player.STATE_READY) positionMs
+            else resumeAnchor.positionForFailure(positionMs)
+        actions.savePlaybackProgress(position, durationMs,
             loadedState.copy(playerEpisodeIndex = player.currentMediaItemIndex.coerceAtLeast(0)))
     }
     BindPlaybackSession(session, player) {
@@ -125,6 +133,9 @@ fun PlayerScreen(
     }
     LaunchedEffect(player) {
         while (true) {
+            if (isCurrentPlayback() && player.playbackState == Player.STATE_READY) {
+                resumeAnchor.update(player.currentPosition)
+            }
             uiPosition = player.currentPosition.coerceAtLeast(0)
             uiDuration = player.duration.takeIf { it > 0 } ?: 0
             uiPlaying = player.playWhenReady
@@ -149,7 +160,7 @@ fun PlayerScreen(
     }
     val remoteKeyState = remember { PlayerRemoteKeyState() }
     var videoDisplayMode by remember { mutableStateOf(VideoDisplayMode.Unknown) }
-    var playbackError by remember { mutableStateOf<String?>(null) }
+    var playbackIssue by remember { mutableStateOf<PlaybackIssueNotice?>(null) }
     var seekGesturePrompt by remember { mutableStateOf<String?>(null) }
     var seekGesturePromptNonce by remember { mutableIntStateOf(0) }
     var playbackNotice by remember { mutableStateOf<String?>(null) }
@@ -157,16 +168,17 @@ fun PlayerScreen(
     val attemptTracker = remember { PlaybackAttemptTracker() }
     var bufferingPlaybackKey by remember { mutableStateOf<String?>(null) }
     var bufferingCheckNonce by remember { mutableIntStateOf(0) }
-    var failedSourceIndexes by remember(movie.id, state.playerEpisodeIndex) {
+    var failedSourceIndexes by remember(movie.apiLineId, movie.id) {
         mutableStateOf(emptySet<Int>())
     }
     val latestState by rememberUpdatedState(state)
-    val latestFailedSourceIndexes by rememberUpdatedState(failedSourceIndexes)
 
     val handlePlaybackIssue = issue@ { issueType: PlaybackIssueType, switchPrefix: String, finalPrefix: String, message: String ->
-        val currentState = latestState
-        if (!session.canPlay) return@issue
-        val failedSources = latestFailedSourceIndexes + currentState.playerSourceIndex
+        val currentState = actions.state.value
+        if (!session.canPlay || !isCurrentPlayback()) return@issue
+        val resumePosition = resumeAnchor.positionForFailure(player.currentPosition)
+        saveCurrentProgress(resumePosition, player.duration.takeIf { it > 0 } ?: 0)
+        val failedSources = failedSourceIndexes + currentState.playerSourceIndex
         failedSourceIndexes = failedSources
         val issueToRecord = if (attemptTracker.shouldRecordIssue(currentState.currentPlaybackKey(), issueType)) {
             issueType
@@ -175,22 +187,25 @@ fun PlayerScreen(
         }
         val decision = actions.switchToNextPlayableSource(
             blockedSourceIndexes = failedSources,
+            positionMs = resumePosition,
+            playWhenReady = player.playWhenReady,
             issueType = issueToRecord,
             autoTriggered = true,
         )
         if (decision.switched) {
             bufferingPlaybackKey = null
-            playbackError = null
+            playbackIssue = null
             playbackNotice = decision.toPlaybackNotice(switchPrefix)
         } else {
             playbackNotice = null
-            playbackError = if (!currentState.appSettings.playbackAgentAutoSwitchEnabled) {
+            val errorMessage = if (!currentState.appSettings.playbackAgentAutoSwitchEnabled) {
                 "$message（播放管家自动换线已关闭）"
             } else if (currentState.detailMovie?.playSources.orEmpty().size > 1) {
                 "$finalPrefix：$message"
             } else {
                 message
             }
+            playbackIssue = PlaybackIssueNotice(issueType, errorMessage)
         }
     }
 
@@ -209,6 +224,7 @@ fun PlayerScreen(
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                if (player.playerError != error) return
                 val message = error.localizedMessage ?: "播放失败"
                 handlePlaybackIssue(
                     PlaybackIssueType.Error,
@@ -219,6 +235,7 @@ fun PlayerScreen(
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!isCurrentPlayback() || player.playWhenReady != playWhenReady) return
                 actions.updatePlayerPlayIntent(playWhenReady)
                 if (!playWhenReady) {
                     bufferMonitor.onPaused()
@@ -232,19 +249,32 @@ fun PlayerScreen(
                 reason: Int,
             ) {
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    if (loadedState.playerSourceIndex != actions.state.value.playerSourceIndex ||
+                        loadedState.copy(playerEpisodeIndex = player.currentMediaItemIndex).currentPlaybackKey() !=
+                        player.currentMediaItem?.mediaId) return
+                    resumeAnchor.update(newPosition.positionMs)
                     bufferMonitor.onSeekStarted(System.currentTimeMillis())
                     bufferingPlaybackKey = null
                 }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val currentState = actions.state.value
+                if (loadedState.playerSourceIndex != currentState.playerSourceIndex ||
+                    loadedState.detailMovie?.apiLineId != currentState.detailMovie?.apiLineId ||
+                    loadedState.detailMovie?.id != currentState.detailMovie?.id) return
                 val episodeIndex = player.currentMediaItemIndex
+                if (loadedState.copy(playerEpisodeIndex = episodeIndex).currentPlaybackKey() != mediaItem?.mediaId) return
                 val episodes = loadedState.detailMovie
                     ?.playSources
                     ?.getOrNull(loadedState.playerSourceIndex)
                     ?.episodes
                     .orEmpty()
-                if (episodeIndex in episodes.indices && episodeIndex != latestState.playerEpisodeIndex) {
+                if (episodeIndex in episodes.indices && episodeIndex != currentState.playerEpisodeIndex) {
+                    resumeAnchor.update(player.currentPosition)
+                    failedSourceIndexes = emptySet()
+                    playbackIssue = null
+                    playbackNotice = null
                     bufferingPlaybackKey = null
                     bufferMonitor.onMediaChanged()
                     actions.syncPlayerEpisode(episodeIndex)
@@ -274,14 +304,8 @@ fun PlayerScreen(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                val currentState = latestState
-                val currentSource = currentState.detailMovie
-                    ?.playSources
-                    ?.getOrNull(currentState.playerSourceIndex)
-                val currentEpisode = currentSource
-                    ?.episodes
-                    ?.getOrNull(currentState.playerEpisodeIndex)
-                    ?: return
+                if (!isCurrentPlayback() || player.playbackState != playbackState) return
+                val currentState = actions.state.value
                 when (playbackState) {
                     Player.STATE_BUFFERING -> {
                         val decision = bufferMonitor.onBuffering(
@@ -297,13 +321,15 @@ fun PlayerScreen(
                     }
                     Player.STATE_READY -> {
                         bufferingPlaybackKey = null
+                        resumeAnchor.update(player.currentPosition)
+                        playbackIssue = playbackIssue?.afterReady()
+                        playbackNotice = null
+                        failedSourceIndexes = emptySet()
                         val result = bufferMonitor.onReady(
                             playWhenReady = player.playWhenReady,
                             nowMs = System.currentTimeMillis(),
                         )
-                        if (result.decision != null) {
-                            handleBufferDecision(result.decision)
-                        } else if (
+                        if (
                             result.shouldRecordPlaybackSuccess &&
                             attemptTracker.shouldRecordSuccess(currentState.currentPlaybackKey())
                         ) {
@@ -333,12 +359,16 @@ fun PlayerScreen(
 
     LaunchedEffect(state.playerSourceIndex, source.episodes) {
         loadedState = state
-        playbackError = null
+        resumeAnchor.update(state.playerStartPositionMs)
+        playbackIssue = null
         bufferingPlaybackKey = null
         bufferMonitor.onMediaChanged()
         attemptTracker.onPlaybackChanged(state.currentPlaybackKey())
         player.setMediaItems(
-            source.episodes.map { item -> MediaItem.fromUri(item.url) },
+            source.episodes.mapIndexed { index, item ->
+                MediaItem.Builder().setUri(item.url)
+                    .setMediaId(state.copy(playerEpisodeIndex = index).currentPlaybackKey().orEmpty()).build()
+            },
             state.playerEpisodeIndex,
             state.playerStartPositionMs,
         )
@@ -362,7 +392,7 @@ fun PlayerScreen(
         delay(PlaybackBufferMonitor.DEFAULT_CONTINUOUS_BUFFER_THRESHOLD_MS)
         if (
             bufferingPlaybackKey == watchedPlaybackKey &&
-            latestState.currentPlaybackKey() == watchedPlaybackKey &&
+            actions.state.value.currentPlaybackKey() == watchedPlaybackKey && isCurrentPlayback() &&
             player.playbackState == Player.STATE_BUFFERING
         ) {
             val decision = bufferMonitor.onBuffering(
@@ -376,6 +406,7 @@ fun PlayerScreen(
     LaunchedEffect(player) {
         while (true) {
             delay(5_000L)
+            if (!isCurrentPlayback()) continue
             saveCurrentProgress(
                 positionMs = player.currentPosition,
                 durationMs = player.duration.takeIf { it > 0L } ?: 0L,
@@ -621,12 +652,13 @@ fun PlayerScreen(
                 val touchSlop = ViewConfiguration.get(viewContext).scaledTouchSlop
                 val doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout().toLong()
                 PlayerView(viewContext).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     this.player = player
                     descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     isFocusable = false
                     isFocusableInTouchMode = false
                     useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    resizeMode = state.appSettings.videoScaleMode.toPlayerResizeMode()
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                     val gestureTouchListener = View.OnTouchListener { _, event ->
                         when (event.actionMasked) {
@@ -770,7 +802,10 @@ fun PlayerScreen(
                     setOnTouchListener(gestureTouchListener)
                 }
             },
-            update = { it.player = player },
+            update = {
+                it.player = player
+                it.resizeMode = state.appSettings.videoScaleMode.toPlayerResizeMode()
+            },
             modifier = Modifier.fillMaxSize(),
         )
         if (controlsVisible) {
@@ -779,6 +814,7 @@ fun PlayerScreen(
                 sourceIndex = state.playerSourceIndex, episodeIndex = player.currentMediaItemIndex.coerceIn(0, source.episodes.lastIndex),
                 positionMs = uiPosition, durationMs = uiDuration, playing = uiPlaying,
                 speed = state.playerSpeed, panel = controlsPanel,
+                videoScaleMode = state.appSettings.videoScaleMode,
                 onPanel = { controlsPanel = it; controlsInteraction++ },
                 onToggle = { togglePlaybackByGesture(); controlsInteraction++ },
                 onEpisode = { index ->
@@ -791,10 +827,11 @@ fun PlayerScreen(
                 },
                 onSource = { index ->
                     saveCurrentProgress(player.currentPosition, uiDuration)
-                    actions.switchPlayerSource(index, player.currentPosition, player.playWhenReady)
+                    actions.switchPlayerSource(index, resumeAnchor.positionForFailure(player.currentPosition), player.playWhenReady)
                     controlsInteraction++
                 },
                 onSpeed = { speed -> player.setPlaybackSpeed(speed); actions.updatePlaybackSpeed(speed); controlsInteraction++ },
+                onVideoScale = { mode -> actions.updateVideoScaleMode(mode); controlsInteraction++ },
                 onSeek = { position ->
                     bufferMonitor.onSeekStarted(System.currentTimeMillis())
                     player.seekTo(position)
@@ -804,11 +841,11 @@ fun PlayerScreen(
                 onScrubbing = { scrubbing = it },
             )
         }
-        val playbackStatus = playbackError ?: playbackNotice
+        val playbackStatus = playbackIssue?.message ?: playbackNotice
         if (playbackStatus != null) {
             GesturePrompt(
                 text = playbackStatus,
-                textColor = if (playbackError != null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                textColor = if (playbackIssue != null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(start = 24.dp, end = 24.dp, bottom = 112.dp),
@@ -858,7 +895,7 @@ private fun TvBoxUiState.currentPlaybackKey(): String? {
     val movie = detailMovie ?: return null
     val source = movie.playSources.getOrNull(playerSourceIndex) ?: return null
     val episode = source.episodes.getOrNull(playerEpisodeIndex) ?: return null
-    return listOf(movie.id, playerSourceIndex, playerEpisodeIndex, episode.url).joinToString("|")
+    return listOf(movie.apiLineId, movie.id, playerSourceIndex, playerEpisodeIndex, episode.url).joinToString("|")
 }
 
 private fun PlaybackBufferDecision.toPlaybackIssueMessages(): PlaybackIssueMessages {
