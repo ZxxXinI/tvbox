@@ -2,6 +2,7 @@
 
 import android.content.Context
 import com.tvbox.app.domain.AppSettings
+import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.domain.CustomVideoApiLine
 import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.TvTheme
@@ -41,6 +42,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             checkUpdatesOnStartup = prefs.getBoolean(KEY_CHECK_UPDATES_ON_STARTUP, true),
             playbackAgentAutoSwitchEnabled = prefs.getBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, true),
             videoScaleMode = VideoScaleMode.fromStorageKey(prefs.getString(KEY_VIDEO_SCALE_MODE, null)),
+            deviceMode = DeviceMode.fromStorageKey(prefs.getString(KEY_DEVICE_MODE, null)),
         )
     }
 
@@ -56,6 +58,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             .putBoolean(KEY_CHECK_UPDATES_ON_STARTUP, settings.checkUpdatesOnStartup)
             .putBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, settings.playbackAgentAutoSwitchEnabled)
             .putString(KEY_VIDEO_SCALE_MODE, settings.videoScaleMode.storageKey)
+            .putString(KEY_DEVICE_MODE, settings.deviceMode.storageKey)
             .apply()
         settings
     }
@@ -78,5 +81,6 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
         const val KEY_CHECK_UPDATES_ON_STARTUP = "check_updates_on_startup"
         const val KEY_PLAYBACK_AGENT_AUTO_SWITCH = "playback_agent_auto_switch"
         const val KEY_VIDEO_SCALE_MODE = "video_scale_mode"
+        const val KEY_DEVICE_MODE = "device_mode"
     }
 }

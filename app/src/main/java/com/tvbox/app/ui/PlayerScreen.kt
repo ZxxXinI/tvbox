@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
-import android.content.res.Configuration
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.KeyEvent as AndroidKeyEvent
@@ -56,6 +55,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.tvbox.app.domain.PlaybackAgentDecision
+import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.domain.PlaybackAttemptTracker
 import com.tvbox.app.domain.PlaybackBufferDecision
 import com.tvbox.app.domain.PlaybackBufferMonitor
@@ -89,7 +89,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     FullscreenWhilePlayingPageVisible(activity)
-    val isTelevision = remember(context) { context.isTelevision() }
+    val isTelevision = state.appSettings.deviceMode == DeviceMode.Television
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
@@ -286,21 +286,11 @@ fun PlayerScreen(
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (!isCurrentPlayback()) return
                 val displayMode = videoSize.toVideoDisplayMode()
                 if (displayMode == VideoDisplayMode.Unknown || displayMode == videoDisplayMode) return
 
                 videoDisplayMode = displayMode
-                if (isTelevision) return
-
-                val requestedOrientation = displayMode.requestedOrientation ?: return
-                val currentActivity = activity ?: return
-                if (currentActivity.requestedOrientation == requestedOrientation) return
-
-                saveCurrentProgress(
-                    positionMs = player.currentPosition,
-                    durationMs = player.duration.takeIf { it > 0L } ?: 0L,
-                )
-                currentActivity.requestedOrientation = requestedOrientation
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -355,6 +345,20 @@ fun PlayerScreen(
             player.removeListener(listener)
             player.release()
         }
+    }
+
+    LaunchedEffect(activity, isTelevision, videoDisplayMode) {
+        val requested = if (isTelevision) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else videoDisplayMode.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        if (activity != null && activity.requestedOrientation != requested) {
+            if (isCurrentPlayback()) {
+                saveCurrentProgress(player.currentPosition, player.duration.takeIf { it > 0 } ?: 0)
+            }
+            activity.requestedOrientation = requested
+        }
+    }
+    DisposableEffect(activity) {
+        onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
     }
 
     LaunchedEffect(state.playerSourceIndex, source.episodes) {
@@ -534,16 +538,13 @@ fun PlayerScreen(
         seekGesturePromptNonce++
     }
 
-    DisposableEffect(touchHandler, player, activity, initialScreenBrightness, isTelevision) {
+    DisposableEffect(touchHandler, player, activity, initialScreenBrightness) {
         onDispose {
             touchGesture.longPressRunnable?.let(touchHandler::removeCallbacks)
             touchGesture.singleTapRunnable?.let(touchHandler::removeCallbacks)
             touchGesture.longPressRunnable = null
             touchGesture.singleTapRunnable = null
             activity?.window?.restoreScreenBrightness(initialScreenBrightness)
-            if (!isTelevision) {
-                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            }
         }
     }
 
@@ -967,11 +968,6 @@ private fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
-}
-
-private fun Context.isTelevision(): Boolean {
-    val deviceType = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
-    return deviceType == Configuration.UI_MODE_TYPE_TELEVISION
 }
 
 private fun VideoSize.toVideoDisplayMode(): VideoDisplayMode {

@@ -23,6 +23,7 @@ import com.tvbox.app.data.PlatformLiveFavoritesRepository
 import com.tvbox.app.data.VideoApiConfigServer
 import com.tvbox.app.domain.AiRecommendationItem
 import com.tvbox.app.domain.AppSettings
+import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppUpdate
@@ -158,6 +159,9 @@ data class TvBoxUiState(
     val updateDownloadProgress: Int? = null,
     val updateDownloadedApkPath: String? = null,
     val updateAutoInstallPath: String? = null,
+    val updateAwaitingInstallPermission: Boolean = false,
+    val updateExporting: Boolean = false,
+    val updateExportMessage: String? = null,
     val updateError: String? = null,
     val appSettings: AppSettings = AppSettings(),
     val playbackHealth: PlaybackHealthSnapshot = PlaybackHealthSnapshot(),
@@ -220,6 +224,8 @@ class TvBoxViewModel(
     private var aiJob: Job? = null
     private var updateJob: Job? = null
     private var updateDownloadJob: Job? = null
+    private var updateInstallStateJob: Job? = null
+    private var settingsWriteJob: Job? = null
     private var aiConfigServer: AiConfigServer? = null
     private var videoApiConfigServer: VideoApiConfigServer? = null
     private val playbackAgent = PlaybackAgent()
@@ -485,17 +491,21 @@ class TvBoxViewModel(
         _state.update {
             it.copy(updateDialogVisible = false, updateDownloading = true,
                 updateDownloadProgress = 0, updateDownloadedApkPath = null,
-                updateAutoInstallPath = null, updateError = null)
+                updateAutoInstallPath = null, updateAwaitingInstallPermission = false, updateError = null,
+                updateExporting = false, updateExportMessage = null)
         }
         updateDownloadJob = viewModelScope.launch {
             try {
+                updateInstallStateJob?.join()
                 val apkFile = appUpdateRepository.downloadUpdate(update) { progress ->
                     _state.update { it.copy(updateDownloadProgress = progress.takeIf { value -> value >= 0 }) }
                 }
                 val autoInstall = appUpdateRepository.shouldAutoInstall(apkFile.absolutePath)
+                val awaitingPermission = appUpdateRepository.isAwaitingInstallPermission(apkFile.absolutePath)
                 _state.update {
                     it.copy(updateDownloading = false, updateDownloadProgress = 100,
                         updateDownloadedApkPath = apkFile.absolutePath,
+                        updateAwaitingInstallPermission = awaitingPermission,
                         updateAutoInstallPath = apkFile.absolutePath.takeIf { autoInstall }, updateError = null)
                 }
             } catch (cancelled: CancellationException) {
@@ -503,7 +513,8 @@ class TvBoxViewModel(
             } catch (error: Throwable) {
                 _state.update {
                     it.copy(updateDownloading = false, updateDownloadProgress = null,
-                        updateDownloadedApkPath = null, updateAutoInstallPath = null, updateError = error.userMessage())
+                        updateDownloadedApkPath = null, updateAutoInstallPath = null,
+                        updateAwaitingInstallPermission = false, updateError = error.userMessage())
                 }
             }
         }
@@ -519,8 +530,79 @@ class TvBoxViewModel(
     }
 
     fun markUpdateInstallPrompted(apkPath: String) {
-        _state.update { it.copy(updateAutoInstallPath = null, updateDialogVisible = false) }
-        viewModelScope.launch { runCatching { appUpdateRepository.markInstallPrompted(apkPath) } }
+        _state.update { it.copy(updateAutoInstallPath = null, updateDialogVisible = false,
+            updateAwaitingInstallPermission = false, updateError = null) }
+        persistUpdateInstallState { appUpdateRepository.markInstallPrompted(apkPath) }
+    }
+
+    fun beginUpdateInstallAttempt(apkPath: String): Boolean {
+        if (_state.value.updateDownloadedApkPath != apkPath || _state.value.updateExporting) return false
+        // Consume only the UI event, not the persistent successful-launch marker.
+        _state.update { it.copy(updateAutoInstallPath = null, updateDialogVisible = false,
+            updateAwaitingInstallPermission = false, updateError = null) }
+        return true
+    }
+
+    fun awaitUpdateInstallPermission(apkPath: String, message: String? = null) {
+        if (_state.value.updateDownloadedApkPath != apkPath) return
+        _state.update { it.copy(updateAutoInstallPath = null, updateAwaitingInstallPermission = true,
+            updateError = message) }
+        persistUpdateInstallState { appUpdateRepository.setAwaitingInstallPermission(apkPath, true) }
+    }
+
+    fun resumeUpdateInstallAfterPermission(apkPath: String) {
+        _state.update {
+            if (it.updateDownloadedApkPath == apkPath && it.updateAwaitingInstallPermission)
+                it.copy(updateAutoInstallPath = apkPath, updateError = null) else it
+        }
+    }
+
+    fun reportUpdateInstallFailure(apkPath: String, message: String, fileMissing: Boolean = false) {
+        _state.update { it.copy(updateAutoInstallPath = null, updateAwaitingInstallPermission = false,
+            updateDownloadedApkPath = if (fileMissing) null else it.updateDownloadedApkPath, updateError = message) }
+        persistUpdateInstallState {
+            if (fileMissing) appUpdateRepository.forgetDownload(apkPath)
+            else appUpdateRepository.setAwaitingInstallPermission(apkPath, false)
+        }
+    }
+
+    fun beginUpdateApkExport(apkPath: String): Boolean {
+        if (_state.value.updateDownloadedApkPath != apkPath || _state.value.updateExporting) return false
+        _state.update { it.copy(updateAutoInstallPath = null, updateAwaitingInstallPermission = false,
+            updateExporting = true, updateExportMessage = null, updateError = null) }
+        persistUpdateInstallState { appUpdateRepository.chooseManualInstall(apkPath) }
+        return true
+    }
+
+    fun cancelUpdateApkExport(message: String = "已取消保存，安装包仍保留") {
+        _state.update { it.copy(updateExporting = false, updateExportMessage = message) }
+    }
+
+    fun saveUpdateApk(apkPath: String, destination: android.net.Uri?) {
+        _state.update { it.copy(updateExporting = true, updateExportMessage = null) }
+        viewModelScope.launch {
+            try {
+                updateInstallStateJob?.join()
+                val location = appUpdateRepository.exportUpdateApk(apkPath, destination)
+                _state.update { it.copy(updateExporting = false,
+                    updateExportMessage = "已保存：$location。请通过文件管理器打开安装") }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                android.util.Log.w("TVBoxUpdate", "Unable to export update APK", error)
+                _state.update { it.copy(updateExporting = false, updateExportMessage = "保存失败：${error.userMessage()}") }
+            }
+        }
+    }
+
+    private fun persistUpdateInstallState(write: suspend () -> Unit) {
+        val previous = updateInstallStateJob
+        updateInstallStateJob = viewModelScope.launch {
+            previous?.join()
+            try { write() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { android.util.Log.w("TVBoxUpdate", "Unable to persist install state", error) }
+        }
     }
 
     fun openHistory() {
@@ -1250,6 +1332,13 @@ class TvBoxViewModel(
         }
     }
 
+    fun updateDeviceMode(mode: DeviceMode) {
+        if (_state.value.appSettings.deviceMode == mode) return
+        val settings = _state.value.appSettings.copy(deviceMode = mode)
+        _state.update { it.copy(appSettings = settings) }
+        saveSettings(settings)
+    }
+
     fun updateTheme(theme: TvTheme) {
         if (_state.value.appSettings.theme == theme) return
         val settings = _state.value.appSettings.copy(theme = theme)
@@ -1917,7 +2006,9 @@ class TvBoxViewModel(
     }
 
     private fun saveSettings(settings: AppSettings) {
-        viewModelScope.launch {
+        val previous = settingsWriteJob
+        settingsWriteJob = viewModelScope.launch {
+            previous?.join()
             runCatching { appSettingsRepository.saveSettings(settings) }
         }
     }
