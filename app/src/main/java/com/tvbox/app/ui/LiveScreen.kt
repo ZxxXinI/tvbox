@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
@@ -79,6 +78,7 @@ import com.tvbox.app.domain.LivePlaybackWatchdog
 import com.tvbox.app.domain.LiveChannel
 import com.tvbox.app.domain.PlaybackBufferDecision
 import com.tvbox.app.domain.PlaybackBufferMonitor
+import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.PageSurface
@@ -128,7 +128,7 @@ private fun LivePlayerScreen(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val activity = remember(context) { context.findActivityForLive() }
-    val isTelevision = remember(context) { context.isTelevisionDeviceForLive() }
+    val isTelevision = state.appSettings.deviceMode == DeviceMode.Television
     val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
     val initialRequestedOrientation = remember(activity) {
         activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -151,7 +151,7 @@ private fun LivePlayerScreen(
     val playbackWatchdog = remember { LivePlaybackWatchdog() }
     var channelListVisible by remember { mutableStateOf(false) }
     var channelListInteraction by remember { mutableIntStateOf(0) }
-    var mobileControlsVisible by remember { mutableStateOf(!isTelevision) }
+    var mobileControlsVisible by remember(isTelevision) { mutableStateOf(!isTelevision) }
     var mobileControlsInteraction by remember { mutableIntStateOf(0) }
     var channelNumberInput by remember { mutableStateOf("") }
     var channelNumberNonce by remember { mutableIntStateOf(0) }
@@ -218,13 +218,10 @@ private fun LivePlayerScreen(
     }
 
     DisposableEffect(activity, initialRequestedOrientation, isTelevision) {
-        if (!isTelevision) {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
+        activity?.requestedOrientation = if (isTelevision) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         onDispose {
-            if (!isTelevision) {
-                activity?.requestedOrientation = initialRequestedOrientation
-            }
+            activity?.requestedOrientation = initialRequestedOrientation
         }
     }
 
@@ -328,14 +325,14 @@ private fun LivePlayerScreen(
         playerFocusRequester.requestFocus()
     }
 
-    LaunchedEffect(channelListVisible, channelListInteraction) {
+    LaunchedEffect(isTelevision, channelListVisible, channelListInteraction) {
         if (!isTelevision || !channelListVisible) return@LaunchedEffect
         delay(CHANNEL_LIST_HIDE_DELAY_MS)
         channelListVisible = false
         playerFocusRequester.requestFocus()
     }
 
-    LaunchedEffect(mobileControlsVisible, mobileControlsInteraction, channelListVisible) {
+    LaunchedEffect(isTelevision, mobileControlsVisible, mobileControlsInteraction, channelListVisible) {
         if (isTelevision || !mobileControlsVisible || channelListVisible) return@LaunchedEffect
         delay(MOBILE_CONTROLS_HIDE_DELAY_MS)
         mobileControlsVisible = false
@@ -364,7 +361,7 @@ private fun LivePlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(playerFocusRequester)
-            .pointerInput(channels.size) {
+            .pointerInput(channels.size, isTelevision) {
                 detectTapGestures(
                     onTap = {
                         if (isTelevision) {
@@ -822,12 +819,6 @@ private fun Context.findActivityForLive(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivityForLive()
     else -> null
-}
-
-private fun Context.isTelevisionDeviceForLive(): Boolean {
-    val deviceType = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
-    return deviceType == Configuration.UI_MODE_TYPE_TELEVISION ||
-        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 }
 
 private const val CHANNEL_LIST_HIDE_DELAY_MS = 2_000L

@@ -13,7 +13,19 @@ data class AppSettings(
     val checkUpdatesOnStartup: Boolean = true,
     val playbackAgentAutoSwitchEnabled: Boolean = true,
     val videoScaleMode: VideoScaleMode = VideoScaleMode.Fit,
+    val deviceMode: DeviceMode = DeviceMode.Television,
 )
+
+enum class DeviceMode(val storageKey: String, val displayName: String, val description: String) {
+    Television("tv", "电视模式", "电视和盒子保持横屏，竖屏短剧在横屏窗口中显示。"),
+    Mobile("mobile", "手机模式", "点播按影片比例切换横竖屏，电视直播使用手机布局。"),
+    ;
+
+    companion object {
+        fun fromStorageKey(value: String?): DeviceMode =
+            entries.firstOrNull { it.storageKey == value } ?: Television
+    }
+}
 
 enum class VideoScaleMode(val storageKey: String, val displayName: String, val description: String) {
     Fit("fit", "自适应", "保持原始比例并完整显示；影片与屏幕比例不同时可能留黑边。"),

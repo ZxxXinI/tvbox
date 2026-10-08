@@ -1,5 +1,30 @@
 ﻿# Release - 2026-06-25
 
+## 2026-10-08 12:01 - 发布 v1.3.12：设备模式与 OTA 兼容
+
+### 文件修改、原因与目的
+
+- `app/build.gradle.kts`：用户验收后明确要求发布 v1.3.12，设置 `versionCode=10312`、`versionName=1.3.12`。
+- `app/src/main/java/com/tvbox/app/domain/AppSettings.kt`、`data/AppSettingsRepository.kt`、`ui/DeviceModeDetection.kt`、`ui/PlayerScreen.kt`、`ui/LiveScreen.kt`、`ui/TvBoxApp.kt`、`ui/TvBoxViewModel.kt`：纳入默认电视模式、本机设备模式选择与短剧横屏修复，用户选择优先于识别参考。
+- `app/src/main/java/com/tvbox/app/MainActivity.kt`、`data/AppUpdateRepository.kt`、`data/UpdateDownloadService.kt`、`data/UpdateApkFiles.kt`、`data/UpdateApkExporter.kt`、`app/src/main/AndroidManifest.xml`：纳入授权续接、备用下载和 APK 保存；缺少系统组件时仍能下载或保存到公共目录。
+- `CHANGELOG.md`、`README.md`、`update.json`：同步版本、手机模式入口、更新说明、下载示例及实际 APK 校验值，保留友情链接。
+- `docs/validation/2026-10-08-ota-download-export.md`：归档此前 5554 定向复查结果及未覆盖分支，避免将有限验证描述为全部设备通过。
+- `devLog/README.md`、`devLog/ota-update.md`、`devLog/playback-experience.md`、本日志：关联开发记录、用户验收和正式发布信息；无关兼容日志保持在工作区。
+
+### 构建与发布校验
+
+- 用户反馈设备模式没有问题并授权发布；沿用此前 5554 下载、安装器拉起及本地保存验证，本轮不重复运行功能/单元测试，不操作 ADB。
+- `:app:assembleRelease` 构建通过（包含构建自带 vital lint）；最低 API 28，包内版本 `10312 / 1.3.12`。
+- `TVBox-v1.3.12.apk`：`5034437` 字节；SHA-256 `54fa16b488d98475137382b2e33d8797a471e341befec1c5b0086b8195db49fe`。
+- v2 签名校验通过，证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`，与已发布版本一致。
+- 发布流程：仅暂存本轮主工程及相关文档，推送新标签，草稿上传 APK 和相同 OTA 清单并校验，公开 Release 后推送 main，核对远端附件与根清单。
+- Release：[TVBox v1.3.12](https://github.com/ZxxXinI/tvbox/releases/tag/v1.3.12)。默认电视模式，手机用户需选择“设置 → 设备模式 → 手机模式”；旧版无法在线更新时可手动覆盖安装。
+- Android 4.4 / Android 6 独立工程、无关文件与日志不纳入提交、推送或附件。
+
+### 导航
+
+- 主日志：`devLog/README.md`；模块日志：`devLog/ota-update.md`、`devLog/playback-experience.md`。
+
 ## 2026-10-05 20:07 - 发布 v1.3.11：自动换线与点播画面
 
 ### 文件修改、原因与目的

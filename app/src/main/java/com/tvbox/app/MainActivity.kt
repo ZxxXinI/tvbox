@@ -2,6 +2,8 @@
 
 import android.Manifest
 import android.content.Intent
+import android.content.ClipData
+import android.util.Log
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -47,9 +49,23 @@ class MainActivity : ComponentActivity() {
         TvBoxViewModelFactory(this)
     }
     private var pendingInstallPermissionAction: InstallPermissionAction? = null
+    private var permissionSettingsOpen = false
+    private var pendingExportApkPath: String? = null
+    private val saveApkLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument(APK_MIME_TYPE)) { uri ->
+        val path = pendingExportApkPath ?: return@registerForActivityResult
+        pendingExportApkPath = null
+        if (uri != null) viewModel.saveUpdateApk(path, uri) else viewModel.cancelUpdateApkExport()
+    }
+    private val exportStoragePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val path = pendingExportApkPath ?: return@registerForActivityResult
+        pendingExportApkPath = null
+        if (granted) viewModel.saveUpdateApk(path, null)
+        else viewModel.cancelUpdateApkExport("未获得存储权限，无法保存到下载目录；安装包仍保留，可重试")
+    }
     private val installPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) {
+        permissionSettingsOpen = false
         val action = pendingInstallPermissionAction ?: return@registerForActivityResult
         pendingInstallPermissionAction = null
         handleInstallPermissionResult(action)
@@ -67,12 +83,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingExportApkPath = savedInstanceState?.getString("pendingExportApk")
         pendingInstallPermissionAction = savedInstanceState?.getString("pendingUpdateApk")
             ?.let { InstallPermissionAction.InstallDownloadedApk(it) }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                viewModel.state.map { it.updateAutoInstallPath }.distinctUntilChanged().collect { path ->
-                    if (path != null) installUpdateApk(path)
+                // Some TV settings apps return without an ActivityResult callback.
+                permissionSettingsOpen = false
+                viewModel.state.map {
+                    it.updateAutoInstallPath to it.updateDownloadedApkPath.takeIf { _ -> it.updateAwaitingInstallPermission }
+                }.distinctUntilChanged().collect { (automatic, awaitingPermission) ->
+                    if (automatic != null) installUpdateApk(automatic)
+                    else if (awaitingPermission != null && canInstallUnknownApps()) installUpdateApk(awaitingPermission)
                 }
             }
         }
@@ -91,6 +113,8 @@ class MainActivity : ComponentActivity() {
                     onStartAiVoiceInput = ::startAiVoiceInput,
                     onStartUpdateDownload = ::startBackgroundUpdateDownload,
                     onInstallUpdate = ::installUpdateApk,
+                    onOpenUpdateSettings = ::openUpdateSystemSettings,
+                    onSaveUpdateApk = ::saveUpdateApk,
                 )
             }
         }
@@ -220,15 +244,43 @@ class MainActivity : ComponentActivity() {
             }
     }
 
+    private fun saveUpdateApk(apkPath: String) {
+        if (!viewModel.beginUpdateApkExport(apkPath)) return
+        pendingInstallPermissionAction = null
+        pendingExportApkPath = apkPath
+        val version = viewModel.state.value.availableUpdate?.versionName.orEmpty()
+            .replace(Regex("[^A-Za-z0-9._-]"), "_")
+        try {
+            saveApkLauncher.launch("TVBox-v$version.apk")
+        } catch (error: Exception) {
+            Log.w("TVBoxUpdate", "No document picker; exporting to public Downloads", error)
+            Toast.makeText(this, "系统没有可用的文件选择器，将保存到下载目录的 TVBox 文件夹", Toast.LENGTH_LONG).show()
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                try { exportStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) }
+                catch (permissionError: Exception) {
+                    Log.w("TVBoxUpdate", "Cannot request legacy export storage permission", permissionError)
+                    pendingExportApkPath = null
+                    viewModel.cancelUpdateApkExport("无法申请保存所需的存储权限，安装包仍保留")
+                }
+            } else {
+                pendingExportApkPath = null
+                viewModel.saveUpdateApk(apkPath, null)
+            }
+        }
+    }
+
     private fun startBackgroundUpdateDownload() {
         viewModel.startUpdateDownload()
     }
 
     private fun installUpdateApk(apkPath: String) {
-        viewModel.markUpdateInstallPrompted(apkPath)
+        if (permissionSettingsOpen && !canInstallUnknownApps()) return
+        if (!viewModel.beginUpdateInstallAttempt(apkPath)) return
         val apkFile = File(apkPath)
-        if (!apkFile.exists()) {
-            Toast.makeText(this, "安装包不存在，请重新下载", Toast.LENGTH_SHORT).show()
+        if (!apkFile.isFile || apkFile.length() == 0L) {
+            pendingInstallPermissionAction = null
+            viewModel.reportUpdateInstallFailure(apkPath, "安装包不存在，请重新下载", fileMissing = true)
             return
         }
         if (!canInstallUnknownApps()) {
@@ -238,71 +290,115 @@ class MainActivity : ComponentActivity() {
             )
             return
         }
+        pendingInstallPermissionAction = null
+        permissionSettingsOpen = false
         openSystemInstaller(apkFile)
     }
 
+    @Suppress("DEPRECATION")
     private fun openSystemInstaller(apkFile: File) {
-        val apkUri = FileProvider.getUriForFile(
-            this,
-            "$packageName.fileprovider",
-            apkFile,
-        )
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, APK_MIME_TYPE)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { startActivity(intent) }
-            .onFailure {
-                Toast.makeText(this, "无法打开系统安装器", Toast.LENGTH_SHORT).show()
-            }
-    }
-
-    private fun requestInstallPermission(action: InstallPermissionAction, message: String) {
-        if (canInstallUnknownApps()) {
-            handleInstallPermissionGranted(action)
+        val apkUri = try {
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
+        } catch (error: Exception) {
+            Log.e("TVBoxUpdate", "Unable to share update APK", error)
+            viewModel.reportUpdateInstallFailure(apkFile.absolutePath, "无法读取安装包，请重新下载", fileMissing = true)
             return
         }
-
-        pendingInstallPermissionAction = action
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        val appPermissionIntent = Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:$packageName"),
-        )
-        runCatching {
-            installPermissionLauncher.launch(appPermissionIntent)
-        }.onFailure {
-            runCatching {
-                installPermissionLauncher.launch(Intent(Settings.ACTION_SECURITY_SETTINGS))
-            }.onFailure {
-                pendingInstallPermissionAction = null
-                Toast.makeText(this, "无法打开安装权限设置，请在系统设置中允许 TVBox 安装未知应用", Toast.LENGTH_LONG).show()
+        for (action in listOf(Intent.ACTION_VIEW, Intent.ACTION_INSTALL_PACKAGE)) {
+            val intent = Intent(action).apply {
+                setDataAndType(apkUri, APK_MIME_TYPE)
+                clipData = ClipData.newRawUri("TVBox update", apkUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try {
+                startActivity(intent)
+                viewModel.markUpdateInstallPrompted(apkFile.absolutePath)
+                return
+            } catch (error: Exception) {
+                Log.w("TVBoxUpdate", "Unable to open installer: $action", error)
             }
         }
+        val message = "无法打开系统安装器，安装包已保留，可重试安装"
+        viewModel.reportUpdateInstallFailure(apkFile.absolutePath, message)
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun openUpdateSystemSettings() {
+        val apkPath = viewModel.state.value.updateDownloadedApkPath ?: return
+        if (permissionSettingsOpen) return
+        requestInstallPermission(InstallPermissionAction.InstallDownloadedApk(apkPath),
+            "请在系统设置中允许 TVBox 安装未知应用，授权后返回即可继续安装", generalSettingsOnly = true)
+    }
+
+    private fun requestInstallPermission(
+        action: InstallPermissionAction,
+        message: String,
+        generalSettingsOnly: Boolean = false,
+    ) {
+        val apkPath = (action as InstallPermissionAction.InstallDownloadedApk).apkPath
+        viewModel.awaitUpdateInstallPermission(apkPath)
+        pendingInstallPermissionAction = action
+        if (canInstallUnknownApps()) {
+            viewModel.resumeUpdateInstallAfterPermission(apkPath)
+            return
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        val packageUri = Uri.parse("package:$packageName")
+        val candidates = if (generalSettingsOnly) listOf(
+            Intent(Settings.ACTION_SETTINGS),
+            Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS),
+            Intent(Settings.ACTION_SECURITY_SETTINGS),
+        ) else listOf(
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, packageUri),
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri),
+            Intent(Settings.ACTION_SECURITY_SETTINGS),
+            Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS),
+            Intent(Settings.ACTION_SETTINGS),
+        )
+        // Try launching directly: package visibility can make resolveActivity unreliable.
+        for (intent in candidates) {
+            try {
+                permissionSettingsOpen = true
+                installPermissionLauncher.launch(intent)
+                Log.i("TVBoxUpdate", "Opened install permission settings: ${intent.action}")
+                return
+            } catch (error: Exception) {
+                permissionSettingsOpen = false
+                Log.w("TVBoxUpdate", "Unable to open permission settings: ${intent.action}", error)
+            }
+        }
+        val failureMessage = "无法打开安装权限设置。安装包已保留，请在系统设置中允许 TVBox 安装未知应用"
+        viewModel.awaitUpdateInstallPermission(apkPath, failureMessage)
+        Toast.makeText(this, failureMessage, Toast.LENGTH_LONG).show()
     }
 
     private fun handleInstallPermissionResult(action: InstallPermissionAction) {
+        val apkPath = (action as InstallPermissionAction.InstallDownloadedApk).apkPath
+        val state = viewModel.state.value
+        if (state.updateDownloadedApkPath != apkPath || !state.updateAwaitingInstallPermission) return
         if (canInstallUnknownApps()) {
-            handleInstallPermissionGranted(action)
+            // The RESUMED collector launches the installer, never this STARTED callback.
+            viewModel.resumeUpdateInstallAfterPermission(apkPath)
             return
         }
 
-        val message = "未获得安装权限，暂不安装更新。"
+        val message = "尚未获得安装授权，安装包已保留。授权后返回应用即可继续安装"
+        viewModel.awaitUpdateInstallPermission(apkPath, message)
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
-    private fun handleInstallPermissionGranted(action: InstallPermissionAction) {
-        when (action) {
-            is InstallPermissionAction.InstallDownloadedApk -> installUpdateApk(action.apkPath)
+    private fun canInstallUnknownApps(): Boolean {
+        return try {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
+        } catch (error: Exception) {
+            Log.w("TVBoxUpdate", "Unable to check unknown-app installation permission", error)
+            false
         }
     }
 
-    private fun canInstallUnknownApps(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("pendingExportApk", pendingExportApkPath)
         val action = pendingInstallPermissionAction as? InstallPermissionAction.InstallDownloadedApk
         outState.putString("pendingUpdateApk", action?.apkPath)
         super.onSaveInstanceState(outState)

@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,6 +82,7 @@ import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.PlaybackHealthSnapshot
 import com.tvbox.app.domain.TvFontScale
+import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.AppNavigationRail
@@ -106,6 +108,8 @@ fun TvBoxApp(
     onStartAiVoiceInput: () -> Unit = {},
     onStartUpdateDownload: () -> Unit = actions::startUpdateDownload,
     onInstallUpdate: (String) -> Unit = {},
+    onOpenUpdateSettings: () -> Unit = {},
+    onSaveUpdateApk: (String) -> Unit = {},
 ) {
     val screenStateHolder = rememberSaveableStateHolder()
     Box(modifier = Modifier.fillMaxSize()) {
@@ -150,11 +154,14 @@ fun TvBoxApp(
             actions = actions,
             onStartUpdateDownload = onStartUpdateDownload,
             onInstallUpdate = onInstallUpdate,
+            onSaveUpdateApk = onSaveUpdateApk,
         )
         UpdateDownloadCard(
             state = state,
             onRetry = onStartUpdateDownload,
             onInstall = onInstallUpdate,
+            onOpenSettings = onOpenUpdateSettings,
+            onSaveApk = onSaveUpdateApk,
             modifier = Modifier.align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
         )
@@ -166,6 +173,8 @@ private fun UpdateDownloadCard(
     state: TvBoxUiState,
     onRetry: () -> Unit,
     onInstall: (String) -> Unit,
+    onOpenSettings: () -> Unit,
+    onSaveApk: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val update = state.availableUpdate ?: return
@@ -189,8 +198,27 @@ private fun UpdateDownloadCard(
                 Text("可继续使用，完成后打开安装界面", style = MaterialTheme.typography.labelSmall,
                     color = Color.White.copy(alpha = 0.65f))
             } else if (state.updateDownloadedApkPath != null) {
-                Text("下载完成", style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { onInstall(state.updateDownloadedApkPath) }) { Text("安装更新", color = Color.White) }
+                Text(if (state.updateAwaitingInstallPermission) "下载完成，等待安装授权" else "下载完成",
+                    style = MaterialTheme.typography.bodySmall)
+                state.updateError?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.8f))
+                }
+                state.updateExportMessage?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.8f))
+                }
+                TextButton(onClick = { onInstall(state.updateDownloadedApkPath) }, enabled = !state.updateExporting) {
+                    Text(when {
+                        state.updateAwaitingInstallPermission -> "授权并安装"
+                        state.updateError != null -> "重试安装"
+                        else -> "安装更新"
+                    }, color = Color.White)
+                }
+                TextButton(onClick = { onSaveApk(state.updateDownloadedApkPath) }, enabled = !state.updateExporting) {
+                    Text(if (state.updateExporting) "正在保存…" else "保存安装包", color = Color.White)
+                }
+                if (state.updateAwaitingInstallPermission) {
+                    TextButton(onClick = onOpenSettings) { Text("系统设置", color = Color.White) }
+                }
             } else {
                 Text(state.updateError.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 2)
                 TextButton(onClick = onRetry) { Text("重新下载", color = Color.White) }
@@ -231,6 +259,7 @@ private fun AppUpdateDialog(
     actions: TvBoxViewModel,
     onStartUpdateDownload: () -> Unit,
     onInstallUpdate: (String) -> Unit,
+    onSaveUpdateApk: (String) -> Unit,
 ) {
     val update = state.availableUpdate ?: return
     if (!state.updateDialogVisible) return
@@ -267,9 +296,13 @@ private fun AppUpdateDialog(
                 }
                 if (downloadedApkPath != null) {
                     Text(
-                        text = "安装包已下载完成，请选择安装更新。",
+                        text = "安装包已下载完成，可直接安装或保存后手动安装。",
                         color = MaterialTheme.colorScheme.primary,
                     )
+                    TextButton(onClick = { onSaveUpdateApk(downloadedApkPath) }, enabled = !state.updateExporting) {
+                        Text(if (state.updateExporting) "正在保存…" else "保存安装包")
+                    }
+                    state.updateExportMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
                 if (state.updateError != null) {
                     Text(
@@ -281,7 +314,7 @@ private fun AppUpdateDialog(
         },
         confirmButton = {
             Button(
-                enabled = !state.updateDownloading,
+                enabled = !state.updateDownloading && !state.updateExporting,
                 onClick = {
                     if (downloadedApkPath != null) {
                         onInstallUpdate(downloadedApkPath)
@@ -293,6 +326,8 @@ private fun AppUpdateDialog(
                 Text(
                     when {
                         state.updateDownloading -> "下载中"
+                        downloadedApkPath != null && state.updateAwaitingInstallPermission -> "授权并安装"
+                        downloadedApkPath != null && state.updateError != null -> "重试安装"
                         downloadedApkPath != null -> "安装更新"
                         state.updateError != null -> "重新下载"
                         else -> "立即更新"
@@ -710,7 +745,7 @@ private fun SettingsScreen(
                         style = MaterialTheme.typography.headlineLarge,
                     )
                     Text(
-                        text = "启动更新检查",
+                        text = "设备模式、外观与播放设置",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -724,6 +759,18 @@ private fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.weight(1f),
             ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsSectionTitle(
+                        title = "设备模式",
+                        subtitle = "默认使用电视模式；手机用户可选择手机模式。设置保存在本机。",
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    DeviceModeSetting(
+                        selectedMode = state.appSettings.deviceMode,
+                        onModeSelect = actions::updateDeviceMode,
+                    )
+                }
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     SettingsSectionTitle(
                         title = "外观",
@@ -1483,6 +1530,28 @@ private fun ThemeSetting(
                     text = if (selectedTheme == theme) "✓ ${theme.displayName}" else theme.displayName,
                     selected = selectedTheme == theme,
                     onClick = { onThemeSelect(theme) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceModeSetting(selectedMode: DeviceMode, onModeSelect: (DeviceMode) -> Unit) {
+    val context = LocalContext.current
+    val detectedMode = remember(context) { context.detectDeviceMode() }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("当前：${selectedMode.displayName}", style = MaterialTheme.typography.titleMedium)
+        Text(selectedMode.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall)
+        Text("系统自动识别：${detectedMode.displayName}。播放行为以你的选择为准。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(DeviceMode.entries, key = { it.storageKey }) { mode ->
+                SettingsActionButton(
+                    text = if (selectedMode == mode) "✓ ${mode.displayName}" else mode.displayName,
+                    selected = selectedMode == mode,
+                    onClick = { onModeSelect(mode) },
                 )
             }
         }
