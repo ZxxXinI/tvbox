@@ -1,5 +1,29 @@
 ﻿# Release - 2026-06-25
 
+## 2026-10-13 11:37 - 发布 v1.3.13：合并搜索输入修复
+
+### 文件修改、原因与目的
+
+- `app/src/main/java/com/tvbox/app/ui/SearchScreen.kt`：通过合并 PR #5 纳入关键词末尾光标修复，保留贡献者提交与作者信息。
+- `app/build.gradle.kts`：版本升级至 `10313 / 1.3.13`，允许旧版收到 OTA 更新。
+- `CHANGELOG.md`、`README.md`、`update.json`：同步本次搜索修复、贡献者、正式版本与实际 APK 校验值；保留此前功能说明及友情链接。
+- `devLog/README.md`、`devLog/home-player-ui.md`、本日志：关联缺陷审查、合并记录与发布结果；主日志中的无关兼容条目保留在本地。
+
+### 构建与发布校验
+
+- 用户授权合并、回复及发布；PR 已合并，合并提交 `37bbbd04b05e3160473343eb2f1ce3eaa8285127`。
+- `:app:assembleRelease` 构建成功（包含构建自带 vital lint）；APK 包内版本 `10313 / 1.3.13`，最低 API 28，目标 API 36。
+- `TVBox-v1.3.13.apk`：`5034437` 字节；SHA-256 `2c69db103a867ed74d28481dcafd5f395f90d87b5cef6d0592ff12e167597edf`。
+- v2 签名和 zipalign 校验通过，签名证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`，与此前正式版一致。
+- 不运行单元或设备功能测试，不操作 ADB，不将作者的本地构建报告描述为本轮实机验证。
+- 发布顺序：核对签名与清单，精确暂存主工程及相关文档，推送标签，草稿上传并校验附件，公开 Release 后推送 main，再核对远端 OTA 清单并回复 PR。
+- Release：[TVBox v1.3.13](https://github.com/ZxxXinI/tvbox/releases/tag/v1.3.13)。旧版可 OTA 更新或手动覆盖安装，保留本机数据。
+- 排除 Android 4.4 / Android 6 独立工程、参考目录和其他无关文件；不修改旧 Release 或旧标签。
+
+### 导航
+
+- 主日志：`devLog/README.md`；模块日志：`devLog/home-player-ui.md`。
+
 ## 2026-10-08 12:01 - 发布 v1.3.12：设备模式与 OTA 兼容
 
 ### 文件修改、原因与目的

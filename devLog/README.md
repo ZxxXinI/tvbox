@@ -1,5 +1,13 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-10-13 11:37 - 合并 PR #5 并发布 v1.3.13：搜索输入光标
+
+- Branch docs: `devLog/home-player-ui.md`、`devLog/release.md`
+- Summary:
+  - 用户授权合并并回复 PR #5，保留贡献者提交；搜索框重新进入时光标位于关键词末尾，正常编辑保留输入状态。
+  - 版本升级至 `10313 / 1.3.13`，构建正式签名包，同步 Release 与 OTA 清单。
+  - 本轮仅执行构建、签名和发布完整性校验，不执行设备或功能测试；无关独立兼容工程及日志不纳入提交。
+
 ### 2026-10-08 12:01 - 发布 v1.3.12：设备模式与 OTA 兼容
 
 - Branch docs: `devLog/release.md`、`devLog/playback-experience.md`、`devLog/ota-update.md`
