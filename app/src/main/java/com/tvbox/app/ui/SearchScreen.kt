@@ -30,8 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.LoadingState
@@ -49,7 +51,11 @@ fun SearchScreen(
     val grid = rememberLazyGridState()
     val returnFocus = rememberReturnFocus()
     var savedQuery by rememberSaveable { mutableStateOf(state.searchQuery) }
+    var fieldValue by remember { mutableStateOf(queryFieldValue(state.searchQuery)) }
     LaunchedEffect(state.searchQuery) {
+        if (fieldValue.text != state.searchQuery) {
+            fieldValue = queryFieldValue(state.searchQuery)
+        }
         if (savedQuery != state.searchQuery) {
             returnFocus.reset()
             grid.scrollToItem(0)
@@ -73,8 +79,11 @@ fun SearchScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedTextField(
-                    value = state.searchQuery,
-                    onValueChange = actions::updateSearchQuery,
+                    value = fieldValue,
+                    onValueChange = {
+                        fieldValue = it
+                        actions.updateSearchQuery(it.text)
+                    },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     label = { Text("影片名称") },
@@ -133,6 +142,12 @@ fun SearchScreen(
         }
     }
 }
+
+// 搜索页重新进入时，String 版输入框会以 TextRange.Zero 重建内部光标，
+// 遥控器只有退格键，光标之后的旧关键词将无法删除；统一用光标在末尾的 TextFieldValue，
+// 每次进入组合都从 searchQuery 重建，光标位置不落盘恢复。
+private fun queryFieldValue(query: String): TextFieldValue =
+    TextFieldValue(query, TextRange(query.length))
 
 @Composable
 private fun SearchActionButton(
