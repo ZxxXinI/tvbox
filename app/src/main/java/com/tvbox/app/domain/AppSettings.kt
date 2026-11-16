@@ -14,6 +14,8 @@ data class AppSettings(
     val playbackAgentAutoSwitchEnabled: Boolean = true,
     val videoScaleMode: VideoScaleMode = VideoScaleMode.Fit,
     val deviceMode: DeviceMode = DeviceMode.Television,
+    val defaultIntroSkipSeconds: Int = 0,
+    val introSkipOverrides: Map<String, Int> = emptyMap(),
 )
 
 enum class DeviceMode(val storageKey: String, val displayName: String, val description: String) {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
@@ -33,8 +35,6 @@ import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.PlaySource
 import com.tvbox.app.domain.VideoScaleMode
 import com.tvbox.app.domain.correspondingEpisodeIndex
-
-internal enum class PlayerPanel { None, Episodes, Sources, Speeds, Picture }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,11 +49,14 @@ internal fun PlayerControls(
     speed: Float,
     panel: PlayerPanel,
     videoScaleMode: VideoScaleMode,
+    defaultIntroSeconds: Int,
+    introSecondsOverride: Int?,
+    onIntroSeconds: (Int?) -> Unit,
     onPanel: (PlayerPanel) -> Unit,
     onToggle: () -> Unit,
     onEpisode: (Int) -> Unit,
     onSource: (Int) -> Unit,
-    onSpeed: (Float) -> Unit,
+    onCycleSpeed: () -> Unit,
     onVideoScale: (VideoScaleMode) -> Unit,
     onSeek: (Long) -> Unit,
     onInteraction: () -> Unit,
@@ -65,9 +68,26 @@ internal fun PlayerControls(
     val buttonScroll = rememberScrollState()
     var progressFocused by remember { mutableStateOf(false) }
     val playFocus = remember { FocusRequester() }
+    val settingsButtonFocus = remember { FocusRequester() }
+    val settingsScroll = rememberScrollState()
+    val settingsFocus = remember { playerSettingsPanels.associateWith { FocusRequester() } }
+    var lastSettingsPanel by remember { mutableStateOf(PlayerPanel.Picture) }
+    var lastBarPanel by remember { mutableStateOf(PlayerPanel.None) }
     var preview by remember { mutableStateOf<Float?>(null) }
     var lastSeekTime by remember { mutableStateOf(Long.MIN_VALUE) }
-    LaunchedEffect(panel) { if (panel == PlayerPanel.None) playFocus.requestFocus() }
+    LaunchedEffect(panel) {
+        if (panel == PlayerPanel.None || panel == PlayerPanel.Settings) {
+            val target = if (panel == PlayerPanel.Settings) settingsFocus.getValue(lastSettingsPanel)
+                else when (lastBarPanel) {
+                    PlayerPanel.Settings -> settingsButtonFocus
+                    else -> playFocus
+                }
+            for (attempt in 0..8) {
+                withFrameNanos { }
+                if (runCatching { target.requestFocus() }.getOrDefault(false)) break
+            }
+        }
+    }
     Box(modifier.fillMaxSize()) {
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -133,36 +153,86 @@ internal fun PlayerControls(
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ControlButton(if (playing) "暂停" else "播放", onToggle, Modifier.focusRequester(playFocus), primary = true)
-                    ControlButton("上一集", { onEpisode(episodeIndex - 1) }, enabled = episodeIndex > 0)
-                    ControlButton("下一集", { onEpisode(episodeIndex + 1) }, enabled = episodeIndex < source.episodes.lastIndex)
+                    ControlButton("上一集(1)", { onEpisode(episodeIndex - 1) }, enabled = episodeIndex > 0)
+                    ControlButton("下一集(3)", { onEpisode(episodeIndex + 1) }, enabled = episodeIndex < source.episodes.lastIndex)
                     if (!compact) Spacer(Modifier.weight(1f))
-                    ControlButton("选集", { onPanel(PlayerPanel.Episodes) })
-                    ControlButton("线路", { onPanel(PlayerPanel.Sources) })
-                    ControlButton("${speed.toString().trimEnd('0').trimEnd('.')}x", { onPanel(PlayerPanel.Speeds) })
-                    ControlButton("画面", { onPanel(PlayerPanel.Picture) })
+                    ControlButton(formatPlaybackSpeed(speed), onCycleSpeed)
+                    ControlButton("设置", {
+                        lastBarPanel = PlayerPanel.Settings
+                        onPanel(PlayerPanel.Settings)
+                    }, Modifier.focusRequester(settingsButtonFocus))
                 }
             }
         }
-        if (panel != PlayerPanel.None) {
+        if (panel == PlayerPanel.Settings) {
+            Surface(
+                modifier = Modifier.align(Alignment.TopEnd)
+                    .width(playerSettingsWidthDp(LocalConfiguration.current.screenWidthDp).dp).fillMaxHeight()
+                    .testTag("player_settings"),
+                color = Color(0xEF101514), contentColor = Color.White, shape = RoundedCornerShape(0.dp),
+            ) {
+                Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(
+                    WindowInsetsSides.Top + WindowInsetsSides.Right + WindowInsetsSides.Bottom))
+                    .padding(horizontal = 12.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
+                        Text("播放设置", style = MaterialTheme.typography.titleMedium)
+                        Text("${playerSettingsPanels.size} 项设置 · 返回键退出", style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.5f))
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
+                    Column(Modifier.weight(1f).verticalScroll(settingsScroll).padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        playerSettingsPanels.forEachIndexed { index, entry ->
+                            val (title, value) = when (entry) {
+                                PlayerPanel.Picture -> "画面" to videoScaleMode.displayName
+                                PlayerPanel.Intro -> "片头" to ((introSecondsOverride ?: defaultIntroSeconds).let {
+                                    if (it == 0) "不跳过" else "${it} 秒"
+                                })
+                                PlayerPanel.Episodes -> "选集" to source.episodes.getOrNull(episodeIndex)?.title.orEmpty()
+                                PlayerPanel.Sources -> "线路" to source.name
+                                else -> error("Not a settings entry")
+                            }
+                            PlaybackSettingsRow(title, value, selected = entry == lastSettingsPanel, onClick = {
+                                lastSettingsPanel = entry
+                                onInteraction()
+                                onPanel(entry)
+                            }, modifier = Modifier.focusRequester(settingsFocus.getValue(entry)).focusProperties {
+                                up = if (index == 0) FocusRequester.Cancel else settingsFocus.getValue(playerSettingsPanels[index - 1])
+                                down = playerSettingsPanels.getOrNull(index + 1)?.let(settingsFocus::getValue) ?: FocusRequester.Cancel
+                                left = FocusRequester.Cancel
+                                right = FocusRequester.Cancel
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        if (panel == PlayerPanel.Intro) {
+            IntroSkipDialog(introSecondsOverride, defaultIntroSeconds, true,
+                onDismiss = { onPanel(PlayerPanel.Settings) }, onSave = onIntroSeconds)
+        }
+        if (panel != PlayerPanel.None && panel != PlayerPanel.Intro && panel != PlayerPanel.Settings) {
             val labels = when (panel) {
                 PlayerPanel.Episodes -> source.episodes.map { it.title }
                 PlayerPanel.Sources -> sources.map { it.name }
-                PlayerPanel.Speeds -> playerSpeeds.map { "${it}x" }
                 PlayerPanel.Picture -> VideoScaleMode.entries.map { it.displayName }
-                PlayerPanel.None -> emptyList()
+                PlayerPanel.None, PlayerPanel.Intro, PlayerPanel.Settings -> emptyList()
             }
             val selected = when (panel) {
                 PlayerPanel.Episodes -> episodeIndex
                 PlayerPanel.Sources -> sourceIndex
-                PlayerPanel.Speeds -> playerSpeeds.indexOf(speed).coerceAtLeast(0)
                 PlayerPanel.Picture -> VideoScaleMode.entries.indexOf(videoScaleMode)
-                PlayerPanel.None -> 0
+                PlayerPanel.None, PlayerPanel.Intro, PlayerPanel.Settings -> 0
             }
-            val pickerFocus = remember(panel, labels.size) { List(labels.size) { FocusRequester() } }
+            val pickerFocus = remember(panel) { mutableMapOf<Int, FocusRequester>() }
+            labels.indices.forEach { pickerFocus.getOrPut(it) { FocusRequester() } }
             val grid = rememberLazyGridState()
             LaunchedEffect(panel) {
                 grid.scrollToItem(selected.coerceIn(0, labels.lastIndex.coerceAtLeast(0)))
-                pickerFocus.getOrNull(selected)?.requestFocus()
+                for (attempt in 0..8) {
+                    withFrameNanos { }
+                    if (runCatching { pickerFocus[selected]?.requestFocus() == true }.getOrDefault(false)) break
+                }
             }
             Surface(Modifier.align(Alignment.Center).fillMaxWidth(0.8f).fillMaxHeight(0.6f),
                 color = Color(0xFA202020), contentColor = Color.White, shape = RoundedCornerShape(12.dp)) {
@@ -172,9 +242,9 @@ internal fun PlayerControls(
                             PlayerPanel.Episodes -> "选择集数"
                             PlayerPanel.Sources -> "选择线路"
                             PlayerPanel.Picture -> "画面比例 · ${videoScaleMode.displayName}"
-                            else -> "播放倍速"
                         }, Modifier.weight(1f))
-                        ControlButton("关闭", { onPanel(PlayerPanel.None) })
+                        ControlButton(if (panel.parentPanel() == PlayerPanel.Settings) "返回设置" else "关闭",
+                            { onPanel(panel.parentPanel()) })
                     }
                     if (panel == PlayerPanel.Picture) {
                         Text(videoScaleMode.description, style = MaterialTheme.typography.bodySmall,
@@ -190,12 +260,10 @@ internal fun PlayerControls(
                                 when (panel) {
                                     PlayerPanel.Episodes -> onEpisode(index)
                                     PlayerPanel.Sources -> onSource(index)
-                                    PlayerPanel.Speeds -> onSpeed(playerSpeeds[index])
                                     PlayerPanel.Picture -> onVideoScale(VideoScaleMode.entries[index])
-                                    else -> Unit
                                 }
-                                onPanel(PlayerPanel.None)
-                            }, Modifier.focusRequester(pickerFocus[index]), enabled)
+                                onPanel(panel.parentPanel())
+                            }, Modifier.focusRequester(pickerFocus.getValue(index)), enabled)
                         }
                     }
                 }
@@ -226,7 +294,7 @@ internal fun ControlButton(
         ),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
     ) {
-        Text(text, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -235,4 +303,3 @@ internal fun formatPlayerTime(ms: Long): String {
     return if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
     else "%d:%02d".format(seconds / 60, seconds % 60)
 }
-private val playerSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)

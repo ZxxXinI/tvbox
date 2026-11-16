@@ -21,8 +21,11 @@ import com.tvbox.app.data.DefaultPlatformLiveRepository
 import com.tvbox.app.data.PlatformLiveRepository
 import com.tvbox.app.data.PlatformLiveFavoritesRepository
 import com.tvbox.app.data.VideoApiConfigServer
+import com.tvbox.app.data.PhoneSearchServer
 import com.tvbox.app.domain.AiRecommendationItem
 import com.tvbox.app.domain.AppSettings
+import com.tvbox.app.domain.introSkipKey
+import com.tvbox.app.domain.withIntroSkipOverride
 import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.ApiLine
@@ -48,6 +51,8 @@ import com.tvbox.app.domain.findBestTitleMatchIndex
 import com.tvbox.app.domain.playbackHealthKey
 import com.tvbox.app.domain.toApiLines
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -126,6 +131,11 @@ data class TvBoxUiState(
     val playerSourceIndex: Int = 0,
     val playerEpisodeIndex: Int = 0,
     val playerStartPositionMs: Long = 0L,
+    val playerCanSkipIntro: Boolean = false,
+    val phoneSearchDialogVisible: Boolean = false,
+    val phoneSearchUrl: String? = null,
+    val phoneSearchError: String? = null,
+    val phoneSearchCompletedNonce: Int = 0,
     val playerSpeed: Float = 1f,
     val playerPlayWhenReady: Boolean = true,
     val liveChannels: List<LiveChannel> = emptyList(),
@@ -228,6 +238,9 @@ class TvBoxViewModel(
     private var settingsWriteJob: Job? = null
     private var aiConfigServer: AiConfigServer? = null
     private var videoApiConfigServer: VideoApiConfigServer? = null
+    private var phoneSearchServer: PhoneSearchServer? = null
+    private var phoneSearchStartJob: Job? = null
+    private var phoneSearchGeneration = 0L
     private val playbackAgent = PlaybackAgent()
 
     init {
@@ -842,6 +855,61 @@ class TvBoxViewModel(
         _state.update { it.copy(searchQuery = query) }
     }
 
+    fun openPhoneSearchDialog() {
+        closePhoneSearchDialog()
+        if (_state.value.screen != TvScreen.Search) return
+        val generation = phoneSearchGeneration
+        _state.update { it.copy(phoneSearchDialogVisible = true) }
+        val server = PhoneSearchServer(viewModelScope,
+            onSubmit = { query ->
+                withContext(Dispatchers.Main.immediate) {
+                    if (generation != phoneSearchGeneration || !_state.value.phoneSearchDialogVisible ||
+                        _state.value.screen != TvScreen.Search || phoneSearchServer?.isSessionActive != true)
+                        "扫码窗口已关闭或过期，请重新扫码。"
+                    else { updateSearchQuery(query); submitSearch(); null }
+                }
+            },
+            onDelivered = {
+                withContext(Dispatchers.Main.immediate) {
+                    if (generation == phoneSearchGeneration) {
+                        _state.update { it.copy(phoneSearchCompletedNonce = it.phoneSearchCompletedNonce + 1) }
+                        closePhoneSearchDialog()
+                    }
+                }
+            },
+            onExpired = {
+                withContext(Dispatchers.Main.immediate) {
+                    if (generation == phoneSearchGeneration) _state.update {
+                        it.copy(phoneSearchUrl = null, phoneSearchError = "二维码已过期，请重新生成。")
+                    }
+                }
+            },
+        )
+        phoneSearchServer = server
+        phoneSearchStartJob = viewModelScope.launch {
+            try {
+                val session = withContext(Dispatchers.IO) { server.start() }
+                if (generation != phoneSearchGeneration) server.stop()
+                else _state.update { it.copy(phoneSearchUrl = session.url) }
+            } catch (cancelled: CancellationException) {
+                server.stop()
+                throw cancelled
+            } catch (error: Exception) {
+                server.stop()
+                if (generation == phoneSearchGeneration) _state.update { it.copy(phoneSearchError = error.userMessage()) }
+            }
+        }
+    }
+
+    fun closePhoneSearchDialog() {
+        phoneSearchGeneration++
+        phoneSearchStartJob?.cancel()
+        phoneSearchStartJob = null
+        phoneSearchServer?.stop()
+        phoneSearchServer = null
+        _state.update { it.copy(phoneSearchDialogVisible = false, phoneSearchUrl = null, phoneSearchError = null) }
+    }
+
     fun updateAiQuery(query: String) {
         _state.update { it.copy(aiQuery = query, aiVoiceListening = false, aiError = null) }
     }
@@ -1175,6 +1243,7 @@ class TvBoxViewModel(
                 playerSourceIndex = selectedSourceIndex,
                 playerEpisodeIndex = selectedEpisodeIndex,
                 playerStartPositionMs = startPositionMs.coerceAtLeast(0L),
+                playerCanSkipIntro = startPositionMs <= 0L,
                 playerPlayWhenReady = true,
             )
         }
@@ -1218,6 +1287,7 @@ class TvBoxViewModel(
                         selectedSourceIndex = sourceIndex, selectedEpisodeIndex = episodeIndex,
                         playerSourceIndex = sourceIndex, playerEpisodeIndex = episodeIndex,
                         playerStartPositionMs = item.positionMs.coerceAtLeast(0L),
+                        playerCanSkipIntro = false,
                         playerPlayWhenReady = true, screen = TvScreen.Player,
                     )
                 }
@@ -1261,6 +1331,7 @@ class TvBoxViewModel(
                     selectedEpisodeIndex = nextEpisodeIndex,
                     playerEpisodeIndex = nextEpisodeIndex,
                     playerStartPositionMs = 0L,
+                    playerCanSkipIntro = true,
                 )
             }
         }
@@ -1275,6 +1346,7 @@ class TvBoxViewModel(
                     selectedEpisodeIndex = previousEpisodeIndex,
                     playerEpisodeIndex = previousEpisodeIndex,
                     playerStartPositionMs = 0L,
+                    playerCanSkipIntro = true,
                 )
             }
         }
@@ -1335,6 +1407,25 @@ class TvBoxViewModel(
     fun updateDeviceMode(mode: DeviceMode) {
         if (_state.value.appSettings.deviceMode == mode) return
         val settings = _state.value.appSettings.copy(deviceMode = mode)
+        _state.update { it.copy(appSettings = settings) }
+        saveSettings(settings)
+    }
+
+    fun updateDefaultIntroSkipSeconds(seconds: Int) {
+        val settings = _state.value.appSettings.copy(defaultIntroSkipSeconds = seconds.coerceIn(0, 600))
+        _state.update { it.copy(appSettings = settings) }
+        saveSettings(settings)
+    }
+
+    fun consumeIntroStartRequest(playbackKey: String?) {
+        _state.update {
+            if (playbackKey != null && it.currentPlaybackKey() == playbackKey) it.copy(playerCanSkipIntro = false) else it
+        }
+    }
+
+    fun updateMovieIntroSkipSeconds(seconds: Int?) {
+        val movie = _state.value.detailMovie ?: return
+        val settings = _state.value.appSettings.withIntroSkipOverride(introSkipKey(movie.apiLineId, movie.id), seconds)
         _state.update { it.copy(appSettings = settings) }
         saveSettings(settings)
     }
@@ -1626,6 +1717,7 @@ class TvBoxViewModel(
                 playerEpisodeIndex = target.episodeIndex,
                 selectedEpisodeIndex = target.episodeIndex,
                 playerStartPositionMs = target.positionMs,
+                playerCanSkipIntro = false,
                 playerPlayWhenReady = target.playWhenReady,
             )
         }
@@ -2319,6 +2411,7 @@ class TvBoxViewModel(
     }
 
     override fun onCleared() {
+        closePhoneSearchDialog()
         aiConfigServer?.stop()
         aiConfigServer = null
         videoApiConfigServer?.stop()

@@ -701,6 +701,12 @@ private fun SettingsScreen(
 ) {
     PageSurface { padding ->
         var confirmClearPlaybackStats by remember { mutableStateOf(false) }
+        var showIntroSettings by remember { mutableStateOf(false) }
+        if (showIntroSettings) {
+            IntroSkipDialog(state.appSettings.defaultIntroSkipSeconds, state.appSettings.defaultIntroSkipSeconds, false,
+                onDismiss = { showIntroSettings = false },
+                onSave = { actions.updateDefaultIntroSkipSeconds(it ?: 0) })
+        }
         if (confirmClearPlaybackStats) {
             AlertDialog(
                 onDismissRequest = { confirmClearPlaybackStats = false },
@@ -817,6 +823,18 @@ private fun SettingsScreen(
                         apiKey = state.appSettings.aiApiKey,
                         onProviderSelect = actions::updateAiProvider,
                         onOpenConfig = actions::openAiConfigDialog,
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsSectionTitle(
+                        title = "播放设置",
+                        subtitle = "默认片头长度可在播放页为当前影片或整部剧单独覆盖。",
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SettingsActionButton(
+                        text = "默认跳过片头：${state.appSettings.defaultIntroSkipSeconds} 秒",
+                        onClick = { showIntroSettings = true },
                     )
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1596,7 +1614,7 @@ private fun PlaybackHealthSnapshot.qualitySummaryText(): String {
     return "已记录 $entryCount 条线路表现｜成功 $successCount｜失败 $failureCount｜卡顿 $slowBufferCount｜保留最近 30 天"
 }
 
-private fun createQrBitmap(content: String, size: Int): Bitmap {
+internal fun createQrBitmap(content: String, size: Int): Bitmap {
     val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size)
     val pixels = IntArray(size * size)
     for (y in 0 until size) {

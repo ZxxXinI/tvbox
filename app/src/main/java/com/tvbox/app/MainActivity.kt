@@ -14,6 +14,7 @@ import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.widget.Toast
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,10 +42,13 @@ import com.tvbox.app.data.SharedPlatformLiveFavoritesRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tvbox.app.ui.TvBoxApp
 import com.tvbox.app.ui.TvBoxViewModel
+import com.tvbox.app.ui.TvScreen
+import com.tvbox.app.ui.SearchMenuShortcut
 import com.tvbox.app.ui.theme.TVBoxTheme
 import java.io.File
 
 class MainActivity : ComponentActivity() {
+    private val searchMenuShortcut = SearchMenuShortcut()
     private val viewModel: TvBoxViewModel by viewModels {
         TvBoxViewModelFactory(this)
     }
@@ -118,6 +122,27 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_MENU) {
+            val current = viewModel.state.value
+            val onSearch = current.screen == TvScreen.Search
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> if (searchMenuShortcut.keyDown(onSearch, event.repeatCount)) return true
+                KeyEvent.ACTION_UP -> {
+                    val result = searchMenuShortcut.keyUp(onSearch, current.phoneSearchDialogVisible, event.isCanceled)
+                    if (result.openScanner) viewModel.openPhoneSearchDialog()
+                    if (result.consumed) return true
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onPause() {
+        searchMenuShortcut.reset()
+        super.onPause()
     }
 
     private fun startAiVoiceInput() {

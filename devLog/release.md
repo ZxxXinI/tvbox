@@ -1,5 +1,33 @@
 ﻿# Release - 2026-06-25
 
+## 2026-11-16 20:38 - 发布 v1.3.14：片头、扫码与播放操作
+
+### 文件修改、原因与用途
+
+- `app/build.gradle.kts`：用户确认后授权发布，版本升级至 `10314 / 1.3.14`，允许旧版收到 OTA 更新。
+- `domain/AppSettings.kt`、`domain/IntroSkip.kt`、`data/AppSettingsRepository.kt`、`ui/IntroSkipDialog.kt`：纳入默认／本片片头设置及一次性跳转规则，不迁移历史或清除配置。
+- `data/PhoneSearchServer.kt`、`ui/PhoneSearchDialog.kt`、`ui/SearchMenuShortcut.kt`、`ui/SearchScreen.kt`、`MainActivity.kt`：纳入有时限、一次性局域网输入，以及搜索页专属菜单快捷键和生命周期清理。
+- `ui/PlaybackSettingsRow.kt`、`ui/PlaybackSpeed.kt`、`ui/PlayerNavigation.kt`、`ui/PlayerControls.kt`、`ui/PlayerScreen.kt`、`ui/TvBoxApp.kt`、`ui/TvBoxViewModel.kt`：纳入频道风格设置面板、逐级返回、焦点、片头接入、直接倍速循环与切集标注。
+- `app/src/test/java/com/tvbox/app/data/PhoneSearchServerTest.kt`、`domain/IntroSkipTest.kt`、`ui/PlaybackSpeedTest.kt`、`ui/PlayerNavigationTest.kt`、`ui/SearchMenuShortcutTest.kt`：提交本轮规则与本地 HTTP 回归用例。
+- `CHANGELOG.md`、`README.md`、`update.json`：整理正式说明、版本号、安装示例及真实 APK 校验信息，保留原有功能和友情链接。
+- 用户要求明确署名：README、CHANGELOG 和 Release 发布说明注明手机扫码搜索需求建议来自 LINUX DO 社区用户 patrickpa；仅致谢创意建议，不表述为代码贡献。
+- 主日志、播放／扫码模块日志及本轮五份验收记录：归档实现、测试与未覆盖的设备场景；此前未发布记录作为历史保留，不纳入其它无关文档。
+
+### 构建与发布边界
+
+- 此前最新相关单元测试 59 项通过，用户已确认并要求正式提交发布；本轮不重复单元或设备测试，不操作 ADB。
+- `:app:assembleRelease` 构建成功（含构建自带 vital lint）；包内版本 `10314 / 1.3.14`，最低 API 28，目标 API 36。
+- APK `TVBox-v1.3.14.apk`：`5083585` 字节；SHA-256 `bb080515d598a3dcd168f9112a20f8a61a732535f36e931110fb703594e159a1`。
+- v2 签名、zipalign 校验通过；证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`，与已发布版本一致。
+- 完整 Lint 仍有之前记录的 OTA 下载服务通知权限错误，本次不掩盖或扩改；Release 构建自带 vital lint 单独记录，不声称全量 Lint 通过。
+- 仅暂存本轮主工程及相关文档，主日志中的无关独立兼容条目不提交；版本标签指向该提交，不覆盖旧标签或旧附件。
+- 发布流程：构建与签名、真实 APK 校验值、精确暂存与提交、推送标签、草稿上传并校验附件、公开 Release 后推送 main，再核对公开 OTA 与匿名下载。
+- Release：[TVBox v1.3.14](https://github.com/ZxxXinI/tvbox/releases/tag/v1.3.14)。应用内 OTA 或手动覆盖安装保留本机数据；手机扫码需局域网互通，片头首次默认关闭。
+
+### 导航
+
+- 主日志：`devLog/README.md`；模块日志：`devLog/playback-experience.md`、`devLog/phone-search.md`。
+
 ## 2026-10-13 11:37 - 发布 v1.3.13：合并搜索输入修复
 
 ### 文件修改、原因与目的

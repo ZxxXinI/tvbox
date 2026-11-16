@@ -32,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +61,9 @@ import com.tvbox.app.domain.PlaybackBufferMonitor
 import com.tvbox.app.domain.PlaybackIssueType
 import com.tvbox.app.domain.PlaybackIssueNotice
 import com.tvbox.app.domain.PlaybackResumeAnchor
+import com.tvbox.app.domain.IntroSkipPolicy
+import com.tvbox.app.domain.introSkipKey
+import com.tvbox.app.domain.introSkipSeconds
 import com.tvbox.app.domain.SlowBufferReason
 import com.tvbox.app.ui.components.ErrorState
 import kotlinx.coroutines.delay
@@ -104,6 +106,7 @@ fun PlayerScreen(
     val session = rememberPlaybackSession()
     var loadedState by remember { mutableStateOf(state) }
     val resumeAnchor = remember { PlaybackResumeAnchor() }
+    val introPolicy = remember { IntroSkipPolicy() }
     fun isCurrentPlayback(): Boolean = player.currentMediaItem?.mediaId?.let {
         it == actions.state.value.currentPlaybackKey()
     } == true
@@ -126,7 +129,7 @@ fun PlayerScreen(
     var uiPlaying by remember { mutableStateOf(true) }
     BackHandler {
         when {
-            controlsPanel != PlayerPanel.None -> controlsPanel = PlayerPanel.None
+            controlsPanel != PlayerPanel.None -> controlsPanel = controlsPanel.parentPanel()
             controlsVisible -> { controlsVisible = false; playerFocusRequester.requestFocus() }
             else -> actions.goBack()
         }
@@ -154,6 +157,7 @@ fun PlayerScreen(
     }
     LaunchedEffect(controlsVisible) {
         if (!controlsVisible) {
+            controlsPanel = PlayerPanel.None
             androidx.compose.runtime.withFrameNanos { }
             playerFocusRequester.requestFocus()
         }
@@ -171,7 +175,26 @@ fun PlayerScreen(
     var failedSourceIndexes by remember(movie.apiLineId, movie.id) {
         mutableStateOf(emptySet<Int>())
     }
-    val latestState by rememberUpdatedState(state)
+
+    fun beginEpisodeIntro() {
+        val current = actions.state.value
+        val currentMovie = current.detailMovie ?: return
+        introPolicy.begin(true, current.appSettings.introSkipSeconds(currentMovie.apiLineId, currentMovie.id))
+    }
+    LaunchedEffect(player) {
+        while (true) {
+            delay(200)
+            if (!session.canPlay || !isCurrentPlayback() || player.playbackState != Player.STATE_READY) continue
+            val target = introPolicy.target(player.currentPosition, player.duration, player.isCurrentMediaItemSeekable)
+                ?: continue
+            bufferMonitor.onSeekStarted(System.currentTimeMillis())
+            player.seekTo(target)
+            resumeAnchor.update(target)
+            saveCurrentProgress(target, player.duration)
+            seekGesturePrompt = "已跳过片头 ${target / 1_000} 秒"
+            seekGesturePromptNonce++
+        }
+    }
 
     val handlePlaybackIssue = issue@ { issueType: PlaybackIssueType, switchPrefix: String, finalPrefix: String, message: String ->
         val currentState = actions.state.value
@@ -252,6 +275,7 @@ fun PlayerScreen(
                     if (loadedState.playerSourceIndex != actions.state.value.playerSourceIndex ||
                         loadedState.copy(playerEpisodeIndex = player.currentMediaItemIndex).currentPlaybackKey() !=
                         player.currentMediaItem?.mediaId) return
+                    introPolicy.cancel()
                     resumeAnchor.update(newPosition.positionMs)
                     bufferMonitor.onSeekStarted(System.currentTimeMillis())
                     bufferingPlaybackKey = null
@@ -278,6 +302,8 @@ fun PlayerScreen(
                     bufferingPlaybackKey = null
                     bufferMonitor.onMediaChanged()
                     actions.syncPlayerEpisode(episodeIndex)
+                    if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) beginEpisodeIntro()
                 }
             }
 
@@ -364,6 +390,8 @@ fun PlayerScreen(
     LaunchedEffect(state.playerSourceIndex, source.episodes) {
         loadedState = state
         resumeAnchor.update(state.playerStartPositionMs)
+        introPolicy.begin(state.playerCanSkipIntro, state.appSettings.introSkipSeconds(movie.apiLineId, movie.id))
+        actions.consumeIntroStartRequest(state.currentPlaybackKey())
         playbackIssue = null
         bufferingPlaybackKey = null
         bufferMonitor.onMediaChanged()
@@ -522,6 +550,7 @@ fun PlayerScreen(
         val targetIndex = currentIndex + offset
         if (targetIndex in source.episodes.indices) {
             player.seekTo(targetIndex, 0L)
+            beginEpisodeIntro()
             session.play(player)
             val action = if (offset < 0) "上一集" else "下一集"
             seekGesturePrompt = "$action  ${source.episodes[targetIndex].title}"
@@ -530,8 +559,8 @@ fun PlayerScreen(
         }
         seekGesturePromptNonce++
     }
-    val cyclePlaybackSpeedByRemote = {
-        val nextSpeed = nextPlaybackSpeed(latestState.playerSpeed)
+    val cyclePlaybackSpeed = {
+        val nextSpeed = nextPlaybackSpeed(actions.state.value.playerSpeed)
         player.setPlaybackSpeed(nextSpeed)
         actions.updatePlaybackSpeed(nextSpeed)
         seekGesturePrompt = "当前倍速 ${formatPlaybackSpeed(nextSpeed)}"
@@ -564,7 +593,7 @@ fun PlayerScreen(
                     AndroidKeyEvent.KEYCODE_BACK -> {
                         if (controlsVisible || controlsPanel != PlayerPanel.None) {
                             if (event.type == KeyEventType.KeyUp) {
-                                if (controlsPanel != PlayerPanel.None) controlsPanel = PlayerPanel.None
+                                if (controlsPanel != PlayerPanel.None) controlsPanel = controlsPanel.parentPanel()
                                 else controlsVisible = false
                             }
                             true
@@ -640,7 +669,7 @@ fun PlayerScreen(
                         true
                     }
                     AndroidKeyEvent.KEYCODE_MENU -> {
-                        if (event.type == KeyEventType.KeyUp) cyclePlaybackSpeedByRemote()
+                        if (event.type == KeyEventType.KeyUp) cyclePlaybackSpeed()
                         true
                     }
                     else -> false
@@ -816,12 +845,16 @@ fun PlayerScreen(
                 positionMs = uiPosition, durationMs = uiDuration, playing = uiPlaying,
                 speed = state.playerSpeed, panel = controlsPanel,
                 videoScaleMode = state.appSettings.videoScaleMode,
+                defaultIntroSeconds = state.appSettings.defaultIntroSkipSeconds,
+                introSecondsOverride = state.appSettings.introSkipOverrides[introSkipKey(movie.apiLineId, movie.id)],
+                onIntroSeconds = actions::updateMovieIntroSkipSeconds,
                 onPanel = { controlsPanel = it; controlsInteraction++ },
                 onToggle = { togglePlaybackByGesture(); controlsInteraction++ },
                 onEpisode = { index ->
                     if (index in source.episodes.indices) {
                         saveCurrentProgress(player.currentPosition, uiDuration)
                         player.seekTo(index, 0)
+                        beginEpisodeIntro()
                         session.play(player)
                         controlsInteraction++
                     }
@@ -831,7 +864,7 @@ fun PlayerScreen(
                     actions.switchPlayerSource(index, resumeAnchor.positionForFailure(player.currentPosition), player.playWhenReady)
                     controlsInteraction++
                 },
-                onSpeed = { speed -> player.setPlaybackSpeed(speed); actions.updatePlaybackSpeed(speed); controlsInteraction++ },
+                onCycleSpeed = { cyclePlaybackSpeed(); controlsInteraction++ },
                 onVideoScale = { mode -> actions.updateVideoScaleMode(mode); controlsInteraction++ },
                 onSeek = { position ->
                     bufferMonitor.onSeekStarted(System.currentTimeMillis())
@@ -892,7 +925,7 @@ private data class PlaybackIssueMessages(
     val message: String,
 )
 
-private fun TvBoxUiState.currentPlaybackKey(): String? {
+internal fun TvBoxUiState.currentPlaybackKey(): String? {
     val movie = detailMovie ?: return null
     val source = movie.playSources.getOrNull(playerSourceIndex) ?: return null
     val episode = source.episodes.getOrNull(playerEpisodeIndex) ?: return null
@@ -1067,17 +1100,6 @@ private const val DEFAULT_SYSTEM_BRIGHTNESS = 128
 private const val MAX_SYSTEM_BRIGHTNESS = 255f
 private const val PORTRAIT_VIDEO_ASPECT_RATIO_MAX = 0.8f
 private const val LANDSCAPE_VIDEO_ASPECT_RATIO_MIN = 1.1f
-private val PLAYBACK_SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
-
-private fun nextPlaybackSpeed(currentSpeed: Float): Float {
-    val currentIndex = PLAYBACK_SPEEDS.indexOfFirst { abs(it - currentSpeed) < 0.01f }
-    return PLAYBACK_SPEEDS[(currentIndex + 1).coerceAtLeast(0) % PLAYBACK_SPEEDS.size]
-}
-
-private fun formatPlaybackSpeed(speed: Float): String {
-    return "${speed.toString().trimEnd('0').trimEnd('.')}x"
-}
-
 private fun PlaybackAgentDecision.toPlaybackNotice(prefix: String): String {
     val sourceName = nextSourceName
     return if (sourceName.isNullOrBlank()) {
