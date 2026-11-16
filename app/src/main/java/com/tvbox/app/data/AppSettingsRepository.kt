@@ -7,6 +7,7 @@ import com.tvbox.app.domain.CustomVideoApiLine
 import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.domain.VideoScaleMode
+import com.tvbox.app.domain.MAX_INTRO_SKIP_SECONDS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -43,6 +44,11 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             playbackAgentAutoSwitchEnabled = prefs.getBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, true),
             videoScaleMode = VideoScaleMode.fromStorageKey(prefs.getString(KEY_VIDEO_SCALE_MODE, null)),
             deviceMode = DeviceMode.fromStorageKey(prefs.getString(KEY_DEVICE_MODE, null)),
+            defaultIntroSkipSeconds = prefs.getInt(KEY_INTRO_SKIP_DEFAULT, 0).coerceIn(0, MAX_INTRO_SKIP_SECONDS),
+            introSkipOverrides = runCatching {
+                json.decodeFromString<Map<String, Int>>(prefs.getString(KEY_INTRO_SKIP_OVERRIDES, "{}").orEmpty())
+                    .mapValues { it.value.coerceIn(0, MAX_INTRO_SKIP_SECONDS) }
+            }.getOrDefault(emptyMap()),
         )
     }
 
@@ -59,6 +65,8 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             .putBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, settings.playbackAgentAutoSwitchEnabled)
             .putString(KEY_VIDEO_SCALE_MODE, settings.videoScaleMode.storageKey)
             .putString(KEY_DEVICE_MODE, settings.deviceMode.storageKey)
+            .putInt(KEY_INTRO_SKIP_DEFAULT, settings.defaultIntroSkipSeconds.coerceIn(0, MAX_INTRO_SKIP_SECONDS))
+            .putString(KEY_INTRO_SKIP_OVERRIDES, json.encodeToString(settings.introSkipOverrides))
             .apply()
         settings
     }
@@ -82,5 +90,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
         const val KEY_PLAYBACK_AGENT_AUTO_SWITCH = "playback_agent_auto_switch"
         const val KEY_VIDEO_SCALE_MODE = "video_scale_mode"
         const val KEY_DEVICE_MODE = "device_mode"
+        const val KEY_INTRO_SKIP_DEFAULT = "intro_skip_default_seconds"
+        const val KEY_INTRO_SKIP_OVERRIDES = "intro_skip_movie_overrides"
     }
 }

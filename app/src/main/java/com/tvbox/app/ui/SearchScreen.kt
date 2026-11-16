@@ -23,6 +23,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +33,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -50,6 +58,37 @@ fun SearchScreen(
 ) {
     val grid = rememberLazyGridState()
     val returnFocus = rememberReturnFocus()
+    val searchButtonFocus = remember { FocusRequester() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var handledPhoneNonce by rememberSaveable { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) actions.closePhoneSearchDialog()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer); actions.closePhoneSearchDialog() }
+    }
+    if (state.phoneSearchDialogVisible) PhoneSearchDialog(state, actions)
+    LaunchedEffect(state.phoneSearchCompletedNonce, state.phoneSearchDialogVisible,
+        state.searchResults.isNotEmpty(), state.searchLoading) {
+        if (state.phoneSearchCompletedNonce == 0 || state.phoneSearchCompletedNonce == handledPhoneNonce ||
+            state.phoneSearchDialogVisible) return@LaunchedEffect
+        if (state.searchResults.isNotEmpty()) {
+            grid.scrollToItem(0)
+            val first = state.searchResults.first()
+            for (attempt in 0..12) {
+                withFrameNanos { }
+                if (returnFocus.request("${first.apiLineId}:${first.id}")) {
+                    handledPhoneNonce = state.phoneSearchCompletedNonce
+                    break
+                }
+            }
+        } else if (!state.searchLoading) {
+            withFrameNanos { }
+            searchButtonFocus.requestFocus()
+            handledPhoneNonce = state.phoneSearchCompletedNonce
+        }
+    }
     var savedQuery by rememberSaveable { mutableStateOf(state.searchQuery) }
     var fieldValue by remember { mutableStateOf(queryFieldValue(state.searchQuery)) }
     LaunchedEffect(state.searchQuery) {
@@ -94,10 +133,13 @@ fun SearchScreen(
                     text = if (state.searchLoading) "搜索中" else "搜索",
                     onClick = actions::submitSearch,
                     enabled = !state.searchLoading,
+                    modifier = Modifier.focusRequester(searchButtonFocus),
                 )
                 SearchActionButton(text = "返回", onClick = actions::goBack)
             }
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            SearchActionButton(text = "手机扫码输入 · 菜单键", onClick = actions::openPhoneSearchDialog)
+            Spacer(modifier = Modifier.height(16.dp))
             val searchProgress = state.searchTotalSources.takeIf { it > 0 }?.let { total ->
                 "已完成 ${state.searchCompletedSources}/$total 条线路 · 找到 ${state.searchResults.size} 个结果"
             }
@@ -154,13 +196,14 @@ private fun SearchActionButton(
     text: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
+        modifier = modifier
             .tvFocusScale(
                 shape = shape,
                 focusedBorder = TvColors.FocusRing,

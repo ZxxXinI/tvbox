@@ -2,7 +2,7 @@
 
 TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Kotlin、Jetpack Compose 和 Media3 ExoPlayer 构建。应用重点适配遥控器操作，支持影视分类、搜索、详情、m3u8 播放、观看历史、电视直播和 OTA 更新。
 
-当前源码版本为 `1.3.13`（`versionCode=10313`）。本版本合并 [PR #5](https://github.com/ZxxXinI/tvbox/pull/5)，修复重新进入搜索页后遥控器无法退格删除旧关键词的问题；感谢 [@lliyuu520](https://github.com/lliyuu520) 提交修复。保留此前设备模式与 OTA 安装包保存能力；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
+当前源码版本为 `1.3.14`（`versionCode=10314`）。本版本新增自动跳过片头、手机扫码输入搜索及菜单键快捷入口，优化频道风格播放设置和倍速循环操作。保留此前设备模式、搜索光标修复与 OTA 安装包保存能力；服务端部署方式见 [多平台直播服务部署说明](platform_live_server/DEPLOYMENT.md)。
 
 > 请确保使用的影视与直播接口具备合法授权。本项目仅提供客户端能力，不内置或托管影视内容。
 
@@ -20,7 +20,12 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 - 搜索与详情：关键词搜索最多三条来源并行，结果增量去重显示；重新进入搜索页时光标位于旧关键词末尾，可用遥控器退格删除。详情页优先显示主来源，后台补齐播放源和选集。
 - AI 找片：支持文字、应用内语音识别、快捷推荐词和“换一批”，可在设置页用手机扫码配置大模型、模型名和 API Key。
 - 播放器：基于 Media3 ExoPlayer，仅使用其视频解码与画面窗口；TVBox 自行处理遥控器快退/快进、切集、倍速、播放暂停、自动跳下一集和手机播放手势。
+- 底栏操作：显示“上一集(1)”“下一集(3)”；点击当前倍速或按播放页菜单键，均直接循环 `1x → 1.25x → 1.5x → 2.0x → 0.75x → 1x`，不弹出倍速面板。
 - 画面比例：点播操作栏“画面”支持自适应、裁剪铺满和拉伸铺满，本机记忆并实时生效；播放页隐藏系统栏，退出后恢复。
+- 跳过片头：设置页可设默认秒数，播放页“片头”通过预设和 ±5 秒调整本片／整部剧的秒数；没有自定义输入框或“跟随全局”按钮，未单独设置的影片仍使用默认值。仅从头播放和切集时生效，不覆盖历史续播或换线进度。
+- 手机扫码输入：搜索页点击“手机扫码输入 · 菜单键”或短按遥控器菜单键打开二维码，手机在可互通的同一局域网扫码输入片名并提交，电视直接搜索；一次性会话 5 分钟有效，退出搜索页或切后台即失效，无需配套手机应用。
+  - 该功能的需求建议来自 **LINUX DO 社区用户 patrickpa**，感谢提出让电视遥控器输入更方便的想法。
+- 播放设置：底栏保留播放／暂停、上一集、下一集、倍速和设置；右侧面板参照“电视(4)”频道的 260dp 宽度、半透明深色背景和扁平焦点列表，画面、片头、选集与线路的名称和当前值分层显示。仍右上贴边、全高，无关闭按钮，使用返回键逐级退出并恢复焦点。
 - 设备模式：设置提供“电视模式”和“手机模式”，默认电视模式，本机保存并优先于系统识别；电视短剧保持横屏，手机模式保留点播转屏和普通直播手机布局。
 - 观看历史：记录影片、封面、播放线路、集数、播放进度和更新时间；首页显示最近六部未看完的“继续观看”，原来源优先续播，备用线路后台补齐。
 - 返回定位：首页、搜索和历史页面恢复滚动位置与影片焦点；“继续观看”卡片可用方向上返回顶部导航。
@@ -47,6 +52,12 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 | 确认键 | 打开当前焦点内容 |
 | 下滑到加载更多 | 自动加载下一页 |
 
+搜索页：
+
+| 按键 | 功能 |
+| --- | --- |
+| 菜单键 | 打开手机扫码输入；长按不重复触发，二维码已打开时不重新生成 |
+
 播放器：
 
 | 按键 | 功能 |
@@ -54,10 +65,10 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 | 确认键 | 展开控制栏，或操作当前聚焦控件 |
 | 媒体播放暂停键 | 直接播放或暂停 |
 | 方向左 / 右 | 控制栏关闭时每次快退 / 快进 10 秒并支持长按；控制栏打开时导航按钮，聚焦进度条时调整进度 |
-| 菜单键 | 切换倍速并显示当前倍速 |
+| 菜单键 | 与底部倍速按钮相同，直接循环 1x → 1.25x → 1.5x → 2.0x → 0.75x → 1x |
 | 数字 1 | 上一集 |
 | 数字 3 | 下一集 |
-| 返回键 | 依次关闭选择面板、关闭操作栏、返回详情页 |
+| 返回键 | 设置子项 → 播放设置 → 操作栏 → 详情页 |
 
 直播：
 
@@ -85,7 +96,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 如果是从 Release 下载的 APK：
 
 ```powershell
-adb install -r TVBox-v1.3.13.apk
+adb install -r TVBox-v1.3.14.apk
 ```
 
 ## OTA 更新机制
@@ -100,16 +111,18 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 ```json
 {
-  "versionCode": 10313,
-  "versionName": "1.3.13",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.13/TVBox-v1.3.13.apk",
-  "apkSha256": "2c69db103a867ed74d28481dcafd5f395f90d87b5cef6d0592ff12e167597edf",
-  "apkSize": 5034437,
+  "versionCode": 10314,
+  "versionName": "1.3.14",
+  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.3.14/TVBox-v1.3.14.apk",
+  "apkSha256": "bb080515d598a3dcd168f9112a20f8a61a732535f36e931110fb703594e159a1",
+  "apkSize": 5083585,
   "force": false,
   "changelog": [
-    "修复重新进入搜索页后，遥控器无法退格删除旧关键词的问题。",
-    "搜索框重新进入时光标位于关键词末尾，正常编辑保留光标和输入法状态。",
-    "感谢 lliyuu520 提交 PR #5；保留搜索结果及返回定位逻辑。"
+    "新增自动跳过片头，默认关闭；预设和 ±5 秒调整，本片设置在本机保存。",
+    "搜索页支持手机扫码输入，菜单键可直达，提交片名后电视直接搜索。",
+    "扫码会话 5 分钟有效且一次性，退出搜索页或切后台立即关闭。",
+    "播放设置改为频道风格 260dp 侧栏，选集、线路、画面和片头集中收纳。",
+    "倍速按钮与菜单键直接循环切换，不再弹窗；上／下一集标注数字 1/3。"
   ]
 }
 ```
@@ -117,7 +130,7 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 说明：
 
 - `versionCode` 必须大于当前应用版本，才会提示更新。
-- v1.3.13 可通过旧版应用的 OTA 提示更新，也可手动下载 APK 覆盖安装，保留本机数据。
+- v1.3.14 可通过旧版应用的 OTA 提示更新，也可手动下载 APK 覆盖安装，保留本机数据。
 - 手机用户请到“设置 → 设备模式”选择手机模式；默认电视模式用于避免盒子播放短剧时切成竖屏。
 - 已下载的 APK 可从小窗选择“保存安装包”。系统没有文件选择器时保存到下载目录的 `TVBox` 文件夹；Android 9 需存储授权，手动安装仍受系统权限限制。
 - 旧版若无法在线更新，可从 Release 页面下载 APK 手动覆盖安装。
@@ -224,21 +237,21 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 ```powershell
 git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src\main app\src\test app\src\debug devLog\home-player-ui.md devLog\playback-experience.md devLog\release.md
 git add -p devLog\README.md
-git commit -m "Release v1.3.13"
-git tag -a v1.3.13 -m "TVBox v1.3.13"
-git push origin v1.3.13
+git commit -m "Release v1.3.14"
+git tag -a v1.3.14 -m "TVBox v1.3.14"
+git push origin v1.3.14
 ```
 
 3. 创建草稿 Release 并上传 APK 与相同版本的 OTA 清单，检查附件完整性。
 
 ```powershell
-gh release create v1.3.13 app\build\outputs\apk\release\TVBox-v1.3.13.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --verify-tag --draft --title "TVBox v1.3.13" --notes-file app\build\outputs\apk\release\release-notes.md
+gh release create v1.3.14 app\build\outputs\apk\release\TVBox-v1.3.14.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --verify-tag --draft --title "TVBox v1.3.14" --notes-file app\build\outputs\apk\release\release-notes.md
 ```
 
 4. 公开 Release 后推送主分支，使 OTA 清单指向已经可下载的附件。
 
 ```powershell
-gh release edit v1.3.13 --repo ZxxXinI/tvbox --draft=false --latest
+gh release edit v1.3.14 --repo ZxxXinI/tvbox --draft=false --latest
 git push origin main
 ```
 

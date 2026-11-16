@@ -1,5 +1,60 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-11-16 20:38 - 发布 v1.3.14：片头、扫码搜索与播放操作
+
+- Branch docs: `devLog/release.md`、`devLog/playback-experience.md`、`devLog/phone-search.md`
+- Summary:
+  - 用户确认后授权提交并发布，将本轮片头、手机扫码、菜单快捷键、频道式设置和直接倍速循环统一纳入正式版本。
+  - 版本升级至 `10314 / 1.3.14`，重新构建签名包并同步 README、CHANGELOG、Release 附件和 OTA 清单。
+  - 沿用此前 59 项相关单元测试及用户反馈，不重复设备测试；仅提交主工程、对应文档和验收记录，无关文件及独立兼容日志继续保留在本地。
+
+### 2026-11-16 20:30 - 倍速按钮循环切换及切集按键标注
+
+- Branch doc: `devLog/playback-experience.md`
+- Summary:
+  - 底部倍速按钮与菜单键共用循环回调，直接切换并提示当前速度；删除倍速弹窗、旧面板枚举和重复速度列表。
+  - 底部显示“上一集(1)”“下一集(3)”，保留首尾禁用规则与数字快捷键行为。
+  - 仅构建本地测试包，保持版本号，不安装、提交、推送或发布；记录见 `docs/validation/2026-11-16-speed-cycle.md`。
+  - 最终 59 项相关测试、Release 构建、v2 签名及 zipalign 校验通过，本地包 `TVBox-v1.3.13-speed-cycle-test.apk`；实机行为待用户验收。
+
+### 2026-11-16 20:12 - 播放设置参照电视频道面板重绘
+
+- Branch doc: `devLog/playback-experience.md`
+- Summary:
+  - 对照“电视(4)”频道面板源码，播放设置统一为 260dp 宽、同色半透明底、分隔线和绿色细焦点描边。
+  - 移除操作栏式大按钮，改为左对齐的名称／当前值两层列表行；仍右上贴边、全高且无关闭按钮。
+  - 仅调整播放设置，不修改电视(4)页面、播放规则或版本；构建及验证记录见 `docs/validation/2026-11-16-player-channel-style.md`。
+  - 最终 55 项相关测试、Release 构建、v2 签名及 zipalign 校验通过，本地包 `TVBox-v1.3.13-player-settings-style-test.apk`；未操作设备、提交或发布。
+
+### 2026-11-16 20:00 - 简化片头设置与播放设置侧栏
+
+- Branch doc: `devLog/playback-experience.md`
+- Summary:
+  - 移除片头设置中的自定义输入框和“跟随全局”按钮，保留当前值、预设及 ±5 秒调整，已有配置不迁移或清空。
+  - 播放设置缩窄、贴右侧与顶部并铺满高度，不再显示关闭按钮；返回层级及设置项焦点保持。
+  - 仅离线构建本地签名包及运行相关规则测试，不操作设备、不提交、不推送或发布；记录见 `docs/validation/2026-11-16-player-ui.md`。
+  - 最终 55 项相关测试与 Release 构建通过，v2 签名及 zipalign 校验通过；本地包 `TVBox-v1.3.13-player-ui-test.apk`，实机布局待用户验收。
+
+### 2026-11-15 19:35 - 菜单键扫码快捷入口与播放设置收纳
+
+- Branch docs: `devLog/phone-search.md`、`devLog/playback-experience.md`
+- Summary:
+  - 搜索页菜单键松开打开扫码输入，按钮明确显示快捷键；长按去重、取消与后台清理，不占用其它页面菜单键。
+  - 播放栏保留常用操作，选集、线路、画面和片头收进播放设置；子项逐级返回，保留项目及底栏入口焦点。
+  - 新增快捷键及导航纯规则测试，保留上一轮功能；仅本地构建签名包，保持版本号，不安装、提交、推送或发布。
+  - 完整记录见 `docs/validation/2026-11-15-player-settings-shortcut.md`；已有独立兼容日志及工程保持原状。
+  - 最终 53 项相关测试、Release 构建、v2 签名及 zipalign 校验通过；本地包 `TVBox-v1.3.13-playback-settings-test.apk`，不代表设备焦点验收已通过。
+
+### 2026-11-15 15:04 - 自动跳过片头与手机扫码输入搜索
+
+- Branch docs: `devLog/playback-experience.md`、`devLog/phone-search.md`
+- Summary:
+  - 按已确认方案实现全局默认＋本片设置，覆盖首次开播、遥控选集及自动连播，保留历史与换线进度。
+  - 搜索页新增手机扫码输入窗口并直接搜索，采用有时限的一次性局域网会话，不实现语音识别。
+  - 补充纯规则与本地 HTTP 单元测试，构建本地签名包；保持版本号，不操作 ADB，不提交、推送或正式发布。
+  - 项目外依赖补齐登记见 `F:\Documents\Agents\20261115-1500-CODEX-TVBox.md`；保留原有独立兼容工程及无关日志。
+  - 最终相关单元测试 43 项与 Release 构建通过，签名校验通过；额外全量 Lint 被现有 OTA 通知权限错误阻塞。产物与用户验收清单见 `docs/validation/2026-11-15-intro-phone-search.md`。
+
 ### 2026-10-13 11:37 - 合并 PR #5 并发布 v1.3.13：搜索输入光标
 
 - Branch docs: `devLog/home-player-ui.md`、`devLog/release.md`
