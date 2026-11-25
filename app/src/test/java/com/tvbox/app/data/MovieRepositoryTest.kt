@@ -1,17 +1,177 @@
 ﻿package com.tvbox.app.data
 
 import com.tvbox.app.domain.ApiLine
+import com.tvbox.app.domain.Category
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.CancellationException
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MovieRepositoryTest {
+    @Test
+    fun searchCountsEmptyResponsesAsSuccessfulAndRetriesSourcesInCooldown() = runBlocking {
+        val primary = line("primary")
+        val backup = line("backup")
+        var backupOffline = true
+        val repo = repository(listOf(primary, backup), mapOf(
+            primary.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> response() },
+            backup.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                if (backupOffline) throw IOException("Offline")
+                response(vod(2, "恢复的结果"))
+            },
+        ))
+
+        val firstSearch = repo.searchProgressively(primary.id, 1, "影片").toList().last()
+        assertEquals(2, firstSearch.completedSources)
+        assertEquals(1, firstSearch.successfulSources)
+        assertTrue(firstSearch.movies.isEmpty())
+
+        backupOffline = false
+        val regularSearch = repo.searchProgressively(primary.id, 1, "影片").toList().last()
+        assertEquals(1, regularSearch.totalSources)
+        val retry = repo.searchProgressively(primary.id, 1, "影片", retryUnavailableSources = true).toList().last()
+        assertEquals(2, retry.successfulSources)
+        assertEquals("恢复的结果", retry.movies.single().name)
+    }
+
+    @Test
+    fun homeCatalogKeepsWorkingPreferredSource() = runBlocking {
+        val preferred = line("liangzi")
+        val backup = line("backup")
+        val repo = repository(listOf(preferred, backup), mapOf(
+            preferred.baseUrls.single() to fakeApi { _, page, typeId, _, _, _ ->
+                assertEquals(1, page)
+                assertEquals(13, typeId)
+                response(vod(1, "首选影片"))
+            },
+            backup.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                throw AssertionError("Working preferred source should be sufficient")
+            },
+        ))
+
+        val result = repo.loadAvailableHomeCatalog(preferred.id)
+
+        assertEquals(preferred.id, result?.apiLine?.id)
+        assertEquals("首选影片", result?.movies?.single()?.name)
+    }
+
+    @Test
+    fun homeCatalogUsesNextSourceAndPaginatesWithItsOwnQuery() = runBlocking {
+        val earlier = line("earlier")
+        val preferred = line("liangzi")
+        val backup = line("backup")
+        val requests = mutableListOf<String>()
+        val repo = repository(listOf(earlier, preferred, backup), mapOf(
+            earlier.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                throw AssertionError("Fallback should start at the source after the preferred one")
+            },
+            preferred.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                requests += preferred.id
+                throw IOException("Offline")
+            },
+            backup.baseUrls.single() to fakeApi { _, page, typeId, _, _, _ ->
+                assertNull(typeId)
+                requests += "${backup.id}:$page"
+                response(vod(page ?: 0, "备用影片 $page")).copy(
+                    categories = listOf(CategoryDto(typeId = 21, typeName = "电影")),
+                )
+            },
+        ))
+
+        val firstPage = checkNotNull(repo.loadAvailableHomeCatalog(preferred.id))
+        val secondPage = repo.getHomeCatalogMovies(firstPage.apiLine.id, page = 2)
+
+        assertEquals(listOf("liangzi", "backup:1", "backup:2"), requests)
+        assertEquals(listOf(Category(id = 21, parentId = 0, name = "电影")), firstPage.categories)
+        assertEquals(backup.id, firstPage.movies.single().apiLineId)
+        assertEquals(backup.id, secondPage.movies.single().apiLineId)
+    }
+
+    @Test
+    fun homeCatalogSkipsTimeoutAndEmptyResultThenWrapsAround() = runBlocking {
+        val working = line("working")
+        val preferred = line("slow")
+        val empty = line("empty")
+        val requests = mutableListOf<String>()
+        val repo = repository(listOf(working, preferred, empty), mapOf(
+            working.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                requests += working.id
+                response(vod(1, "可用影片"))
+            },
+            preferred.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                requests += preferred.id
+                awaitCancellation()
+            },
+            empty.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                requests += empty.id
+                response()
+            },
+        ))
+
+        val result = repo.loadAvailableHomeCatalog(preferred.id, sourceTimeoutMs = 300)
+
+        assertEquals(listOf("slow", "empty", "working"), requests)
+        assertEquals(working.id, result?.apiLine?.id)
+    }
+
+    @Test
+    fun homeCatalogReportsExhaustionAndCanRetryPreferredSource() = runBlocking {
+        val preferred = line("preferred")
+        val backup = line("backup")
+        val requests = mutableListOf<String>()
+        var preferredOffline = true
+        val repo = repository(listOf(preferred), mapOf(
+            preferred.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                requests += preferred.id
+                if (preferredOffline) response() else response(vod(1, "恢复的影片"))
+            },
+            backup.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                requests += backup.id
+                throw IOException("Offline")
+            },
+        ))
+        repo.updateCustomApiLines(listOf(backup))
+
+        assertNull(repo.loadAvailableHomeCatalog(preferred.id))
+        assertEquals(listOf("preferred", "backup"), requests)
+
+        preferredOffline = false
+        assertEquals(preferred.id, repo.loadAvailableHomeCatalog(preferred.id)?.apiLine?.id)
+        assertEquals(listOf("preferred", "backup", "preferred"), requests)
+    }
+
+    @Test
+    fun cancellingHomeCatalogStopsBeforeTryingAnotherSource() = runBlocking {
+        val preferred = line("preferred")
+        val backup = line("backup")
+        val started = CompletableDeferred<Unit>()
+        val repo = repository(listOf(preferred, backup), mapOf(
+            preferred.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                started.complete(Unit)
+                awaitCancellation()
+            },
+            backup.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                throw AssertionError("Cancelled request must not continue to another source")
+            },
+        ))
+        val request = launch { repo.loadAvailableHomeCatalog(preferred.id) }
+
+        withTimeout(1_500) { started.await() }
+        request.cancelAndJoin()
+        assertTrue(request.isCancelled)
+    }
+
     @Test
     fun resumeOnlyRequestsOriginalSourceWithoutWaitingForSlowAlternatives() = runBlocking {
         val primary = line("primary")

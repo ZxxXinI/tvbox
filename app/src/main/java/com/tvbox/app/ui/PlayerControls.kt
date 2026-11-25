@@ -6,35 +6,28 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.PlaySource
 import com.tvbox.app.domain.VideoScaleMode
-import com.tvbox.app.domain.correspondingEpisodeIndex
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,33 +57,26 @@ internal fun PlayerControls(
     modifier: Modifier = Modifier,
 ) {
     val source = sources[sourceIndex]
-    val compact = LocalConfiguration.current.screenWidthDp < 800
     val buttonScroll = rememberScrollState()
     var progressFocused by remember { mutableStateOf(false) }
     val playFocus = remember { FocusRequester() }
     val settingsButtonFocus = remember { FocusRequester() }
-    val settingsScroll = rememberScrollState()
-    val settingsFocus = remember { playerSettingsPanels.associateWith { FocusRequester() } }
-    var lastSettingsPanel by remember { mutableStateOf(PlayerPanel.Picture) }
-    var lastBarPanel by remember { mutableStateOf(PlayerPanel.None) }
+    var settingsOpened by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Float?>(null) }
     var lastSeekTime by remember { mutableStateOf(Long.MIN_VALUE) }
     LaunchedEffect(panel) {
-        if (panel == PlayerPanel.None || panel == PlayerPanel.Settings) {
-            val target = if (panel == PlayerPanel.Settings) settingsFocus.getValue(lastSettingsPanel)
-                else when (lastBarPanel) {
-                    PlayerPanel.Settings -> settingsButtonFocus
-                    else -> playFocus
-                }
-            for (attempt in 0..8) {
-                withFrameNanos { }
-                if (runCatching { target.requestFocus() }.getOrDefault(false)) break
-            }
+        if (panel == PlayerPanel.None) {
+            (if (settingsOpened) settingsButtonFocus else playFocus).requestPlayerControlFocus()
         }
     }
-    Box(modifier.fillMaxSize()) {
-        Surface(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val sidebarOpen = panel != PlayerPanel.None
+        val sidebarWidth = if (sidebarOpen) playerSettingsWidthDp(maxWidth.value.toInt()).dp else 0.dp
+        val barWidth = maxWidth - sidebarWidth
+        val compact = barWidth < 800.dp
+        val barFocus = Modifier.focusProperties { canFocus = !sidebarOpen }
+        if (!sidebarOpen || barWidth >= 320.dp) Surface(
+            modifier = Modifier.align(Alignment.BottomStart).padding(end = sidebarWidth).fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))))
                 .windowInsetsPadding(WindowInsets.safeDrawing).testTag("player_controls"),
             color = Color.Transparent, contentColor = Color.White,
@@ -122,7 +108,7 @@ internal fun PlayerControls(
                                 drawLine(Color(0xFF7AE2BA), Offset(0f, center), Offset(size.width * fraction, center), size.height, StrokeCap.Round)
                             }
                         },
-                        modifier = Modifier.weight(1f).height(36.dp).padding(horizontal = 8.dp)
+                        modifier = barFocus.weight(1f).height(36.dp).padding(horizontal = 8.dp)
                             .onFocusChanged { progressFocused = it.isFocused }
                             .testTag("player_progress").onPreviewKeyEvent { event ->
                             val delta = when (event.nativeKeyEvent.keyCode) {
@@ -152,122 +138,37 @@ internal fun PlayerControls(
                     modifier = Modifier.fillMaxWidth().then(if (compact) Modifier.horizontalScroll(buttonScroll) else Modifier),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ControlButton(if (playing) "暂停" else "播放", onToggle, Modifier.focusRequester(playFocus), primary = true)
-                    ControlButton("上一集(1)", { onEpisode(episodeIndex - 1) }, enabled = episodeIndex > 0)
-                    ControlButton("下一集(3)", { onEpisode(episodeIndex + 1) }, enabled = episodeIndex < source.episodes.lastIndex)
+                    ControlButton(if (playing) "暂停" else "播放", onToggle,
+                        Modifier.focusRequester(playFocus).then(barFocus), primary = true)
+                    ControlButton("上一集(1)", { onEpisode(episodeIndex - 1) }, barFocus, enabled = episodeIndex > 0)
+                    ControlButton("下一集(3)", { onEpisode(episodeIndex + 1) }, barFocus, enabled = episodeIndex < source.episodes.lastIndex)
                     if (!compact) Spacer(Modifier.weight(1f))
-                    ControlButton(formatPlaybackSpeed(speed), onCycleSpeed)
-                    ControlButton("设置", {
-                        lastBarPanel = PlayerPanel.Settings
-                        onPanel(PlayerPanel.Settings)
-                    }, Modifier.focusRequester(settingsButtonFocus))
-                }
-            }
-        }
-        if (panel == PlayerPanel.Settings) {
-            Surface(
-                modifier = Modifier.align(Alignment.TopEnd)
-                    .width(playerSettingsWidthDp(LocalConfiguration.current.screenWidthDp).dp).fillMaxHeight()
-                    .testTag("player_settings"),
-                color = Color(0xEF101514), contentColor = Color.White, shape = RoundedCornerShape(0.dp),
-            ) {
-                Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(
-                    WindowInsetsSides.Top + WindowInsetsSides.Right + WindowInsetsSides.Bottom))
-                    .padding(horizontal = 12.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
-                        Text("播放设置", style = MaterialTheme.typography.titleMedium)
-                        Text("${playerSettingsPanels.size} 项设置 · 返回键退出", style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.5f))
-                    }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
-                    Column(Modifier.weight(1f).verticalScroll(settingsScroll).padding(vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        playerSettingsPanels.forEachIndexed { index, entry ->
-                            val (title, value) = when (entry) {
-                                PlayerPanel.Picture -> "画面" to videoScaleMode.displayName
-                                PlayerPanel.Intro -> "片头" to ((introSecondsOverride ?: defaultIntroSeconds).let {
-                                    if (it == 0) "不跳过" else "${it} 秒"
-                                })
-                                PlayerPanel.Episodes -> "选集" to source.episodes.getOrNull(episodeIndex)?.title.orEmpty()
-                                PlayerPanel.Sources -> "线路" to source.name
-                                else -> error("Not a settings entry")
-                            }
-                            PlaybackSettingsRow(title, value, selected = entry == lastSettingsPanel, onClick = {
-                                lastSettingsPanel = entry
-                                onInteraction()
-                                onPanel(entry)
-                            }, modifier = Modifier.focusRequester(settingsFocus.getValue(entry)).focusProperties {
-                                up = if (index == 0) FocusRequester.Cancel else settingsFocus.getValue(playerSettingsPanels[index - 1])
-                                down = playerSettingsPanels.getOrNull(index + 1)?.let(settingsFocus::getValue) ?: FocusRequester.Cancel
-                                left = FocusRequester.Cancel
-                                right = FocusRequester.Cancel
-                            })
-                        }
+                    ControlButton(formatPlaybackSpeed(speed), onCycleSpeed, barFocus)
+                    if (!sidebarOpen) {
+                        ControlButton("设置", {
+                            settingsOpened = true
+                            onPanel(PlayerPanel.Settings)
+                        }, Modifier.focusRequester(settingsButtonFocus))
                     }
                 }
             }
         }
-        if (panel == PlayerPanel.Intro) {
-            IntroSkipDialog(introSecondsOverride, defaultIntroSeconds, true,
-                onDismiss = { onPanel(PlayerPanel.Settings) }, onSave = onIntroSeconds)
-        }
-        if (panel != PlayerPanel.None && panel != PlayerPanel.Intro && panel != PlayerPanel.Settings) {
-            val labels = when (panel) {
-                PlayerPanel.Episodes -> source.episodes.map { it.title }
-                PlayerPanel.Sources -> sources.map { it.name }
-                PlayerPanel.Picture -> VideoScaleMode.entries.map { it.displayName }
-                PlayerPanel.None, PlayerPanel.Intro, PlayerPanel.Settings -> emptyList()
-            }
-            val selected = when (panel) {
-                PlayerPanel.Episodes -> episodeIndex
-                PlayerPanel.Sources -> sourceIndex
-                PlayerPanel.Picture -> VideoScaleMode.entries.indexOf(videoScaleMode)
-                PlayerPanel.None, PlayerPanel.Intro, PlayerPanel.Settings -> 0
-            }
-            val pickerFocus = remember(panel) { mutableMapOf<Int, FocusRequester>() }
-            labels.indices.forEach { pickerFocus.getOrPut(it) { FocusRequester() } }
-            val grid = rememberLazyGridState()
-            LaunchedEffect(panel) {
-                grid.scrollToItem(selected.coerceIn(0, labels.lastIndex.coerceAtLeast(0)))
-                for (attempt in 0..8) {
-                    withFrameNanos { }
-                    if (runCatching { pickerFocus[selected]?.requestFocus() == true }.getOrDefault(false)) break
-                }
-            }
-            Surface(Modifier.align(Alignment.Center).fillMaxWidth(0.8f).fillMaxHeight(0.6f),
-                color = Color(0xFA202020), contentColor = Color.White, shape = RoundedCornerShape(12.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(when (panel) {
-                            PlayerPanel.Episodes -> "选择集数"
-                            PlayerPanel.Sources -> "选择线路"
-                            PlayerPanel.Picture -> "画面比例 · ${videoScaleMode.displayName}"
-                        }, Modifier.weight(1f))
-                        ControlButton(if (panel.parentPanel() == PlayerPanel.Settings) "返回设置" else "关闭",
-                            { onPanel(panel.parentPanel()) })
-                    }
-                    if (panel == PlayerPanel.Picture) {
-                        Text(videoScaleMode.description, style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(bottom = 12.dp))
-                    }
-                    LazyVerticalGrid(GridCells.Adaptive(130.dp), state = grid,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(labels) { index, label ->
-                            val enabled = panel != PlayerPanel.Sources || correspondingEpisodeIndex(
-                                sources[index], source.episodes[episodeIndex].title, episodeIndex) != null
-                            ControlButton(if (index == selected) "$label ✓" else label, {
-                                onInteraction()
-                                when (panel) {
-                                    PlayerPanel.Episodes -> onEpisode(index)
-                                    PlayerPanel.Sources -> onSource(index)
-                                    PlayerPanel.Picture -> onVideoScale(VideoScaleMode.entries[index])
-                                }
-                                onPanel(panel.parentPanel())
-                            }, Modifier.focusRequester(pickerFocus.getValue(index)), enabled)
-                        }
-                    }
-                }
-            }
+        if (sidebarOpen) {
+            PlayerSettingsSidebar(
+                panel = panel,
+                sources = sources,
+                sourceIndex = sourceIndex,
+                episodeIndex = episodeIndex,
+                videoScaleMode = videoScaleMode,
+                defaultIntroSeconds = defaultIntroSeconds,
+                introSecondsOverride = introSecondsOverride,
+                onPanel = onPanel,
+                onVideoScale = onVideoScale,
+                onIntroSeconds = onIntroSeconds,
+                onEpisode = onEpisode,
+                onSource = onSource,
+                modifier = Modifier.align(Alignment.TopEnd).width(sidebarWidth).fillMaxHeight(),
+            )
         }
     }
 }

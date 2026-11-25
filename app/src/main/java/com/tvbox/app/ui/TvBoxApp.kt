@@ -38,12 +38,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,17 +69,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.tvbox.app.domain.AiProvider
-import com.tvbox.app.domain.AiProviders
-import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
-import com.tvbox.app.domain.PlaybackHealthSnapshot
-import com.tvbox.app.domain.TvFontScale
-import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.AppNavigationRail
@@ -113,10 +103,7 @@ fun TvBoxApp(
 ) {
     val screenStateHolder = rememberSaveableStateHolder()
     Box(modifier = Modifier.fillMaxSize()) {
-        val showNavigationRail = state.appSettings.theme == TvTheme.Cinema &&
-            state.screen != TvScreen.Player &&
-            state.screen != TvScreen.Live
-        if (showNavigationRail) {
+        if (state.showCinemaNavigation) {
             Row(modifier = Modifier.fillMaxSize()) {
                 AppNavigationRail(
                     screen = state.screen,
@@ -465,48 +452,38 @@ private fun HomeScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
-            when {
-                state.homeLoading -> LoadingState(
-                    text = "正在加载影片",
-                    modifier = Modifier.weight(1f),
-                )
-                state.homeError != null -> ErrorState(
-                    message = state.homeError,
-                    onRetry = { actions.refreshHome(forceRefresh = true) },
-                    modifier = Modifier.weight(1f),
-                )
-                else -> MovieGrid(
-                    state = state,
-                    gridState = movieGridState,
-                    onMovieClick = actions::openDetail,
-                    onDoubanHotClick = actions::openDoubanHotDetail,
-                    onLoadMore = actions::loadNextPage,
-                    focus = homeFocus,
-                    onContinue = { actions.resumeHistory(it, TvScreen.Home) },
-                    onMoveToNavigation = {
-                        navigationUpHeld = true
-                        forceNavigationVisible = true
-                        if (!movingToNavigation) {
-                            movingToNavigation = true
-                            navigationScope.launch {
-                                try {
-                                    movieGridState.scrollToItem(0, 0)
-                                    // The navigation can be outside composition until AnimatedVisibility expands it.
-                                    for (attempt in 0..20) {
-                                        withFrameNanos { }
-                                        if (runCatching { navigationFocusRequester.requestFocus() }.getOrDefault(false)) break
-                                    }
-                                } finally {
-                                    movingToNavigation = false
+            MovieGrid(
+                state = state,
+                gridState = movieGridState,
+                onMovieClick = actions::openDetail,
+                onDoubanHotClick = actions::openDoubanHotDetail,
+                onLoadMore = actions::loadNextPage,
+                onRetryHome = { actions.refreshHome(forceRefresh = true) },
+                focus = homeFocus,
+                onContinue = { actions.resumeHistory(it, TvScreen.Home) },
+                onMoveToNavigation = {
+                    navigationUpHeld = true
+                    forceNavigationVisible = true
+                    if (!movingToNavigation) {
+                        movingToNavigation = true
+                        navigationScope.launch {
+                            try {
+                                movieGridState.scrollToItem(0, 0)
+                                // The navigation can be outside composition until AnimatedVisibility expands it.
+                                for (attempt in 0..20) {
+                                    withFrameNanos { }
+                                    if (runCatching { navigationFocusRequester.requestFocus() }.getOrDefault(false)) break
                                 }
+                            } finally {
+                                movingToNavigation = false
                             }
                         }
-                    },
-                    onContentFocused = { if (!movingToNavigation) forceNavigationVisible = false },
-                    showSectionHeader = cinemaTheme,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+                    }
+                },
+                onContentFocused = { if (!movingToNavigation) forceNavigationVisible = false },
+                showSectionHeader = cinemaTheme,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -695,471 +672,83 @@ private fun HistoryScreen(
 }
 
 @Composable
-private fun SettingsScreen(
-    state: TvBoxUiState,
-    actions: TvBoxViewModel,
-) {
-    PageSurface { padding ->
-        var confirmClearPlaybackStats by remember { mutableStateOf(false) }
-        var showIntroSettings by remember { mutableStateOf(false) }
-        if (showIntroSettings) {
-            IntroSkipDialog(state.appSettings.defaultIntroSkipSeconds, state.appSettings.defaultIntroSkipSeconds, false,
-                onDismiss = { showIntroSettings = false },
-                onSave = { actions.updateDefaultIntroSkipSeconds(it ?: 0) })
-        }
-        if (confirmClearPlaybackStats) {
-            AlertDialog(
-                onDismissRequest = { confirmClearPlaybackStats = false },
-                title = { Text("清空线路统计") },
-                text = { Text("确定要清空线路质量统计吗？清空后播放管家会重新学习线路表现。") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            confirmClearPlaybackStats = false
-                            actions.clearPlaybackStats()
-                        },
-                    ) {
-                        Text("清空")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmClearPlaybackStats = false }) {
-                        Text("取消")
-                    }
-                },
-            )
-        }
-        if (state.aiConfigDialogVisible) {
-            AiConfigDialog(state = state, actions = actions)
-        }
-        if (state.videoApiConfigDialogVisible) {
-            VideoApiConfigDialog(state = state, actions = actions)
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "设置",
-                        style = MaterialTheme.typography.headlineLarge,
-                    )
-                    Text(
-                        text = "设备模式、外观与播放设置",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                SettingsActionButton(text = "返回", onClick = actions::goBack)
-            }
-            Spacer(modifier = Modifier.height(22.dp))
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = TvLayout.SettingsGridMinWidth),
-                contentPadding = PaddingValues(bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.weight(1f),
-            ) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsSectionTitle(
-                        title = "设备模式",
-                        subtitle = "默认使用电视模式；手机用户可选择手机模式。设置保存在本机。",
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    DeviceModeSetting(
-                        selectedMode = state.appSettings.deviceMode,
-                        onModeSelect = actions::updateDeviceMode,
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsSectionTitle(
-                        title = "外观",
-                        subtitle = "默认主题保留原有界面；影院主题使用左侧图标导航和影院色板。",
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    ThemeSetting(
-                        selectedTheme = state.appSettings.theme,
-                        onThemeSelect = actions::updateTheme,
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    FontScaleSetting(
-                        selectedFontScale = state.appSettings.fontScale,
-                        onFontScaleSelect = actions::updateFontScale,
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsSectionTitle(
-                        title = "视频接口",
-                        subtitle = "内置接口保留不变，可扫码添加 MacCms 自定义视频接口。",
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    HomeApiLineSetting(
-                        apiLines = state.apiLines,
-                        selectedApiLine = state.selectedApiLine,
-                        customLineCount = state.appSettings.customVideoApiLines.size,
-                        onSelect = actions::updateHomeApiLine,
-                        onOpenConfig = actions::openVideoApiConfigDialog,
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsSectionTitle(
-                        title = "大模型",
-                        subtitle = "未填写 API Key 时使用 APK 内置 AI 配置。",
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    AiProviderSetting(
-                        selectedProvider = AiProviders.find(state.appSettings.aiProviderId),
-                        modelName = state.appSettings.aiModelName,
-                        apiKey = state.appSettings.aiApiKey,
-                        onProviderSelect = actions::updateAiProvider,
-                        onOpenConfig = actions::openAiConfigDialog,
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsSectionTitle(
-                        title = "播放设置",
-                        subtitle = "默认片头长度可在播放页为当前影片或整部剧单独覆盖。",
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsActionButton(
-                        text = "默认跳过片头：${state.appSettings.defaultIntroSkipSeconds} 秒",
-                        onClick = { showIntroSettings = true },
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsSectionTitle(
-                        title = "播放管家",
-                        subtitle = "控制播放失败或卡顿时是否自动尝试其它线路。",
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "自动换线",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                text = if (state.appSettings.playbackAgentAutoSwitchEnabled) {
-                                    "播放失败或缓冲过久时自动切换线路"
-                                } else {
-                                    "已关闭，播放器仍可手动换线"
-                                },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = state.appSettings.playbackAgentAutoSwitchEnabled,
-                            onCheckedChange = actions::updatePlaybackAgentAutoSwitch,
-                        )
-                    }
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "线路质量统计",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                text = state.playbackHealth.qualitySummaryText(),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        SettingsActionButton(
-                            text = "清空统计",
-                            enabled = state.playbackHealth.entryCount > 0,
-                            onClick = { confirmClearPlaybackStats = true },
-                        )
-                    }
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SettingsSectionTitle(
-                        title = "更新",
-                        subtitle = "控制应用启动时是否自动检查 GitHub Release 更新。",
-                    )
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "启动时检查更新",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                text = if (state.appSettings.checkUpdatesOnStartup) "已开启" else "已关闭",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (state.updateError != null) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = state.updateError,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            SettingsActionButton(
-                                text = if (state.updateChecking) "检查中" else "立即检查",
-                                enabled = !state.updateChecking,
-                                onClick = { actions.checkForAppUpdate(showError = true) },
-                            )
-                            Switch(
-                                checked = state.appSettings.checkUpdatesOnStartup,
-                                onCheckedChange = actions::updateStartupUpdateCheck,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
+internal fun AiConfigDialog(state: TvBoxUiState, actions: TvBoxViewModel) {
+    PhoneConfigDialog(
+        title = "手机扫码配置 AI",
+        instructions = "在手机上填写模型名称和 API Key，提交后同步到电视。",
+        url = state.aiConfigServerUrl,
+        savedMessage = state.aiConfigSavedMessage,
+        error = state.aiConfigServerError,
+        onRegenerate = actions::openAiConfigDialog,
+        onClose = actions::closeAiConfigDialog,
+    )
 }
 
 @Composable
-private fun AiConfigDialog(
-    state: TvBoxUiState,
-    actions: TvBoxViewModel,
+internal fun VideoApiConfigDialog(state: TvBoxUiState, actions: TvBoxViewModel) {
+    PhoneConfigDialog(
+        title = "手机扫码添加视频接口",
+        instructions = "在手机上填写接口名称和 MacCms 地址，提交后添加到电视的视频接口列表。",
+        url = state.videoApiConfigServerUrl,
+        savedMessage = state.videoApiConfigSavedMessage,
+        error = state.videoApiConfigServerError,
+        onRegenerate = actions::openVideoApiConfigDialog,
+        onClose = actions::closeVideoApiConfigDialog,
+    )
+}
+
+@Composable
+private fun PhoneConfigDialog(
+    title: String,
+    instructions: String,
+    url: String?,
+    savedMessage: String?,
+    error: String?,
+    onRegenerate: () -> Unit,
+    onClose: () -> Unit,
 ) {
-    val configUrl = state.aiConfigServerUrl
     AlertDialog(
-        onDismissRequest = actions::closeAiConfigDialog,
-        title = { Text("手机扫码配置 AI") },
+        onDismissRequest = onClose,
+        title = { Text(title) },
         text = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(22.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (configUrl == null) {
-                    Box(
-                        modifier = Modifier.size(220.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("正在启动配置服务...")
-                    }
-                } else {
-                    val qrBitmap = remember(configUrl) { createQrBitmap(configUrl, 320) }
+            when {
+                savedMessage != null -> Text(savedMessage, color = MaterialTheme.colorScheme.primary)
+                error != null -> Text(error, color = MaterialTheme.colorScheme.error)
+                url == null -> Text("正在启动配置服务…")
+                else -> Row(
+                    horizontalArrangement = Arrangement.spacedBy(22.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val qrBitmap = remember(url) { createQrBitmap(url, 320) }
                     Image(
                         bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "AI 配置二维码",
-                        modifier = Modifier.size(220.dp),
+                        contentDescription = title,
+                        modifier = Modifier.size(200.dp),
                     )
-                }
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = "使用手机扫描二维码",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text = "或在同一局域网的手机浏览器访问地址：",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = configUrl ?: "正在生成地址...",
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = "手机页面里填写模型名称和 API Key，确认后会自动同步到电视。",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (state.aiConfigSavedMessage != null) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(instructions, style = MaterialTheme.typography.bodyMedium)
+                        Text("请使用同一局域网内的手机，二维码 5 分钟有效。")
                         Text(
-                            text = state.aiConfigSavedMessage,
+                            text = url,
                             color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    if (state.aiConfigServerError != null) {
-                        Text(
-                            text = state.aiConfigServerError,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
             }
         },
         confirmButton = {
-            SettingsActionButton(text = "完成", onClick = actions::closeAiConfigDialog)
+            if (error != null) SettingsActionButton(text = "重新生成", onClick = onRegenerate)
+            else SettingsActionButton(text = if (savedMessage == null) "关闭" else "完成", onClick = onClose)
         },
         dismissButton = {
-            TextButton(onClick = actions::closeAiConfigDialog) {
-                Text("取消")
-            }
+            if (error != null) TextButton(onClick = onClose) { Text("关闭") }
         },
     )
 }
 
 @Composable
-private fun VideoApiConfigDialog(
-    state: TvBoxUiState,
-    actions: TvBoxViewModel,
-) {
-    val configUrl = state.videoApiConfigServerUrl
-    AlertDialog(
-        onDismissRequest = actions::closeVideoApiConfigDialog,
-        title = { Text("手机扫码添加视频接口") },
-        text = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(22.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (configUrl == null) {
-                    Box(
-                        modifier = Modifier.size(220.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("正在启动配置服务...")
-                    }
-                } else {
-                    val qrBitmap = remember(configUrl) { createQrBitmap(configUrl, 320) }
-                    Image(
-                        bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "视频接口配置二维码",
-                        modifier = Modifier.size(220.dp),
-                    )
-                }
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = "使用手机扫描二维码",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text = "或在同一局域网的手机浏览器访问地址：",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = configUrl ?: "正在生成地址...",
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = "手机页面里填写接口名称和 MacCms 地址，确认后会自动添加到电视的视频接口列表。",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = "示例：https://example.com/api.php/provide/vod",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    if (state.videoApiConfigSavedMessage != null) {
-                        Text(
-                            text = state.videoApiConfigSavedMessage,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    if (state.videoApiConfigServerError != null) {
-                        Text(
-                            text = state.videoApiConfigServerError,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            SettingsActionButton(text = "完成", onClick = actions::closeVideoApiConfigDialog)
-        },
-        dismissButton = {
-            TextButton(onClick = actions::closeVideoApiConfigDialog) {
-                Text("取消")
-            }
-        },
-    )
-}
-
-@Composable
-private fun AiProviderSetting(
-    selectedProvider: AiProvider,
-    modelName: String,
-    apiKey: String,
-    onProviderSelect: (String) -> Unit,
-    onOpenConfig: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val displayModelName = modelName.ifBlank { selectedProvider.defaultModel }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(0.9f)) {
-            Text(
-                text = "大模型选择",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Box {
-                SettingsActionButton(
-                    text = "${selectedProvider.name} ▾",
-                    onClick = { expanded = true },
-                )
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    AiProviders.all.forEach { provider ->
-                        val selected = provider.id == selectedProvider.id
-                        DropdownMenuItem(
-                            text = { Text(if (selected) "已选 · ${provider.name}" else provider.name) },
-                            onClick = {
-                                expanded = false
-                                onProviderSelect(provider.id)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-        SettingsActionButton(
-            text = "模型：$displayModelName",
-            onClick = onOpenConfig,
-            modifier = Modifier.weight(1.25f),
-        )
-        SettingsActionButton(
-            text = if (apiKey.isBlank()) "API Key：未配置" else "API Key：已配置",
-            onClick = onOpenConfig,
-            modifier = Modifier.weight(1.1f),
-        )
-    }
-}
-
-@Composable
-private fun SettingsActionButton(
+internal fun SettingsActionButton(
     text: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
@@ -1207,89 +796,6 @@ private fun SettingsActionButton(
             fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun HomeApiLineSetting(
-    apiLines: List<ApiLine>,
-    selectedApiLine: ApiLine?,
-    customLineCount: Int,
-    onSelect: (String) -> Unit,
-    onOpenConfig: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "首页渲染数据",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = selectedApiLine?.let { "当前使用：${it.name}" } ?: "请选择首页资源站",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = if (customLineCount > 0) {
-                    "已添加 $customLineCount 条自定义 MacCms 接口"
-                } else {
-                    "暂无自定义接口"
-                },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                SettingsActionButton(
-                    text = "${selectedApiLine?.name ?: "选择资源"} ▾",
-                    enabled = apiLines.isNotEmpty(),
-                    onClick = { expanded = true },
-                )
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    apiLines.forEach { line ->
-                        val selected = line.id == selectedApiLine?.id
-                        DropdownMenuItem(
-                            text = {
-                                Text(if (selected) "已选 · ${line.name}" else line.name)
-                            },
-                            onClick = {
-                                expanded = false
-                                onSelect(line.id)
-                            },
-                        )
-                    }
-                }
-            }
-            SettingsActionButton(
-                text = "添加接口",
-                onClick = onOpenConfig,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsSectionTitle(
-    title: String,
-    subtitle: String,
-) {
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-        )
-        Text(
-            text = subtitle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -1355,6 +861,7 @@ private fun MovieGrid(
     onMovieClick: (Int) -> Unit,
     onDoubanHotClick: (com.tvbox.app.domain.DoubanHotItem) -> Unit,
     onLoadMore: () -> Unit,
+    onRetryHome: () -> Unit,
     showSectionHeader: Boolean,
     focus: ReturnFocus,
     onContinue: (com.tvbox.app.domain.WatchHistoryItem) -> Unit,
@@ -1367,20 +874,21 @@ private fun MovieGrid(
     var savedContext by rememberSaveable { mutableStateOf(contextKey) }
     LaunchedEffect(contextKey) {
         if (savedContext != contextKey) {
-            focus.reset()
+            if (focus.lastKey?.startsWith("continue:") != true) focus.reset()
             gridState.scrollToItem(0)
             savedContext = contextKey
         }
         loadMoreFocused = false
     }
     val recent = state.historyItems.continueWatching()
+    val feedUnavailable = state.homeLoading || state.homeError != null
     val itemOffset = (if (recent.isNotEmpty()) 1 else 0) + (if (state.homeNotice != null) 1 else 0)
     val focusItems = recent.map { "continue:${it.apiLineId}:${it.movieId}" to 0 } +
         if (state.isShowingDoubanHot) state.doubanHotMovies.mapIndexed { index, item -> "douban:${item.doubanId}" to index + itemOffset }
         else state.movies.mapIndexed { index, movie -> "${movie.apiLineId}:${movie.id}" to index + itemOffset }
     RestoreGridFocus(focus, gridState, focusItems)
     Column(modifier = modifier.fillMaxSize()) {
-        if (showSectionHeader) {
+        if (showSectionHeader && !feedUnavailable) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1434,8 +942,19 @@ private fun MovieGrid(
                     }
                 }
             }
+            if (feedUnavailable) {
+                item(key = "home-feed-status", span = { GridItemSpan(maxLineSpan) }) {
+                    val statusModifier = Modifier.fillMaxWidth().heightIn(min = 180.dp)
+                    if (state.homeLoading) {
+                        LoadingState("正在加载影片", statusModifier)
+                    } else {
+                        ErrorState(checkNotNull(state.homeError), onRetryHome, statusModifier)
+                    }
+                }
+                return@LazyVerticalGrid
+            }
             state.homeNotice?.let { notice ->
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(key = "home-feed-notice", span = { GridItemSpan(maxLineSpan) }) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1481,7 +1000,7 @@ private fun MovieGrid(
                 }
             }
             if (state.canLoadMore || state.loadingMore) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(key = "home-load-more", span = { GridItemSpan(maxLineSpan) }) {
                     Row(
                         modifier = Modifier.padding(vertical = 10.dp),
                         horizontalArrangement = Arrangement.Center,
@@ -1494,7 +1013,7 @@ private fun MovieGrid(
                             },
                             modifier = Modifier.onFocusChanged { focusState ->
                                 if (focusState.isFocused) {
-                                    if (!loadMoreFocused && !state.loadingMore) {
+                                    if (!loadMoreFocused && state.canLoadMore && !state.homeLoadMoreFailed) {
                                         onLoadMore()
                                     }
                                     loadMoreFocused = true
@@ -1503,7 +1022,11 @@ private fun MovieGrid(
                                 }
                             },
                         ) {
-                            Text(if (state.loadingMore) "加载中..." else "加载更多")
+                            Text(when {
+                                state.loadingMore -> "加载中..."
+                                state.homeLoadMoreFailed -> "加载失败，重试本页"
+                                else -> "加载更多"
+                            })
                         }
                     }
                 }
@@ -1520,98 +1043,9 @@ private fun MovieGrid(
     }
 }
 
-@Composable
-private fun ThemeSetting(
-    selectedTheme: TvTheme,
-    onThemeSelect: (TvTheme) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("界面主题", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "当前：${selectedTheme.displayName}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "选择后立即生效，设置会保存到本机。",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvTheme.entries.forEach { theme ->
-                SettingsActionButton(
-                    text = if (selectedTheme == theme) "✓ ${theme.displayName}" else theme.displayName,
-                    selected = selectedTheme == theme,
-                    onClick = { onThemeSelect(theme) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DeviceModeSetting(selectedMode: DeviceMode, onModeSelect: (DeviceMode) -> Unit) {
-    val context = LocalContext.current
-    val detectedMode = remember(context) { context.detectDeviceMode() }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("当前：${selectedMode.displayName}", style = MaterialTheme.typography.titleMedium)
-        Text(selectedMode.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall)
-        Text("系统自动识别：${detectedMode.displayName}。播放行为以你的选择为准。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(DeviceMode.entries, key = { it.storageKey }) { mode ->
-                SettingsActionButton(
-                    text = if (selectedMode == mode) "✓ ${mode.displayName}" else mode.displayName,
-                    selected = selectedMode == mode,
-                    onClick = { onModeSelect(mode) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FontScaleSetting(
-    selectedFontScale: TvFontScale,
-    onFontScaleSelect: (TvFontScale) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("字体大小", style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = "当前：${selectedFontScale.displayName}。文字和内容卡片会立即按此大小调整。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(TvFontScale.entries, key = { it.storageKey }) { fontScale ->
-                SettingsActionButton(
-                    text = if (selectedFontScale == fontScale) {
-                        "✓ ${fontScale.displayName}"
-                    } else {
-                        fontScale.displayName
-                    },
-                    selected = selectedFontScale == fontScale,
-                    onClick = { onFontScaleSelect(fontScale) },
-                )
-            }
-        }
-    }
-}
-
 private fun Category.allChildrenLabel(): String {
     val baseName = name.removeSuffix("片")
     return "全部$baseName"
-}
-
-private fun PlaybackHealthSnapshot.qualitySummaryText(): String {
-    if (entryCount <= 0) return "暂无线路质量记录"
-    return "已记录 $entryCount 条线路表现｜成功 $successCount｜失败 $failureCount｜卡顿 $slowBufferCount｜保留最近 30 天"
 }
 
 internal fun createQrBitmap(content: String, size: Int): Bitmap {

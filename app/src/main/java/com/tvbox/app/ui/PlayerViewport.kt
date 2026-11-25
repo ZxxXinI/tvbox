@@ -23,7 +23,7 @@ internal fun VideoScaleMode.toPlayerResizeMode(): Int = when (this) {
     VideoScaleMode.Fill -> AspectRatioFrameLayout.RESIZE_MODE_FILL
 }
 
-/** Only the on-demand playback page owns immersive mode; restore it on exit. */
+/** Restores the system bars when leaving the full-screen player. */
 @Suppress("DEPRECATION")
 @Composable
 internal fun FullscreenWhilePlayingPageVisible(activity: Activity?) {

@@ -1,5 +1,15 @@
 ﻿# Release - 2026-06-25
 
+## 2026-11-25 09:19 - 发布 v1.4.1
+
+- `app/build.gradle.kts` 升级为 `10401 / 1.4.1`，以便旧版收到更新。
+- `app/src/main` 纳入直播双主题与房间搜索、首页自动切源、详情与续播重试、设置侧栏及 QQ 群号。
+- `app/src/test` 纳入扫码配置会话、视频源切换、直播筛选和浏览恢复相关回归测试。
+- `README.md`、`CHANGELOG.md` 同步功能和版本说明， `update.json` 提供实际安装包地址、大小和校验值。
+- 验证通过 133 项单元测试、签名 Release 构建和关键 Lint。APK 适用于 Android 9 及以上，v2 签名与 ZIP 对齐校验通过，证书与旧版一致。
+- APK `TVBox-v1.4.1.apk`，5132737 字节，SHA-256 `a9515fd5322453306c76c1ef3419b9325a65a0fc855dbacf75126bbc03c0295c`。签名证书 SHA-256 `7244ed4db1ee7488c98d1df3c80b2ccacf72e7983aca3f6341c6268ae1dd8b09`。
+- [主日志](README.md) · [直播日志](platform-live.md) · [设置日志](settings.md) · [GitHub Release](https://github.com/ZxxXinI/tvbox/releases/tag/v1.4.1)
+
 ## 2026-11-16 20:38 - 发布 v1.3.14：片头、扫码与播放操作
 
 ### 文件修改、原因与用途

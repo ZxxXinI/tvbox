@@ -1,5 +1,19 @@
 ﻿# 手机扫码输入搜索
 
+## 2026-11-20 10:05 - 扫码配置共用一次性会话
+
+- `app/src/main/java/com/tvbox/app/data/PhoneFormServer.kt` 提供共用的局域网会话。打开表单、提交和重新生成二维码均使用当前会话，5 分钟到期或配置保存后关闭监听。
+- `PhoneSearchServer.kt`、`AiConfigServer.kt` 和 `VideoApiConfigServer.kt` 分别提供原有的搜索、模型和 MacCms 表单。配置校验失败允许更正，已提交的 API Key 不回显。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt` 绑定当前弹窗的会话，在主线程检查会话后保存设置。关闭弹窗、离开设置或切后台时回收会话。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt` 和 `SettingsScreen.kt` 在配置成功时收起二维码，过期时显示重新生成入口。
+- `app/src/test/java/com/tvbox/app/data/PhoneConfigServerTest.kt` 在本机回环接口验证授权、一次保存、纠错、过期及关闭。继续运行原手机扫码搜索回归测试。
+
+### 验证
+
+- 2026-11-20 10:06 完成全量 131 项单元测试，含本轮 7 项回归。Release 构建、Release 关键 Lint、APK 签名和 ZIP 对齐校验通过。
+- 签名测试包为 `app/build/outputs/tvbox-test-apks/TVBox-v1.3.14-live-search-qr-test.apk`（5099969 字节），版本 1.3.14（10314），SHA-256 为 `3ad813056b59b5ced3acb2d3cb105b754ee1743d56d16dc22157e191db4bd8b8`。
+- 手机与盒子跨设备扫码、全屏效果和遥控器焦点待实机验收。
+
 ## 2026-11-15 19:35 - 搜索页菜单键快捷入口（未发布）
 
 - `app/src/main/java/com/tvbox/app/ui/SearchMenuShortcut.kt`：新增可独立测试的菜单按下／松开状态规则，只有在搜索页完成的一次有效按键才打开扫码；长按去重、取消、后台重置和跨页面松开均不误触发。

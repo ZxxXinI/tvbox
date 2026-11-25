@@ -1,5 +1,27 @@
 ﻿# 多来源影视加载优化 - 2026-08-25
 
+## 2026-11-20 10:05 - 区分搜索无匹配与视频源请求失败
+
+- `app/src/main/java/com/tvbox/app/data/MovieRepository.kt` 分开统计响应正常和请求失败的来源。成功返回空列表也计作正常响应，主动重试会重新查询处于冷却状态的来源。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt` 和 `SearchScreen.kt` 分别显示全失败、无匹配和部分失败。有结果时继续显示片单及失败线路数。
+- `app/src/test/java/com/tvbox/app/data/MovieRepositoryTest.kt` 和 `app/src/test/java/com/tvbox/app/ui/TvBoxBrowseRecoveryTest.kt` 用受控来源覆盖计数、重试和部分结果保留。
+
+## 2026-11-20 09:25 - 首页视频源自动切换
+
+用户反馈首选源量子失效时，首页直接显示请求超时。首页影片目录现在从当前源开始，按视频源列表顺序循环尝试，每个源的首屏请求最多等待 4 秒。单个来源超时、请求异常或没有可显示影片时继续尝试，全部试完才显示失败和重试入口。豆瓣热播接口失败、没有热播内容，或热播可用但当前源分类无法加载时，也会尝试影片目录。
+
+- `app/src/main/java/com/tvbox/app/data/HomeCatalog.kt` 处理有序候选、单源超时和取消，并将原来的分类 13 限定在量子。
+- `app/src/main/java/com/tvbox/app/data/MovieRepository.kt` 提供首页目录请求。重试首屏时重新请求此前返回空列表的源。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt` 在同一个首页任务内处理豆瓣、目录及分类，把实际来源、影片和分类一并应用。分类和翻页使用实际来源，详情重试使用影片自身的来源。
+- `app/src/main/java/com/tvbox/app/ui/SettingsScreen.kt` 读取已保存的首选源。自动切换只更新本次会话的实际来源。
+- `app/src/test/java/com/tvbox/app/data/MovieRepositoryTest.kt` 用受控响应覆盖首选正常、故障切换与翻页、超时和空响应、循环、重试及取消。
+
+### 验证
+
+- 2026-11-20 09:28 完成全量 118 项单元测试，含 5 项首页切源回归。Release 构建和 Release 关键 Lint 均通过。
+- 签名测试包为 `TVBox-v1.3.14-home-source-fallback-test.apk`（5099969 字节），版本为 1.3.14（10314）。APK 签名和 ZIP 对齐校验通过，SHA-256 为 `e99082961e24b43a6e401e266276fa34cb03ddae1d0bc36de630de24216d2af5`。
+- 电视盒子与真实视频源的故障场景待验收。
+
 ## 目标
 
 将 TVBox 的搜索与详情流程从单来源等待或全量等待，调整为适合电视端网络与性能条件的受控并行和渐进呈现。

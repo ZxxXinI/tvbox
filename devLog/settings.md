@@ -1,5 +1,11 @@
 ﻿# Settings - 2026-06-28
 
+## 2026-11-25 09:12 - 设置页显示 QQ 群
+
+- `app/src/main/java/com/tvbox/app/ui/SettingsScreen.kt` 在「播放」下方新增「关于」分组，直接显示「QQ群：734624519」。群号为静态文字，遥控器焦点继续在可操作项之间移动。
+- `:app:compileDebugKotlin --offline` 编译通过。
+- [返回主日志](README.md)
+
 ## 2026-08-07 07:50 - 修复字体大小导致的启动闪退
 
 ## File Changes

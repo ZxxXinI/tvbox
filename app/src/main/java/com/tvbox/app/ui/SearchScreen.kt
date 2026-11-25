@@ -141,7 +141,10 @@ fun SearchScreen(
             SearchActionButton(text = "手机扫码输入 · 菜单键", onClick = actions::openPhoneSearchDialog)
             Spacer(modifier = Modifier.height(16.dp))
             val searchProgress = state.searchTotalSources.takeIf { it > 0 }?.let { total ->
-                "已完成 ${state.searchCompletedSources}/$total 条线路 · 找到 ${state.searchResults.size} 个结果"
+                buildString {
+                    append("已完成 ${state.searchCompletedSources}/$total 条线路 · 找到 ${state.searchResults.size} 个结果")
+                    if (state.searchFailedSources > 0) append(" · ${state.searchFailedSources} 条请求失败")
+                }
             }
             when {
                 state.searchLoading && state.searchResults.isEmpty() -> LoadingState(
@@ -149,7 +152,7 @@ fun SearchScreen(
                 )
                 state.searchError != null && state.searchResults.isEmpty() -> ErrorState(
                     message = state.searchError,
-                    onRetry = actions::submitSearch,
+                    onRetry = actions::retrySearch,
                 )
                 else -> Column(modifier = Modifier.fillMaxSize()) {
                     searchProgress?.let { progress ->

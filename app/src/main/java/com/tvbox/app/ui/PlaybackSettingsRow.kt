@@ -25,6 +25,9 @@ internal fun PlaybackSettingsRow(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    trailingText: String = if (selected) "✓" else "",
+    enabled: Boolean = true,
+    inlineValue: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     val accent = Color(0xFF7AE2BA)
@@ -38,17 +41,34 @@ internal fun PlaybackSettingsRow(
         modifier.fillMaxWidth().clip(shape).background(background)
             .border(1.dp, if (focused) accent else Color.Transparent, shape)
             .onFocusChanged { focused = it.isFocused }
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, color = Color.White.copy(alpha = if (selected || focused) 1f else 0.78f),
-                style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(value, color = Color.White.copy(alpha = if (focused) 0.7f else 0.5f),
-                style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val titleColor = Color.White.copy(alpha = when {
+            !enabled -> 0.42f
+            selected || focused -> 1f
+            else -> 0.78f
+        })
+        val valueColor = Color.White.copy(alpha = if (focused) 0.75f else 0.58f)
+        if (inlineValue) {
+            Text(title, Modifier.weight(1f), color = titleColor, style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(Modifier.weight(1.5f).padding(start = 8.dp), contentAlignment = Alignment.CenterEnd) {
+                Text(value, color = valueColor, style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        } else {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, color = titleColor, style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(value, color = valueColor, style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
-        Text("›", Modifier.padding(start = 8.dp), color = if (focused) accent else Color.White.copy(alpha = 0.45f),
-            style = MaterialTheme.typography.titleMedium)
+        if (trailingText.isNotEmpty()) {
+            Text(trailingText, Modifier.padding(start = 8.dp), color = if (selected || focused) accent else Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.titleMedium)
+        }
     }
 }

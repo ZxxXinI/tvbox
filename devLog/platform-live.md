@@ -1,5 +1,59 @@
 ﻿# 平台直播（斗鱼）- 2026-08-01
 
+## 2026-11-20 11:23 - 影院主题直播浏览界面
+
+- 将 `DefaultPlatformLiveScreen.kt` 扩展至共用的 `app/src/main/java/com/tvbox/app/ui/PlatformLiveBrowserScreen.kt`。影院主题宽屏采用左侧平台及收藏栏，右侧显示分类标题、搜索和二级分类标签。窄屏的平台入口改为横排，默认主题保留原横排结构。
+- `app/src/main/java/com/tvbox/app/ui/PlatformLiveScreen.kt` 让两种主题复用房间列表、搜索、分页与收藏。影院主题宽屏三列，默认主题宽屏四列。收藏星标位于右下角，播放器返回后按房间定位。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt` 统一平台和分类的选择与恢复，直播页显示主题内的平台导航，回到首页后恢复影院主导航。
+- `app/src/main/java/com/tvbox/app/ui/theme/Theme.kt` 移除旧多层直播列表的列数设置。列数由房间区域实际宽度和主题决定。
+- `app/src/test/java/com/tvbox/app/ui/TvBoxBrowseRecoveryTest.kt` 验证两种主题的首屏、播放返回、收藏返回、分类切换和重返直播，同时验证影院主导航的显示范围。
+
+### 验证
+
+- 2026-11-20 11:23 完成全量 133 项单元测试、Release 构建及 Release 关键 Lint。APK 签名、ZIP 对齐和版本 1.3.14（10314）校验通过。
+- 签名包为 `app/build/outputs/tvbox-test-apks/TVBox-v1.3.14-cinema-live-theme-test.apk`，SHA-256 为 `666686b99c7f236f14ba54d2a79ae723f1a09fb19e5c10acb07d7e9e9729b38b`。
+- 盒子上的排版和遥控器焦点待实机验收。
+
+## 2026-11-20 11:06 - 默认主题直播浏览界面
+
+- `app/src/main/java/com/tvbox/app/ui/DefaultPlatformLiveScreen.kt` 落地默认主题方案。顶部平台使用横向排列，一级分类用下拉，二级分类用可横向滚动的标签。收藏在标题右侧，搜索与分类标题在宽屏同行。
+- `app/src/main/java/com/tvbox/app/ui/PlatformLiveScreen.kt` 复用房间卡片、查询、收藏、分页和播放器返回定位。默认主题宽屏四列，较窄时调整为三列或两列。标题最多两行，星标位于右下角。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt` 首次进入选中首个平台，并打开该平台首个有二级分类的分组。在同一次应用运行中重新进入，或从收藏返回时恢复之前的平台和分类。平台或分类切换立即显示加载状态，取消或晚到的响应不会覆盖当前选择。
+- `app/src/test/java/com/tvbox/app/ui/TvBoxBrowseRecoveryTest.kt` 验证进入直播、跳过空一级分类、切换平台及分类、收藏返回和再次进入。
+
+### 验证
+
+- 2026-11-20 11:07 完成全量 133 项单元测试、Release 构建和 Release 关键 Lint。APK 签名、ZIP 对齐及版本 1.3.14（10314）均已校验。
+- 签名包为 `app/build/outputs/tvbox-test-apks/TVBox-v1.3.14-default-live-theme-test.apk`，SHA-256 为 `de6d90db733e8c94edaced9dc081e2cdc56cd009c316d31e2ec45f4d99515c5a`。
+- 新界面的排版和遥控器焦点待实机验收。
+
+## 2026-11-20 10:24 - 二级分类房间搜索
+
+- `app/src/main/java/com/tvbox/app/ui/PlatformLiveScreen.kt` 在二级分类房间列表上方添加「用户名或标题」、搜索和清除。支持输入法搜索键，查询进度和无匹配状态区分已查页面与完整分类。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt` 匹配主播名和标题，忽略英文大小写及关键词首尾空白。复用当前平台分类的房间分页，每批最多请求后续 5 页。搜索错误保留已有结果，清除后回到已加载的全部房间。
+- 搜索结果打开播放器后，上一个和下一个直播间沿用匹配结果，返回房间列表保留查询。退出二级分类会清空查询。
+- `app/src/test/java/com/tvbox/app/ui/TvBoxBrowseRecoveryTest.kt` 用 8 页假数据验证主播名在第 3 页命中、直播标题在第 8 页命中、单批页数及清除搜索。
+
+### 验证
+
+- 2026-11-20 10:24 完成 Release 构建与签名、ZIP 对齐和版本校验。使用同签名覆盖安装至 `emulator-5554`，安装包与本地 SHA-256 一致。
+- 签名包为 `app/build/outputs/tvbox-test-apks/TVBox-v1.3.14-live-room-search-test.apk`，SHA-256 为 `d3400f3a2f50d845b64ad36a6b1405573e58f9a86a78d8f729f0a15ba37e38cb`。
+- 全量 132 项单元测试和 Release 关键 Lint 通过。受控测试覆盖跨页匹配。
+- 模拟器使用斗鱼「网游竞技 → 英雄联盟」真实分类。主播名片段 `MQ` 和标题片段 `BLG` 均命中，找不到房间时显示空结果，清除后恢复房间列表。带关键词返回后进入「热门游戏」，搜索条件清空。遥控器方向键可从首个房间聚焦搜索框。模拟器所用分类的测试数据只有一页。
+- 截图见 `app/build/outputs/room-search-qa/match.png`、`title-match.png`、`no-match.png`、`cleared.png` 和 `other-category.png`。
+
+## 2026-11-20 10:05 - 平台直播全屏与房间焦点
+
+- `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt` 和 `TvBoxViewModel.kt` 在平台直播播放器中隐藏影院主题导航，返回浏览页面后恢复导航。
+- `app/src/main/java/com/tvbox/app/ui/PlatformLiveScreen.kt` 复用 `PlayerViewport.kt` 的系统栏控制。首次进入房间列表时聚焦初始房间，从播放页返回时聚焦当前房间，翻页追加保持当前焦点。
+- `app/src/test/java/com/tvbox/app/ui/TvBoxBrowseRecoveryTest.kt` 覆盖影院主题下浏览与播放的导航栏状态。系统栏和遥控器焦点待实机验收。
+
+## 2026-11-20 09:46 - 房间列表翻页失败可原位重试
+
+- `app/src/main/java/com/tvbox/app/ui/TvBoxViewModel.kt` 区分直播房间首屏错误与追加页错误。追加失败保留当前分类、最后成功的页码和已有房间，重试只请求失败页。
+- `app/src/main/java/com/tvbox/app/ui/PlatformLiveScreen.kt` 追加错误显示在底部原控件。加载和失败期间保留该控件的焦点，成功追加时不重新定位房间。
+- `app/src/test/java/com/tvbox/app/ui/TvBoxBrowseRecoveryTest.kt` 模拟第二页失败和重试，验证请求顺序为第 1 页、第 2 页、第 2 页。真机焦点待验收。
+
 ## 2026-09-17 06:52 - 直播播放亮屏与房间收藏
 
 ### 文件变更

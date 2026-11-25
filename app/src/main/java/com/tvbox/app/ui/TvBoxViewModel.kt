@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tvbox.app.data.AppSettingsRepository
 import com.tvbox.app.BuildConfig
-import com.tvbox.app.data.AiConfigServer
 import com.tvbox.app.data.AiRequestConfig
 import com.tvbox.app.data.AiRecommendationRepository
 import com.tvbox.app.data.AppUpdateRepository
@@ -16,12 +15,18 @@ import com.tvbox.app.data.DoubanHotRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
+import com.tvbox.app.data.MovieDetailUpdate
 import com.tvbox.app.data.PlaybackHealthRepository
 import com.tvbox.app.data.DefaultPlatformLiveRepository
 import com.tvbox.app.data.PlatformLiveRepository
 import com.tvbox.app.data.PlatformLiveFavoritesRepository
-import com.tvbox.app.data.VideoApiConfigServer
+import com.tvbox.app.data.PhoneFormServer
+import com.tvbox.app.data.PhoneFormSubmission
 import com.tvbox.app.data.PhoneSearchServer
+import com.tvbox.app.data.aiConfigServer
+import com.tvbox.app.data.videoApiConfigServer
+import com.tvbox.app.data.getHomeCategoriesOrNull
+import com.tvbox.app.data.loadAvailableHomeCatalog
 import com.tvbox.app.domain.AiRecommendationItem
 import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.introSkipKey
@@ -54,7 +59,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,6 +124,7 @@ data class TvBoxUiState(
     val homeLoading: Boolean = false,
     val loadingMore: Boolean = false,
     val homeError: String? = null,
+    val homeLoadMoreFailed: Boolean = false,
     val historyItems: List<WatchHistoryItem> = emptyList(),
     val searchQuery: String = "",
     val searchResults: List<Movie> = emptyList(),
@@ -120,6 +132,7 @@ data class TvBoxUiState(
     val searchError: String? = null,
     val searchCompletedSources: Int = 0,
     val searchTotalSources: Int = 0,
+    val searchFailedSources: Int = 0,
     val detailMovie: Movie? = null,
     val detailLoading: Boolean = false,
     val detailError: String? = null,
@@ -154,11 +167,13 @@ data class TvBoxUiState(
     val platformLiveCategories: List<PlatformLiveCategory> = emptyList(),
     val platformLiveSelectedCategory: PlatformLiveCategory? = null,
     val platformLiveRooms: List<PlatformLiveRoom> = emptyList(),
+    val platformLiveRoomQuery: String = "",
     val platformLiveRoomIndex: Int = 0,
     val platformLiveRoomPage: Int = 1,
     val platformLiveRoomPageCount: Int = 1,
     val platformLiveLoading: Boolean = false,
     val platformLiveLoadingMore: Boolean = false,
+    val platformLiveLoadMoreFailed: Boolean = false,
     val platformLiveResolving: Boolean = false,
     val platformLiveError: String? = null,
     val platformLiveStream: ResolvedPlatformLiveStream? = null,
@@ -192,7 +207,7 @@ data class TvBoxUiState(
     val videoApiConfigSavedMessage: String? = null,
 ) {
     val canLoadMore: Boolean
-        get() = page < pageCount && !homeLoading && !loadingMore
+        get() = page < pageCount && homeError == null && !homeLoading && !loadingMore
 
     val isShowingDoubanHot: Boolean
         get() = homeFeedMode == HomeFeedMode.DoubanHot && !doubanHotFallbackActive
@@ -202,6 +217,21 @@ data class TvBoxUiState(
 
     val selectedApiLine: ApiLine?
         get() = apiLines.firstOrNull { it.id == selectedApiLineId }
+
+    val visiblePlatformLiveRooms: List<PlatformLiveRoom>
+        get() = if (platformLiveRoomQuery.isBlank()) platformLiveRooms else platformLiveRooms.filter { room ->
+            room.anchor.contains(platformLiveRoomQuery, ignoreCase = true) ||
+                room.title.contains(platformLiveRoomQuery, ignoreCase = true)
+        }
+
+    val preferredHomeApiLine: ApiLine?
+        get() = apiLines.firstOrNull { it.id == appSettings.homeApiLineId }
+
+    internal val showCinemaNavigation: Boolean
+        get() = appSettings.theme == TvTheme.Cinema && when (screen) {
+            TvScreen.Live, TvScreen.Player, TvScreen.PlatformLive -> false
+            else -> true
+        }
 }
 
 class TvBoxViewModel(
@@ -215,7 +245,9 @@ class TvBoxViewModel(
     private val playbackHealthRepository: PlaybackHealthRepository = DefaultPlaybackHealthRepositoryPlaceholder(),
     private val historyRepository: HistoryRepository,
     private val platformLiveFavoritesRepository: PlatformLiveFavoritesRepository,
-) : ViewModel() {
+    private val platformLiveServiceUrl: String = BuildConfig.PLATFORM_LIVE_SERVICE_URL,
+    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+) : ViewModel(scope) {
     private val _state = MutableStateFlow(TvBoxUiState())
     val state: StateFlow<TvBoxUiState> = _state.asStateFlow()
 
@@ -224,6 +256,7 @@ class TvBoxViewModel(
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var historyResumeJob: Job? = null
+    private var retryDetailRequest: (() -> Unit)? = null
     private var liveJob: Job? = null
     private var platformLiveJob: Job? = null
     private var platformLiveResolveJob: Job? = null
@@ -236,8 +269,8 @@ class TvBoxViewModel(
     private var updateDownloadJob: Job? = null
     private var updateInstallStateJob: Job? = null
     private var settingsWriteJob: Job? = null
-    private var aiConfigServer: AiConfigServer? = null
-    private var videoApiConfigServer: VideoApiConfigServer? = null
+    private var activeAiConfigServer: PhoneFormServer? = null
+    private var activeVideoConfigServer: PhoneFormServer? = null
     private var phoneSearchServer: PhoneSearchServer? = null
     private var phoneSearchStartJob: Job? = null
     private var phoneSearchGeneration = 0L
@@ -281,7 +314,6 @@ class TvBoxViewModel(
     }
 
     fun refreshHome(forceRefresh: Boolean = false) {
-        loadCategoriesOnly()
         _state.update { state ->
             if (state.homeFeedMode == HomeFeedMode.DoubanHot) {
                 state.copy(doubanHotFallbackActive = false, homeNotice = null)
@@ -360,10 +392,13 @@ class TvBoxViewModel(
     }
 
     fun updateHomeApiLine(apiLineId: String) {
-        if (_state.value.apiLines.none { it.id == apiLineId }) return
-        if (_state.value.selectedApiLineId == apiLineId) return
-        val settings = _state.value.appSettings.copy(homeApiLineId = apiLineId)
-        saveSettings(settings)
+        val current = _state.value
+        if (current.apiLines.none { it.id == apiLineId }) return
+        if (current.appSettings.homeApiLineId == apiLineId && current.selectedApiLineId == apiLineId &&
+            current.homeError == null
+        ) return
+        val settings = current.appSettings.copy(homeApiLineId = apiLineId)
+        if (settings != current.appSettings) saveSettings(settings)
         _state.update {
             it.copy(
                 appSettings = settings,
@@ -387,7 +422,7 @@ class TvBoxViewModel(
     fun loadNextPage() {
         val current = _state.value
         if (!current.canLoadMore) return
-        loadHomePage(reset = false, forceRefresh = current.homeNotice != null)
+        loadHomePage(reset = false, forceRefresh = current.homeLoadMoreFailed || current.homeNotice != null)
     }
 
     fun openHome() {
@@ -425,12 +460,14 @@ class TvBoxViewModel(
                 platformLiveStream = null,
             )
         }
-        if (BuildConfig.PLATFORM_LIVE_SERVICE_URL.isBlank()) {
+        if (platformLiveServiceUrl.isBlank()) {
             _state.update {
                 it.copy(platformLiveError = "测试服务未配置，请使用 TVBOX_PLATFORM_LIVE_SERVICE_URL 构建 APK")
             }
         } else if (_state.value.platformLiveSites.isEmpty()) {
             loadPlatformLiveSites()
+        } else {
+            returnToPlatformLiveBrowse()
         }
     }
 
@@ -444,11 +481,13 @@ class TvBoxViewModel(
     }
 
     fun refreshPlatformLive() {
-        when (_state.value.platformLiveDestination) {
+        val current = _state.value
+        when (current.platformLiveDestination) {
             PlatformLiveDestination.Sites -> loadPlatformLiveSites()
             PlatformLiveDestination.Favorites -> loadPlatformLiveFavorites()
-            PlatformLiveDestination.ParentCategories -> _state.value.platformLiveSelectedSite?.let(::loadPlatformLiveCategories)
-            PlatformLiveDestination.Categories -> _state.value.platformLiveSelectedSite?.let(::loadPlatformLiveCategories)
+            PlatformLiveDestination.ParentCategories, PlatformLiveDestination.Categories -> {
+                current.platformLiveSelectedSite?.let(::loadPlatformLiveCategories)
+            }
             PlatformLiveDestination.Rooms -> _state.value.platformLiveSelectedCategory?.let {
                 loadPlatformLiveRooms(it, reset = true)
             }
@@ -677,13 +716,35 @@ class TvBoxViewModel(
         val current = _state.value
         val provider = AiProviders.find(current.appSettings.aiProviderId)
         val modelName = current.appSettings.aiModelName.ifBlank { provider.defaultModel }
-        val server = AiConfigServer(viewModelScope) { submittedModelName, submittedApiKey ->
-            applyAiConfigFromPhone(
-                modelName = submittedModelName,
-                apiKey = submittedApiKey,
-            )
-        }
-        aiConfigServer = server
+        lateinit var server: PhoneFormServer
+        server = aiConfigServer(
+            scope = viewModelScope,
+            provider = provider,
+            modelName = modelName,
+            onSubmit = { submittedModel, submittedKey ->
+                withContext(Dispatchers.Main.immediate) {
+                    if (activeAiConfigServer !== server || !server.isSessionActive ||
+                        _state.value.screen != TvScreen.Settings ||
+                        AiProviders.find(_state.value.appSettings.aiProviderId).id != provider.id
+                    ) {
+                        PhoneFormSubmission.Inactive("电视已离开此配置会话，请重新扫码。")
+                    } else {
+                        applyAiConfigFromPhone(submittedModel, submittedKey)
+                        PhoneFormSubmission.Accepted
+                    }
+                }
+            },
+            onExpired = {
+                withContext(Dispatchers.Main.immediate) {
+                    if (activeAiConfigServer === server && _state.value.aiConfigSavedMessage == null) {
+                        _state.update {
+                            it.copy(aiConfigServerUrl = null, aiConfigServerError = "二维码已过期，请重新生成。")
+                        }
+                    }
+                }
+            },
+        )
+        activeAiConfigServer = server
         _state.update {
             it.copy(
                 aiConfigDialogVisible = true,
@@ -693,24 +754,19 @@ class TvBoxViewModel(
             )
         }
         viewModelScope.launch {
-            runCatching {
-                server.start(
-                    provider = provider,
-                    modelName = modelName,
-                )
-            }.onSuccess { session ->
-                _state.update {
-                    it.copy(
-                        aiConfigServerUrl = session.url,
-                        aiConfigServerError = null,
-                    )
+            runCatching { withContext(Dispatchers.IO) { server.start() } }.onSuccess { url ->
+                if (activeAiConfigServer === server && server.isSessionActive) {
+                    _state.update {
+                        if (it.aiConfigSavedMessage != null) it
+                        else it.copy(aiConfigServerUrl = url, aiConfigServerError = null)
+                    }
                 }
             }.onFailure { error ->
-                _state.update {
-                    it.copy(
-                        aiConfigServerUrl = null,
-                        aiConfigServerError = "启动手机配置服务失败：${error.userMessage()}",
-                    )
+                if (error is CancellationException) throw error
+                if (activeAiConfigServer === server) {
+                    _state.update {
+                        it.copy(aiConfigServerUrl = null, aiConfigServerError = "启动配置服务失败：${error.userMessage()}")
+                    }
                 }
             }
         }
@@ -722,13 +778,33 @@ class TvBoxViewModel(
 
     fun openVideoApiConfigDialog() {
         closeVideoApiConfigDialog(stopOnly = true)
-        val server = VideoApiConfigServer(viewModelScope) { submittedLineName, submittedApiUrl ->
-            applyCustomVideoApiFromPhone(
-                lineName = submittedLineName,
-                apiUrl = submittedApiUrl,
-            )
-        }
-        videoApiConfigServer = server
+        lateinit var server: PhoneFormServer
+        server = videoApiConfigServer(
+            scope = viewModelScope,
+            onSubmit = { submittedName, submittedUrl ->
+                withContext(Dispatchers.Main.immediate) {
+                    if (activeVideoConfigServer !== server || !server.isSessionActive ||
+                        _state.value.screen != TvScreen.Settings
+                    ) {
+                        PhoneFormSubmission.Inactive("电视已离开此配置会话，请重新扫码。")
+                    } else {
+                        applyCustomVideoApiFromPhone(submittedName, submittedUrl)?.let {
+                            PhoneFormSubmission.Invalid(it)
+                        } ?: PhoneFormSubmission.Accepted
+                    }
+                }
+            },
+            onExpired = {
+                withContext(Dispatchers.Main.immediate) {
+                    if (activeVideoConfigServer === server && _state.value.videoApiConfigSavedMessage == null) {
+                        _state.update {
+                            it.copy(videoApiConfigServerUrl = null, videoApiConfigServerError = "二维码已过期，请重新生成。")
+                        }
+                    }
+                }
+            },
+        )
+        activeVideoConfigServer = server
         _state.update {
             it.copy(
                 videoApiConfigDialogVisible = true,
@@ -738,21 +814,21 @@ class TvBoxViewModel(
             )
         }
         viewModelScope.launch {
-            runCatching { server.start() }
-                .onSuccess { session ->
-                    _state.update {
-                        it.copy(
-                            videoApiConfigServerUrl = session.url,
-                            videoApiConfigServerError = null,
-                        )
+            runCatching { withContext(Dispatchers.IO) { server.start() } }
+                .onSuccess { url ->
+                    if (activeVideoConfigServer === server && server.isSessionActive) {
+                        _state.update {
+                            if (it.videoApiConfigSavedMessage != null) it
+                            else it.copy(videoApiConfigServerUrl = url, videoApiConfigServerError = null)
+                        }
                     }
                 }
                 .onFailure { error ->
-                    _state.update {
-                        it.copy(
-                            videoApiConfigServerUrl = null,
-                            videoApiConfigServerError = "启动视频接口配置服务失败：${error.userMessage()}",
-                        )
+                    if (error is CancellationException) throw error
+                    if (activeVideoConfigServer === server) {
+                        _state.update {
+                            it.copy(videoApiConfigServerUrl = null, videoApiConfigServerError = "启动配置服务失败：${error.userMessage()}")
+                        }
                     }
                 }
         }
@@ -763,8 +839,8 @@ class TvBoxViewModel(
     }
 
     private fun closeAiConfigDialog(stopOnly: Boolean) {
-        aiConfigServer?.stop()
-        aiConfigServer = null
+        activeAiConfigServer?.stop()
+        activeAiConfigServer = null
         if (!stopOnly) {
             _state.update {
                 it.copy(
@@ -778,8 +854,8 @@ class TvBoxViewModel(
     }
 
     private fun closeVideoApiConfigDialog(stopOnly: Boolean) {
-        videoApiConfigServer?.stop()
-        videoApiConfigServer = null
+        activeVideoConfigServer?.stop()
+        activeVideoConfigServer = null
         if (!stopOnly) {
             _state.update {
                 it.copy(
@@ -801,6 +877,7 @@ class TvBoxViewModel(
         _state.update {
             it.copy(
                 appSettings = settings,
+                aiConfigServerUrl = null,
                 aiConfigServerError = null,
                 aiConfigSavedMessage = "已收到手机配置，模型和 API Key 已保存。",
             )
@@ -843,6 +920,7 @@ class TvBoxViewModel(
                 pageCount = 1,
                 total = 0,
                 homeError = null,
+                videoApiConfigServerUrl = null,
                 videoApiConfigServerError = null,
                 videoApiConfigSavedMessage = "已添加视频接口：${customLine.name}",
             )
@@ -1079,7 +1157,11 @@ class TvBoxViewModel(
         }
     }
 
-    fun submitSearch() {
+    fun submitSearch() = search(retryUnavailableSources = false)
+
+    fun retrySearch() = search(retryUnavailableSources = true)
+
+    private fun search(retryUnavailableSources: Boolean) {
         val query = _state.value.searchQuery.trim()
         if (query.isBlank()) {
             _state.update { it.copy(searchResults = emptyList(), searchError = "请输入搜索关键词") }
@@ -1094,26 +1176,30 @@ class TvBoxViewModel(
                     searchResults = emptyList(),
                     searchCompletedSources = 0,
                     searchTotalSources = 0,
+                    searchFailedSources = 0,
                 )
             }
             try {
                 repository.searchProgressively(
-                    apiLineId = _state.value.selectedApiLineId,
+                    apiLineId = _state.value.let { it.preferredHomeApiLine?.id ?: it.selectedApiLineId },
                     page = 1,
                     keyword = query,
+                    retryUnavailableSources = retryUnavailableSources,
                 ).collect { update ->
+                    val finished = update.completedSources == update.totalSources
+                    val failedSources = update.completedSources - update.successfulSources
                     _state.update {
                         it.copy(
-                            searchLoading = update.completedSources < update.totalSources,
+                            searchLoading = !finished,
                             searchResults = update.movies,
                             searchCompletedSources = update.completedSources,
                             searchTotalSources = update.totalSources,
-                            searchError = if (
-                                update.completedSources == update.totalSources && update.movies.isEmpty()
-                            ) {
-                                "没有找到相关影片"
-                            } else {
-                                null
+                            searchFailedSources = failedSources,
+                            searchError = when {
+                                !finished || update.movies.isNotEmpty() -> null
+                                update.successfulSources == 0 -> "暂时无法连接视频源，请重试"
+                                failedSources > 0 -> "可用视频源未找到相关影片，部分视频源请求失败"
+                                else -> "没有找到相关影片"
                             },
                         )
                     }
@@ -1131,6 +1217,7 @@ class TvBoxViewModel(
     fun openDetail(movieId: Int, apiLineId: String = _state.value.selectedApiLineId) {
         historyResumeJob?.cancel()
         detailJob?.cancel()
+        retryDetailRequest = { openDetail(movieId, apiLineId) }
         val current = _state.value
         val returnScreen = when (current.screen) {
             TvScreen.AiRecommend -> TvScreen.AiRecommend
@@ -1159,33 +1246,25 @@ class TvBoxViewModel(
             var receivedPrimary = false
             try {
                 repository.getDetailProgressively(apiLineId = apiLineId, id = movieId).collect { update ->
-                    receivedPrimary = true
-                    _state.update { state ->
-                        val sourceIndex = if (state.detailMovie == null) {
-                            resolveBestPlaybackSourceIndex(
-                                state = state,
-                                movie = update.movie,
-                                requestedSourceIndex = update.movie.preferredSourceIndex(),
-                                episodeIndex = 0,
+                    currentCoroutineContext().ensureActive()
+                    if (receivedPrimary) {
+                        _state.update { it.appendDetailSources(update) }
+                    } else {
+                        _state.update { state ->
+                            val sourceIndex = resolveBestPlaybackSourceIndex(
+                                state, update.movie, update.movie.preferredSourceIndex(), episodeIndex = 0,
                             )
-                        } else {
-                            state.selectedSourceIndex.coerceIn(
-                                0,
-                                update.movie.playSources.lastIndex.coerceAtLeast(0),
+                            state.copy(
+                                detailMovie = update.movie,
+                                detailLoading = false,
+                                detailError = null,
+                                detailCompletedSources = update.completedSources,
+                                detailTotalSources = update.totalSources,
+                                selectedSourceIndex = sourceIndex,
+                                playerSourceIndex = sourceIndex,
                             )
                         }
-                        state.copy(
-                            detailMovie = update.movie,
-                            detailLoading = false,
-                            detailError = null,
-                            detailCompletedSources = update.completedSources,
-                            detailTotalSources = update.totalSources,
-                            selectedSourceIndex = sourceIndex,
-                            selectedEpisodeIndex = 0,
-                            playerSourceIndex = sourceIndex,
-                            playerEpisodeIndex = 0,
-                            playerStartPositionMs = 0L,
-                        )
+                        receivedPrimary = true
                     }
                 }
                 if (!receivedPrimary) {
@@ -1196,8 +1275,10 @@ class TvBoxViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
+                currentCoroutineContext().ensureActive()
                 _state.update {
-                    it.copy(detailLoading = false, detailError = error.userMessage())
+                    if (receivedPrimary) it.copy(detailTotalSources = 0)
+                    else it.copy(detailLoading = false, detailError = error.userMessage())
                 }
             }
         }
@@ -1261,6 +1342,7 @@ class TvBoxViewModel(
     fun resumeHistory(item: WatchHistoryItem, returnScreen: TvScreen = TvScreen.Home) {
         historyResumeJob?.cancel()
         detailJob?.cancel()
+        retryDetailRequest = { resumeHistory(item, returnScreen) }
         _state.update {
             it.copy(
                 screen = TvScreen.Detail,
@@ -1268,6 +1350,8 @@ class TvBoxViewModel(
                 detailMovie = null,
                 detailLoading = true,
                 detailError = null,
+                detailCompletedSources = 0,
+                detailTotalSources = 0,
                 selectedSourceIndex = item.sourceIndex,
                 selectedEpisodeIndex = item.episodeIndex,
             )
@@ -1276,6 +1360,7 @@ class TvBoxViewModel(
             var opened = false
             try {
                 val movie = repository.getResumeDetail(item.apiLineId, item.movieId)
+                currentCoroutineContext().ensureActive()
                 if (movie == null || movie.playSources.none { it.episodes.isNotEmpty() }) {
                     _state.update { it.copy(detailLoading = false, detailError = "暂时无法获取播放地址，请稍后重试") }
                     return@launch
@@ -1292,25 +1377,17 @@ class TvBoxViewModel(
                     )
                 }
                 opened = true
-                // Append alternatives without replacing the playing source or resetting its playlist.
                 repository.getDetailProgressively(item.apiLineId, item.movieId).collect { update ->
-                    _state.update { current ->
-                        val active = current.detailMovie
-                        if (active == null || active.id != movie.id || active.apiLineId != movie.apiLineId ||
-                            current.screen !in listOf(TvScreen.Player, TvScreen.Detail)) current
-                        else {
-                            val sources = (active.playSources + update.movie.playSources)
-                                .distinctBy { source -> source.episodes.map { it.url } }
-                            current.copy(detailMovie = active.copy(playSources = sources),
-                                detailCompletedSources = update.completedSources, detailTotalSources = update.totalSources)
-                        }
-                    }
+                    currentCoroutineContext().ensureActive()
+                    _state.update { it.appendDetailSources(update) }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                if (!opened) _state.update {
-                    it.copy(detailLoading = false, detailError = "续播加载失败，请稍后重试或从搜索重新打开影片")
+                currentCoroutineContext().ensureActive()
+                _state.update {
+                    if (opened) it.copy(detailTotalSources = 0)
+                    else it.copy(detailLoading = false, detailError = "续播加载失败，请稍后重试或从搜索重新打开影片")
                 }
             }
         }
@@ -1486,7 +1563,7 @@ class TvBoxViewModel(
         return true
     }
 
-    fun selectPlatformLiveSite(site: PlatformLiveSite) {
+    private fun switchPlatformLiveSite(site: PlatformLiveSite) {
         _state.update {
             it.copy(
                 screen = TvScreen.PlatformLive,
@@ -1498,11 +1575,44 @@ class TvBoxViewModel(
                 platformLiveCategories = emptyList(),
                 platformLiveRooms = emptyList(),
                 platformLiveRoomIndex = 0,
+                platformLiveRoomQuery = "",
+                platformLiveRoomPage = 1,
+                platformLiveRoomPageCount = 1,
+                platformLiveLoading = platformLiveServiceUrl.isNotBlank(),
+                platformLiveLoadingMore = false,
+                platformLiveLoadMoreFailed = false,
                 platformLiveError = null,
                 platformLiveStream = null,
             )
         }
         loadPlatformLiveCategories(site)
+    }
+
+    fun selectPlatformLiveSite(site: PlatformLiveSite) {
+        val current = _state.value
+        if (current.platformLiveSelectedSite?.id == site.id) {
+            when {
+                current.platformLiveDestination == PlatformLiveDestination.Favorites -> returnToPlatformLiveBrowse()
+                current.platformLiveError == null -> Unit
+                else -> refreshPlatformLive()
+            }
+        } else {
+            switchPlatformLiveSite(site)
+        }
+    }
+
+    fun returnToPlatformLiveBrowse() {
+        val current = _state.value
+        val previousSite = current.platformLiveSites.firstOrNull { it.id == current.platformLiveSelectedSite?.id }
+        val previousCategory = current.platformLiveSelectedCategory?.takeIf {
+            previousSite != null && it in current.platformLiveCategories
+        }
+        val site = previousSite ?: current.platformLiveSites.firstOrNull()
+        when {
+            previousCategory != null -> selectPlatformLiveCategory(previousCategory)
+            site != null -> switchPlatformLiveSite(site)
+            else -> openPlatformLive()
+        }
     }
 
     fun openPlatformLiveFavorites() {
@@ -1512,8 +1622,10 @@ class TvBoxViewModel(
                 screen = TvScreen.PlatformLive,
                 platformLiveDestination = PlatformLiveDestination.Favorites,
                 platformLiveRooms = it.platformLiveFavorites,
+                platformLiveRoomQuery = "",
                 platformLiveRoomIndex = 0,
                 platformLiveLoading = false,
+                platformLiveLoadingMore = false,
                 platformLiveError = null,
                 platformLiveStream = null,
             )
@@ -1547,7 +1659,11 @@ class TvBoxViewModel(
     }
 
     fun selectPlatformLiveParentCategory(parentCategory: PlatformLiveParentCategory) {
-        val hasCategories = _state.value.platformLiveCategories.any { it.parentId == parentCategory.id }
+        val current = _state.value
+        if (current.platformLiveSelectedParentCategory?.id == parentCategory.id &&
+            current.platformLiveDestination == PlatformLiveDestination.Rooms) return
+        val firstCategory = current.platformLiveCategories.firstOrNull { it.parentId == parentCategory.id }
+        platformLiveJob?.cancel()
         _state.update {
             it.copy(
                 screen = TvScreen.PlatformLive,
@@ -1556,10 +1672,15 @@ class TvBoxViewModel(
                 platformLiveSelectedCategory = null,
                 platformLiveRooms = emptyList(),
                 platformLiveRoomIndex = 0,
-                platformLiveError = if (hasCategories) null else "这个大分类暂时没有可用的二级分类",
+                platformLiveRoomQuery = "",
+                platformLiveLoading = false,
+                platformLiveLoadingMore = false,
+                platformLiveLoadMoreFailed = false,
+                platformLiveError = if (firstCategory == null) "这个大分类暂时没有可用的二级分类" else null,
                 platformLiveStream = null,
             )
         }
+        firstCategory?.let(::selectPlatformLiveCategory)
     }
 
     fun selectPlatformLiveCategory(category: PlatformLiveCategory) {
@@ -1569,10 +1690,14 @@ class TvBoxViewModel(
                 platformLiveDestination = PlatformLiveDestination.Rooms,
                 platformLiveSelectedCategory = category,
                 platformLiveRooms = emptyList(),
+                platformLiveRoomQuery = "",
                 platformLiveRoomIndex = 0,
                 platformLiveRoomPage = 1,
                 platformLiveRoomPageCount = 1,
+                platformLiveLoading = platformLiveServiceUrl.isNotBlank(),
+                platformLiveLoadingMore = false,
                 platformLiveError = null,
+                platformLiveLoadMoreFailed = false,
                 platformLiveStream = null,
             )
         }
@@ -1582,23 +1707,48 @@ class TvBoxViewModel(
     fun loadMorePlatformLiveRooms() {
         val state = _state.value
         val category = state.platformLiveSelectedCategory ?: return
-        if (state.platformLiveLoading || state.platformLiveLoadingMore ||
+        if (state.screen != TvScreen.PlatformLive || state.platformLiveDestination != PlatformLiveDestination.Rooms ||
+            state.platformLiveLoading || state.platformLiveLoadingMore ||
             state.platformLiveRoomPage >= state.platformLiveRoomPageCount
         ) {
             return
         }
-        loadPlatformLiveRooms(category, reset = false)
+        val pages = if (state.platformLiveRoomQuery.isBlank()) 1 else PLATFORM_LIVE_SEARCH_PAGES_PER_BATCH
+        loadPlatformLiveRooms(category, reset = false, maxPages = pages)
+    }
+
+    fun searchPlatformLiveRooms(query: String) {
+        val state = _state.value
+        if (state.screen != TvScreen.PlatformLive || state.platformLiveDestination != PlatformLiveDestination.Rooms ||
+            state.platformLiveLoading
+        ) return
+        val normalized = query.trim()
+        if (normalized != state.platformLiveRoomQuery) {
+            if (state.platformLiveLoadingMore) platformLiveJob?.cancel()
+            _state.update {
+                it.copy(
+                    platformLiveRoomQuery = normalized,
+                    platformLiveLoadingMore = false,
+                    platformLiveLoadMoreFailed = false,
+                )
+            }
+        }
+        if (normalized.isNotBlank()) loadMorePlatformLiveRooms()
     }
 
     fun openPlatformLiveRoom(room: PlatformLiveRoom) {
-        val index = _state.value.platformLiveRooms.indexOfFirst { it.id == room.id }
+        val current = _state.value
+        val index = current.platformLiveRooms.indexOfFirst { it.id == room.id }
         if (index < 0) return
+        val stopSearch = current.platformLiveRoomQuery.isNotBlank() && current.platformLiveLoadingMore
+        if (stopSearch) platformLiveJob?.cancel()
         _state.update {
             it.copy(
                 screen = TvScreen.PlatformLive,
                 platformLiveDestination = PlatformLiveDestination.Player,
                 platformLivePlayerReturnDestination = it.platformLiveDestination,
                 platformLiveRoomIndex = index,
+                platformLiveLoadingMore = !stopSearch && it.platformLiveLoadingMore,
                 platformLiveError = null,
                 platformLiveStream = null,
             )
@@ -1607,29 +1757,24 @@ class TvBoxViewModel(
     }
 
     fun playNextPlatformLiveRoom() {
-        val state = _state.value
-        val rooms = state.platformLiveRooms
-        if (rooms.isEmpty()) return
-        _state.update {
-            it.copy(
-                platformLiveRoomIndex = (state.platformLiveRoomIndex + 1) % rooms.size,
-                platformLiveError = null,
-                platformLiveStream = null,
-            )
-        }
-        resolvePlatformLiveRoom()
+        movePlatformLiveRoom(1)
     }
 
     fun playPreviousPlatformLiveRoom() {
+        movePlatformLiveRoom(-1)
+    }
+
+    private fun movePlatformLiveRoom(offset: Int) {
         val state = _state.value
-        val rooms = state.platformLiveRooms
+        val rooms = state.visiblePlatformLiveRooms
         if (rooms.isEmpty()) return
-        val previousIndex = if (state.platformLiveRoomIndex <= 0) rooms.lastIndex else {
-            state.platformLiveRoomIndex - 1
-        }
+        val currentRoomId = state.platformLiveRooms.getOrNull(state.platformLiveRoomIndex)?.id
+        val index = rooms.indexOfFirst { it.id == currentRoomId }.coerceAtLeast(0)
+        val nextRoom = rooms[(index + offset + rooms.size) % rooms.size]
+        if (nextRoom.id == currentRoomId && state.platformLiveRoomQuery.isNotBlank()) return
         _state.update {
             it.copy(
-                platformLiveRoomIndex = previousIndex,
+                platformLiveRoomIndex = state.platformLiveRooms.indexOfFirst { room -> room.id == nextRoom.id },
                 platformLiveError = null,
                 platformLiveStream = null,
             )
@@ -1771,8 +1916,8 @@ class TvBoxViewModel(
         when (_state.value.screen) {
             TvScreen.Home -> refreshHome(forceRefresh = true)
             TvScreen.History -> loadHistory()
-            TvScreen.Search -> submitSearch()
-            TvScreen.Detail -> _state.value.detailMovie?.let { openDetail(it.id) }
+            TvScreen.Search -> retrySearch()
+            TvScreen.Detail -> if (_state.value.detailError != null) retryDetailRequest?.invoke()
             TvScreen.Player -> Unit
             TvScreen.Live -> refreshLive()
             TvScreen.PlatformLive -> retryPlatformLiveChannel()
@@ -1797,6 +1942,7 @@ class TvBoxViewModel(
             TvScreen.Detail -> {
                 historyResumeJob?.cancel()
                 detailJob?.cancel()
+                retryDetailRequest = null
                 _state.update { it.copy(screen = it.detailReturnScreen) }
                 true
             }
@@ -1810,43 +1956,22 @@ class TvBoxViewModel(
             }
             TvScreen.PlatformLive -> {
                 when (current.platformLiveDestination) {
-                    PlatformLiveDestination.Player -> _state.update {
-                        it.copy(
-                            platformLiveDestination = it.platformLivePlayerReturnDestination,
-                            platformLiveResolving = false,
-                            platformLiveError = null,
-                            platformLiveStream = null,
-                        )
+                    PlatformLiveDestination.Player -> {
+                        platformLiveResolveJob?.cancel()
+                        _state.update {
+                            it.copy(
+                                platformLiveDestination = it.platformLivePlayerReturnDestination,
+                                platformLiveResolving = false,
+                                platformLiveError = null,
+                                platformLiveStream = null,
+                            )
+                        }
                     }
-                    PlatformLiveDestination.Rooms -> _state.update {
-                        it.copy(
-                            platformLiveDestination = PlatformLiveDestination.Categories,
-                            platformLiveSelectedCategory = null,
-                            platformLiveError = null,
-                        )
+                    PlatformLiveDestination.Favorites -> returnToPlatformLiveBrowse()
+                    else -> {
+                        platformLiveJob?.cancel()
+                        openHome()
                     }
-                    PlatformLiveDestination.Favorites -> _state.update {
-                        it.copy(
-                            platformLiveDestination = PlatformLiveDestination.Sites,
-                            platformLiveRooms = emptyList(),
-                            platformLiveError = null,
-                        )
-                    }
-                    PlatformLiveDestination.Categories -> _state.update {
-                        it.copy(
-                            platformLiveDestination = PlatformLiveDestination.ParentCategories,
-                            platformLiveSelectedCategory = null,
-                            platformLiveError = null,
-                        )
-                    }
-                    PlatformLiveDestination.ParentCategories -> _state.update {
-                        it.copy(
-                            platformLiveDestination = PlatformLiveDestination.Sites,
-                            platformLiveSelectedParentCategory = null,
-                            platformLiveError = null,
-                        )
-                    }
-                    PlatformLiveDestination.Sites -> _state.update { it.copy(screen = TvScreen.Home) }
                 }
                 true
             }
@@ -1855,10 +1980,29 @@ class TvBoxViewModel(
     }
 
     private fun loadHomePage(reset: Boolean, forceRefresh: Boolean = false) {
-        if (_state.value.isShowingDoubanHot) {
-            loadDoubanHotPage(reset = reset, forceRefresh = forceRefresh)
-        } else {
-            launchCatalogHomePage(reset = reset)
+        homeJob?.cancel()
+        val current = _state.value
+        val nextPage = if (reset) 1 else current.page + 1
+        homeJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    homeLoading = reset,
+                    loadingMore = !reset,
+                    homeError = null,
+                    homeLoadMoreFailed = false,
+                    page = if (reset) 1 else it.page,
+                    pageCount = if (reset) 1 else it.pageCount,
+                    total = if (reset) 0 else it.total,
+                    homeNotice = if (reset) null else it.homeNotice,
+                    movies = if (reset) emptyList() else it.movies,
+                    doubanHotMovies = if (reset && current.isShowingDoubanHot) emptyList() else it.doubanHotMovies,
+                )
+            }
+            if (current.isShowingDoubanHot) {
+                loadDoubanHotPage(current, nextPage, reset, forceRefresh)
+            } else {
+                loadCatalogHomePage(current, nextPage, reset)
+            }
         }
     }
 
@@ -1882,151 +2026,151 @@ class TvBoxViewModel(
         }
     }
 
-    private fun loadDoubanHotPage(reset: Boolean, forceRefresh: Boolean) {
-        homeJob?.cancel()
-        val current = _state.value
-        val nextPage = if (reset) 1 else current.page + 1
-        homeJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    homeLoading = reset,
-                    loadingMore = !reset,
-                    homeError = null,
-                    homeNotice = if (reset) null else it.homeNotice,
-                    movies = if (reset) emptyList() else it.movies,
-                    doubanHotMovies = if (reset) emptyList() else it.doubanHotMovies,
-                    doubanHotFallbackActive = false,
-                )
-            }
-            runCatching {
-                doubanHotRepository.getRecentHot(page = nextPage, forceRefresh = forceRefresh)
-            }.onSuccess { result ->
-                _state.update {
-                    it.copy(
-                        doubanHotMovies = if (reset) {
-                            result.items
-                        } else {
-                            (it.doubanHotMovies + result.items)
-                                .distinctBy { item -> item.doubanId.ifBlank { item.title } }
-                        },
-                        page = result.page,
-                        pageCount = result.pageCount,
-                        total = result.total,
-                        homeLoading = false,
-                        loadingMore = false,
-                        homeError = if (result.items.isEmpty() && reset) "当前没有热播内容" else null,
-                        homeNotice = null,
-                    )
-                }
-            }.onFailure { error ->
-                if (reset) {
-                    val fallbackNotice = "豆瓣热播暂时不可用，已显示当前线路最近更新"
-                    _state.update { it.copy(doubanHotFallbackActive = true, homeNotice = fallbackNotice) }
-                    launchCatalogHomePage(
-                        reset = true,
-                        fallbackNotice = fallbackNotice,
-                        cancelCurrent = false,
-                    )
-                } else {
-                    _state.update {
-                        it.copy(
-                            homeLoading = false,
-                            loadingMore = false,
-                            homeNotice = "热播加载失败，点击加载更多重试",
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun launchCatalogHomePage(
+    private suspend fun loadDoubanHotPage(
+        current: TvBoxUiState,
+        nextPage: Int,
         reset: Boolean,
-        fallbackNotice: String? = null,
-        cancelCurrent: Boolean = true,
-    ) {
-        if (cancelCurrent) homeJob?.cancel()
-        val current = _state.value
-        val nextPage = if (reset) 1 else current.page + 1
-        homeJob = viewModelScope.launch {
+        forceRefresh: Boolean,
+    ): Unit = coroutineScope {
+        val categoryRequest = if (reset) {
+            async { repository.getHomeCategoriesOrNull(current.selectedApiLineId) }
+        } else {
+            null
+        }
+        val result = try {
+            doubanHotRepository.getRecentHot(page = nextPage, forceRefresh = forceRefresh)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+        currentCoroutineContext().ensureActive()
+        val doubanUnavailable = result?.items.isNullOrEmpty()
+        val categories = if (doubanUnavailable) {
+            categoryRequest?.cancel()
+            null
+        } else {
+            categoryRequest?.await()
+        }
+        currentCoroutineContext().ensureActive()
+        if (reset && (doubanUnavailable || categories.isNullOrEmpty())) {
+            loadCatalogHomePage(
+                current = current,
+                nextPage = 1,
+                reset = true,
+                fromDouban = true,
+                doubanUnavailable = doubanUnavailable,
+            )
+        } else if (result == null) {
+            _state.update {
+                it.copy(loadingMore = false, homeLoadMoreFailed = true)
+            }
+        } else {
             _state.update {
                 it.copy(
-                    homeLoading = reset,
-                    loadingMore = !reset,
-                    homeError = null,
-                    homeNotice = fallbackNotice ?: if (reset) null else it.homeNotice,
-                    movies = if (reset) emptyList() else it.movies,
-                    doubanHotFallbackActive = fallbackNotice != null || it.doubanHotFallbackActive,
+                    categories = categories ?: it.categories,
+                    doubanHotMovies = if (reset) {
+                        result.items
+                    } else {
+                        (it.doubanHotMovies + result.items)
+                            .distinctBy { item -> item.doubanId.ifBlank { item.title } }
+                    },
+                    page = result.page,
+                    pageCount = result.pageCount,
+                    total = result.total,
+                    homeLoading = false,
+                    loadingMore = false,
+                    homeNotice = null,
                 )
-            }
-            runCatching {
-                val latest = _state.value
-                val selectedTypeId = latest.selectedCategoryId
-                val parentTypeIds = latest.childCategoryIdsForSelectedParent()
-                when {
-                    selectedTypeId != null -> repository.getMovies(
-                        apiLineId = latest.selectedApiLineId,
-                        page = nextPage,
-                        typeId = selectedTypeId,
-                    )
-                    parentTypeIds.isNotEmpty() -> repository.getMoviesByTypeIds(
-                        apiLineId = latest.selectedApiLineId,
-                        page = nextPage,
-                        typeIds = parentTypeIds,
-                    )
-                    latest.selectedParentCategoryId != null -> repository.getMovies(
-                        apiLineId = latest.selectedApiLineId,
-                        page = nextPage,
-                        typeId = latest.selectedParentCategoryId,
-                    )
-                    latest.isDefaultAllCategorySelection() -> repository.getMovies(
-                        apiLineId = latest.selectedApiLineId,
-                        page = nextPage,
-                        typeId = DEFAULT_ALL_CATEGORY_TYPE_ID,
-                    )
-                    else -> repository.getMovies(
-                        apiLineId = latest.selectedApiLineId,
-                        page = nextPage,
-                    )
-                }
-            }.onSuccess { result ->
-                _state.update {
-                    it.copy(
-                        categories = if (result.categories.isNotEmpty()) result.categories else it.categories,
-                        movies = if (reset) {
-                            result.movies
-                        } else {
-                            (it.movies + result.movies).distinctBy { movie -> "${movie.apiLineId}-${movie.id}" }
-                        },
-                        page = result.page,
-                        pageCount = result.pageCount,
-                        total = result.total,
-                        homeLoading = false,
-                        loadingMore = false,
-                        homeError = if (result.movies.isEmpty() && reset) "当前没有影片" else null,
-                    )
-                }
-            }.onFailure { error ->
-                _state.update {
-                    it.copy(
-                        homeLoading = false,
-                        loadingMore = false,
-                        homeError = error.userMessage(),
-                    )
-                }
-                if (_state.value.categories.isEmpty()) {
-                    loadCategoriesOnly()
-                }
             }
         }
     }
 
-    private fun loadCategoriesOnly() {
-        viewModelScope.launch {
-            runCatching { repository.getCategories(apiLineId = _state.value.selectedApiLineId) }
-                .onSuccess { categories ->
-                    _state.update { it.copy(categories = categories) }
-                }
+    private suspend fun loadCatalogHomePage(
+        current: TvBoxUiState,
+        nextPage: Int,
+        reset: Boolean,
+        fromDouban: Boolean = false,
+        doubanUnavailable: Boolean = false,
+    ) {
+        val result = try {
+            val selectedTypeId = current.selectedCategoryId
+            val parentTypeIds = current.childCategoryIdsForSelectedParent()
+            when {
+                selectedTypeId != null -> repository.getMovies(
+                    apiLineId = current.selectedApiLineId,
+                    page = nextPage,
+                    typeId = selectedTypeId,
+                )
+                parentTypeIds.isNotEmpty() -> repository.getMoviesByTypeIds(
+                    apiLineId = current.selectedApiLineId,
+                    page = nextPage,
+                    typeIds = parentTypeIds,
+                )
+                current.selectedParentCategoryId != null -> repository.getMovies(
+                    apiLineId = current.selectedApiLineId,
+                    page = nextPage,
+                    typeId = current.selectedParentCategoryId,
+                )
+                reset -> repository.loadAvailableHomeCatalog(current.selectedApiLineId)
+                else -> repository.getHomeCatalogMovies(current.selectedApiLineId, nextPage)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            currentCoroutineContext().ensureActive()
+            _state.update {
+                if (reset) it.copy(homeLoading = false, homeError = error.userMessage())
+                else it.copy(loadingMore = false, homeLoadMoreFailed = true)
+            }
+            return
+        }
+        currentCoroutineContext().ensureActive()
+        if (result == null) {
+            _state.update {
+                it.copy(
+                    homeLoading = false,
+                    loadingMore = false,
+                    doubanHotFallbackActive = fromDouban || it.doubanHotFallbackActive,
+                    homeError = "暂时无法从任何视频源加载影片，请重试",
+                )
+            }
+            return
+        }
+
+        val lineChanged = result.apiLine.id != current.selectedApiLineId
+        val categories = result.categories.ifEmpty {
+            val existing = if (lineChanged) emptyList() else current.categories
+            if (reset && existing.isEmpty()) {
+                repository.getHomeCategoriesOrNull(result.apiLine.id).orEmpty()
+            } else {
+                existing
+            }
+        }
+        currentCoroutineContext().ensureActive()
+        val notice = when {
+            doubanUnavailable -> "豆瓣热播暂时不可用，已显示${result.apiLine.name}最近更新"
+            lineChanged -> "已切换到${result.apiLine.name}"
+            else -> null
+        }
+        _state.update {
+            it.copy(
+                selectedApiLineId = result.apiLine.id,
+                categories = categories,
+                movies = if (reset) {
+                    result.movies
+                } else {
+                    (it.movies + result.movies).distinctBy { movie -> "${movie.apiLineId}-${movie.id}" }
+                },
+                page = result.page,
+                pageCount = result.pageCount,
+                total = result.total,
+                homeLoading = false,
+                loadingMore = false,
+                doubanHotFallbackActive = fromDouban || it.doubanHotFallbackActive,
+                homeNotice = if (reset) notice else it.homeNotice,
+                homeError = if (result.movies.isEmpty() && reset) "当前没有影片" else null,
+            )
         }
     }
 
@@ -2034,7 +2178,7 @@ class TvBoxViewModel(
         val keyword = item.searchKeyword.ifBlank { item.name }.trim()
         if (keyword.isBlank()) return null
         val movies = repository.getMovies(
-            apiLineId = _state.value.selectedApiLineId,
+            apiLineId = _state.value.let { it.preferredHomeApiLine?.id ?: it.selectedApiLineId },
             page = 1,
             keyword = keyword,
         ).movies
@@ -2154,7 +2298,7 @@ class TvBoxViewModel(
     }
 
     private fun loadPlatformLiveSites() {
-        val serviceUrl = BuildConfig.PLATFORM_LIVE_SERVICE_URL
+        val serviceUrl = platformLiveServiceUrl
         if (serviceUrl.isBlank()) {
             _state.update {
                 it.copy(
@@ -2181,6 +2325,9 @@ class TvBoxViewModel(
             }
             runCatching { platformLiveRepository.getSites(serviceUrl) }
                 .onSuccess { sites ->
+                    currentCoroutineContext().ensureActive()
+                    if (_state.value.screen != TvScreen.PlatformLive ||
+                        _state.value.platformLiveDestination != PlatformLiveDestination.Sites) return@onSuccess
                     _state.update {
                         if (it.platformLiveDestination != PlatformLiveDestination.Sites) it else it.copy(
                             platformLiveSites = sites,
@@ -2188,6 +2335,7 @@ class TvBoxViewModel(
                             platformLiveError = if (sites.isEmpty()) "没有可用平台直播服务" else null,
                         )
                     }
+                    if (sites.isNotEmpty()) returnToPlatformLiveBrowse()
                 }
                 .onFailure { error ->
                     if (error is CancellationException) return@onFailure
@@ -2223,7 +2371,7 @@ class TvBoxViewModel(
     }
 
     private fun loadPlatformLiveCategories(site: PlatformLiveSite) {
-        val serviceUrl = BuildConfig.PLATFORM_LIVE_SERVICE_URL
+        val serviceUrl = platformLiveServiceUrl
         if (serviceUrl.isBlank()) return
         platformLiveJob?.cancel()
         platformLiveJob = viewModelScope.launch {
@@ -2234,6 +2382,10 @@ class TvBoxViewModel(
             }
             runCatching { platformLiveRepository.getCategoryTree(serviceUrl, site.id) }
                 .onSuccess { tree ->
+                    currentCoroutineContext().ensureActive()
+                    val current = _state.value
+                    if (current.screen != TvScreen.PlatformLive || current.platformLiveSelectedSite?.id != site.id ||
+                        current.platformLiveDestination == PlatformLiveDestination.Favorites) return@onSuccess
                     _state.update {
                         if (it.platformLiveSelectedSite?.id != site.id) it else {
                             it.copy(
@@ -2246,8 +2398,14 @@ class TvBoxViewModel(
                             )
                         }
                     }
+                    val group = tree.parentCategories.firstOrNull { parent ->
+                        tree.categories.any { it.parentId == parent.id }
+                    }
+                    group?.let(::selectPlatformLiveParentCategory)
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
+                    currentCoroutineContext().ensureActive()
                     _state.update {
                         if (it.platformLiveSelectedSite?.id != site.id) it else {
                             it.copy(platformLiveLoading = false, platformLiveError = error.userMessage())
@@ -2257,54 +2415,69 @@ class TvBoxViewModel(
         }
     }
 
-    private fun loadPlatformLiveRooms(category: PlatformLiveCategory, reset: Boolean) {
+    private fun loadPlatformLiveRooms(category: PlatformLiveCategory, reset: Boolean, maxPages: Int = 1) {
         val state = _state.value
-        val serviceUrl = BuildConfig.PLATFORM_LIVE_SERVICE_URL
+        val serviceUrl = platformLiveServiceUrl
         val site = state.platformLiveSelectedSite ?: return
         if (serviceUrl.isBlank()) return
-        val page = if (reset) 1 else state.platformLiveRoomPage + 1
+        val startPage = if (reset) 1 else state.platformLiveRoomPage + 1
+        fun TvBoxUiState.isCurrentCategory() = screen == TvScreen.PlatformLive &&
+            (platformLiveDestination == PlatformLiveDestination.Rooms ||
+                platformLiveDestination == PlatformLiveDestination.Player) &&
+            platformLiveSelectedSite?.id == site.id && platformLiveSelectedCategory?.id == category.id
+
         platformLiveJob?.cancel()
         platformLiveJob = viewModelScope.launch {
             _state.update {
-                if (it.platformLiveSelectedCategory?.id != category.id) it else {
-                    if (reset) {
-                        it.copy(platformLiveLoading = true, platformLiveLoadingMore = false, platformLiveError = null)
-                    } else {
-                        it.copy(platformLiveLoadingMore = true, platformLiveError = null)
-                    }
-                }
+                it.copy(
+                    platformLiveLoading = reset,
+                    platformLiveLoadingMore = !reset,
+                    platformLiveError = if (reset) null else it.platformLiveError,
+                    platformLiveLoadMoreFailed = false,
+                )
             }
-            runCatching { platformLiveRepository.getRooms(serviceUrl, site.id, category.id, page) }
-                .onSuccess { result ->
+            for (page in startPage until (startPage + maxPages)) {
+                val result = try {
+                    platformLiveRepository.getRooms(serviceUrl, site.id, category.id, page)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    currentCoroutineContext().ensureActive()
                     _state.update {
-                        if (it.platformLiveSelectedCategory?.id != category.id) it else {
-                            val rooms = if (reset) {
-                                result.rooms
-                            } else {
-                                (it.platformLiveRooms + result.rooms).distinctBy { room -> room.id }
-                            }
-                            it.copy(
-                                platformLiveRooms = rooms,
-                                platformLiveRoomPage = result.page,
-                                platformLiveRoomPageCount = result.pageCount,
+                        when {
+                            !it.isCurrentCategory() -> it
+                            reset -> it.copy(
                                 platformLiveLoading = false,
-                                platformLiveLoadingMore = false,
-                                platformLiveError = if (rooms.isEmpty()) "这个分类暂时没有正在直播的房间" else null,
-                            )
-                        }
-                    }
-                }
-                .onFailure { error ->
-                    _state.update {
-                        if (it.platformLiveSelectedCategory?.id != category.id) it else {
-                            it.copy(
-                                platformLiveLoading = false,
-                                platformLiveLoadingMore = false,
                                 platformLiveError = error.userMessage(),
                             )
+                            else -> it.copy(platformLiveLoadingMore = false, platformLiveLoadMoreFailed = true)
                         }
                     }
+                    return@launch
                 }
+                currentCoroutineContext().ensureActive()
+                if (!_state.value.isCurrentCategory()) return@launch
+                val hasNextPage = result.page == page && page < result.pageCount
+                val continueBatch = hasNextPage && page + 1 < startPage + maxPages &&
+                    _state.value.platformLiveDestination == PlatformLiveDestination.Rooms
+                _state.update {
+                    val rooms = if (reset) result.rooms else
+                        (it.platformLiveRooms + result.rooms).distinctBy(PlatformLiveRoom::id)
+                    it.copy(
+                        platformLiveRooms = rooms,
+                        platformLiveRoomPage = maxOf(page, result.page),
+                        platformLiveRoomPageCount = result.pageCount,
+                        platformLiveLoading = false,
+                        platformLiveLoadingMore = continueBatch,
+                        platformLiveError = if (reset && rooms.isEmpty() && !hasNextPage) {
+                            "这个分类暂时没有正在直播的房间"
+                        } else {
+                            it.platformLiveError
+                        },
+                    )
+                }
+                if (!continueBatch) break
+            }
         }
     }
 
@@ -2313,7 +2486,7 @@ class TvBoxViewModel(
         candidateIndex: Int = 0,
         isRecovery: Boolean = false,
     ) {
-        val serviceUrl = BuildConfig.PLATFORM_LIVE_SERVICE_URL
+        val serviceUrl = platformLiveServiceUrl
         val state = _state.value
         val room = state.platformLiveRooms.getOrNull(state.platformLiveRoomIndex) ?: return
         if (serviceUrl.isBlank()) return
@@ -2334,6 +2507,7 @@ class TvBoxViewModel(
             }
             runCatching { platformLiveRepository.resolve(serviceUrl, room, forceRefresh) }
                 .onSuccess { stream ->
+                    currentCoroutineContext().ensureActive()
                     _state.update {
                         if (it.platformLiveDestination != PlatformLiveDestination.Player ||
                             it.platformLiveRooms.getOrNull(it.platformLiveRoomIndex)?.id != room.id
@@ -2350,6 +2524,8 @@ class TvBoxViewModel(
                     platformLiveRecoveryInProgress = false
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
+                    currentCoroutineContext().ensureActive()
                     _state.update {
                         if (it.platformLiveDestination != PlatformLiveDestination.Player ||
                             it.platformLiveRooms.getOrNull(it.platformLiveRoomIndex)?.id != room.id
@@ -2412,12 +2588,30 @@ class TvBoxViewModel(
 
     override fun onCleared() {
         closePhoneSearchDialog()
-        aiConfigServer?.stop()
-        aiConfigServer = null
-        videoApiConfigServer?.stop()
-        videoApiConfigServer = null
+        activeAiConfigServer?.stop()
+        activeAiConfigServer = null
+        activeVideoConfigServer?.stop()
+        activeVideoConfigServer = null
         super.onCleared()
     }
+}
+
+private fun TvBoxUiState.appendDetailSources(update: MovieDetailUpdate): TvBoxUiState {
+    val active = detailMovie ?: return this
+    if (active.id != update.movie.id || active.apiLineId != update.movie.apiLineId ||
+        (screen != TvScreen.Player && screen != TvScreen.Detail)
+    ) return this
+
+    // Keep every existing playlist at its original index so the player never reloads it.
+    val knownPlaylists = active.playSources.mapTo(mutableSetOf()) { source -> source.episodes.map { it.url } }
+    val newSources = update.movie.playSources.filter { source ->
+        knownPlaylists.add(source.episodes.map { it.url })
+    }
+    return copy(
+        detailMovie = if (newSources.isEmpty()) active else active.copy(playSources = active.playSources + newSources),
+        detailCompletedSources = update.completedSources,
+        detailTotalSources = update.totalSources,
+    )
 }
 
 private fun Throwable.userMessage(): String {
@@ -2429,10 +2623,6 @@ private fun TvBoxUiState.childCategoryIdsForSelectedParent(): List<Int> {
     return categories
         .filter { it.parentId == parentId }
         .map { it.id }
-}
-
-private fun TvBoxUiState.isDefaultAllCategorySelection(): Boolean {
-    return selectedParentCategoryId == null && selectedCategoryId == null
 }
 
 private fun TvBoxUiState.playbackHealthKeyOrNull(): String? {
@@ -2477,7 +2667,7 @@ private fun customVideoApiLineId(baseUrl: String): String {
     return "custom_" + Integer.toUnsignedString(baseUrl.lowercase().hashCode(), 36)
 }
 
-private const val DEFAULT_ALL_CATEGORY_TYPE_ID = 13
+private const val PLATFORM_LIVE_SEARCH_PAGES_PER_BATCH = 5
 private const val PLATFORM_LIVE_RETRY_PER_LINE = 2
 private const val PLATFORM_LIVE_SECOND_RETRY_DELAY_MS = 1_000L
 

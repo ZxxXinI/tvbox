@@ -3,40 +3,48 @@
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.annotation.OptIn
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,13 +57,14 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.runtime.withFrameNanos
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
@@ -65,291 +74,125 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
-import com.tvbox.app.domain.PlatformLiveCategory
-import com.tvbox.app.domain.PlatformLiveParentCategory
 import com.tvbox.app.domain.PlatformLiveRoom
-import com.tvbox.app.domain.PlatformLiveSite
 import com.tvbox.app.domain.ResolvedPlatformLiveStream
+import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.ErrorState
 import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.PageSurface
 import com.tvbox.app.ui.components.tvFocusScale
-import com.tvbox.app.ui.theme.TvLayout
 import kotlinx.coroutines.delay
 
 @Composable
-fun PlatformLiveScreen(
-    state: TvBoxUiState,
-    actions: TvBoxViewModel,
-) {
+fun PlatformLiveScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
     BackHandler { actions.goBack() }
-    when (state.platformLiveDestination) {
-        PlatformLiveDestination.Sites -> PlatformLiveSitesScreen(state = state, actions = actions)
-        PlatformLiveDestination.Favorites -> PlatformLiveRoomsScreen(state = state, actions = actions, favoritesMode = true)
-        PlatformLiveDestination.ParentCategories -> PlatformLiveParentCategoriesScreen(state = state, actions = actions)
-        PlatformLiveDestination.Categories -> PlatformLiveCategoriesScreen(state = state, actions = actions)
-        PlatformLiveDestination.Rooms -> PlatformLiveRoomsScreen(state = state, actions = actions)
-        PlatformLiveDestination.Player -> PlatformLivePlayerScreen(state = state, actions = actions)
+    if (state.platformLiveDestination == PlatformLiveDestination.Player) {
+        PlatformLivePlayerScreen(state, actions)
+    } else {
+        PlatformLiveBrowserScreen(state, actions)
     }
 }
 
 @Composable
-private fun PlatformLiveSitesScreen(
+internal fun PlatformLiveRoomsPanel(
     state: TvBoxUiState,
     actions: TvBoxViewModel,
-) {
-    val firstCardFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstCardFocusRequester.requestFocus() }
-    PlatformLiveBrowseSurface(
-        title = "直播",
-        subtitle = when {
-            state.platformLiveLoading -> "正在加载直播平台，收藏仍可使用"
-            state.platformLiveError != null -> "平台加载失败：${state.platformLiveError}"
-            state.platformLiveFavoriteError != null -> "收藏读取失败：${state.platformLiveFavoriteError}"
-            else -> "选择直播平台或本机收藏"
-        },
-        loading = false,
-        error = null,
-        isEmpty = false,
-        emptyMessage = "没有可用平台直播服务",
-        onRetry = actions::refreshPlatformLive,
-    ) {
-        item(key = "favorites") {
-            PlatformLiveTextCard(
-                title = "收藏",
-                subtitle = "本机已收藏 ${state.platformLiveFavorites.size} 个房间",
-                label = "我的收藏",
-                onClick = actions::openPlatformLiveFavorites,
-                modifier = Modifier.focusRequester(firstCardFocusRequester),
-            )
-        }
-        itemsIndexed(state.platformLiveSites, key = { _, site -> site.id }) { _, site ->
-            PlatformLiveSiteCard(
-                site = site,
-                onClick = { actions.selectPlatformLiveSite(site) },
-            )
-        }
-        if (state.platformLiveError != null) {
-            item(key = "retry-platforms") {
-                PlatformLiveTextCard(
-                    title = "重试加载平台",
-                    subtitle = "收藏不受平台列表加载失败影响",
-                    label = "重试",
-                    onClick = actions::refreshPlatformLive,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlatformLiveParentCategoriesScreen(
-    state: TvBoxUiState,
-    actions: TvBoxViewModel,
-) {
-    val firstCardFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(state.platformLiveParentCategories) {
-        if (state.platformLiveParentCategories.isNotEmpty()) firstCardFocusRequester.requestFocus()
-    }
-    val site = state.platformLiveSelectedSite
-    PlatformLiveBrowseSurface(
-        title = site?.name ?: "直播",
-        subtitle = "选择直播大类",
-        loading = state.platformLiveLoading,
-        error = state.platformLiveError,
-        isEmpty = state.platformLiveParentCategories.isEmpty(),
-        emptyMessage = "没有可用直播大分类",
-        onRetry = actions::refreshPlatformLive,
-    ) {
-        itemsIndexed(
-            state.platformLiveParentCategories,
-            key = { _, category -> category.id },
-        ) { index, category ->
-            val childCount = state.platformLiveCategories.count { it.parentId == category.id }
-            PlatformLiveParentCategoryCard(
-                category = category,
-                childCount = childCount,
-                onClick = { actions.selectPlatformLiveParentCategory(category) },
-                modifier = if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier,
-            )
-        }
-    }
-}
-
-@Composable
-private fun PlatformLiveCategoriesScreen(
-    state: TvBoxUiState,
-    actions: TvBoxViewModel,
-) {
-    val firstCardFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(state.platformLiveCategories) {
-        if (state.platformLiveCategories.isNotEmpty()) firstCardFocusRequester.requestFocus()
-    }
-    val site = state.platformLiveSelectedSite
-    val parentCategory = state.platformLiveSelectedParentCategory
-    val categories = state.platformLiveCategories.filter { it.parentId == parentCategory?.id }
-    PlatformLiveBrowseSurface(
-        title = parentCategory?.name ?: site?.name ?: "直播分类",
-        subtitle = "选择二级分类",
-        loading = state.platformLiveLoading,
-        error = state.platformLiveError,
-        isEmpty = categories.isEmpty(),
-        emptyMessage = "没有可用二级分类",
-        onRetry = actions::refreshPlatformLive,
-    ) {
-        itemsIndexed(categories, key = { _, category -> category.id }) { index, category ->
-            PlatformLiveCategoryCard(
-                category = category,
-                onClick = { actions.selectPlatformLiveCategory(category) },
-                modifier = if (index == 0) Modifier.focusRequester(firstCardFocusRequester) else Modifier,
-            )
-        }
-    }
-}
-
-@Composable
-private fun PlatformLiveRoomsScreen(
-    state: TvBoxUiState,
-    actions: TvBoxViewModel,
-    favoritesMode: Boolean = false,
+    favoritesMode: Boolean,
+    modifier: Modifier = Modifier,
+    restoreRoomFocus: Boolean,
 ) {
     val gridState = rememberLazyGridState()
     val selectedRoomFocusRequester = remember { FocusRequester() }
-    val emptyFavoriteFocusRequester = remember { FocusRequester() }
-    val selectedRoomIndex = state.platformLiveRoomIndex.coerceIn(
-        0,
-        state.platformLiveRooms.lastIndex.coerceAtLeast(0),
-    )
-    LaunchedEffect(
-        state.platformLiveDestination,
-        state.platformLiveRoomIndex,
-        state.platformLiveRooms.map(PlatformLiveRoom::id),
-    ) {
-        if (state.platformLiveRooms.isEmpty()) return@LaunchedEffect
-        gridState.scrollToItem(selectedRoomIndex)
-        withFrameNanos { }
-        runCatching { selectedRoomFocusRequester.requestFocus() }
-    }
-    LaunchedEffect(favoritesMode, state.platformLiveRooms.isEmpty()) {
-        if (favoritesMode && state.platformLiveRooms.isEmpty()) {
-            runCatching { emptyFavoriteFocusRequester.requestFocus() }
+    val query = state.platformLiveRoomQuery
+    val searching = !favoritesMode && query.isNotBlank()
+    val rooms = remember(state.platformLiveRooms, query) { state.visiblePlatformLiveRooms }
+    val hasMore = !favoritesMode && state.platformLiveRoomPage < state.platformLiveRoomPageCount
+    val selectedRoomId = state.platformLiveRooms.getOrNull(state.platformLiveRoomIndex)?.id
+    val selectedRoomIndex = rooms.indexOfFirst { it.id == selectedRoomId }.coerceAtLeast(0)
+    val loading = !favoritesMode && state.platformLiveLoading
+    val error = if (favoritesMode) null else state.platformLiveError
+    val roomGridReady = rooms.isNotEmpty() && !loading && error == null
+    val cinema = state.appSettings.theme == TvTheme.Cinema
+    var restoredFocus by remember { mutableStateOf(false) }
+    var displayedQuery by remember { mutableStateOf(query) }
+    LaunchedEffect(query) {
+        if (query != displayedQuery) {
+            restoredFocus = true
+            displayedQuery = query
+            if (error == null && !loading) gridState.scrollToItem(0)
         }
     }
-    val category = state.platformLiveSelectedCategory
-    val site = state.platformLiveSelectedSite
-    if (favoritesMode && state.platformLiveRooms.isEmpty()) {
-        PageSurface { padding ->
-            Column(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text("还没有收藏的直播房间", style = MaterialTheme.typography.titleMedium)
-                state.platformLiveFavoriteError?.let { error ->
-                    Text(text = "收藏读取失败：$error", color = MaterialTheme.colorScheme.error)
-                }
-                PlatformLiveTextCard(
-                    title = "返回直播平台",
-                    subtitle = "在主播房间卡片上选择星星即可收藏",
-                    label = "收藏",
-                    onClick = actions::goBack,
-                    modifier = Modifier.padding(top = 20.dp).width(280.dp).focusRequester(emptyFavoriteFocusRequester),
-                )
-            }
+    LaunchedEffect(roomGridReady) {
+        if (!roomGridReady || restoredFocus || !restoreRoomFocus) return@LaunchedEffect
+        restoredFocus = true
+        if (gridState.layoutInfo.visibleItemsInfo.none { it.index == selectedRoomIndex }) {
+            gridState.scrollToItem(selectedRoomIndex)
         }
-        return
+        selectedRoomFocusRequester.requestPlayerControlFocus()
     }
-    PlatformLiveBrowseSurface(
-        title = if (favoritesMode) "收藏" else category?.name ?: "直播间",
-        subtitle = if (favoritesMode) "本机收藏的直播房间" else category?.parentName?.ifBlank { site?.name ?: "直播" } ?: site?.name ?: "直播",
-        loading = !favoritesMode && state.platformLiveLoading,
-        error = if (favoritesMode) null else state.platformLiveError,
-        isEmpty = state.platformLiveRooms.isEmpty(),
-        emptyMessage = if (favoritesMode) "还没有收藏的直播房间" else "这个分类暂时没有正在直播的房间",
-        onRetry = actions::refreshPlatformLive,
-        gridState = gridState,
-        notice = state.platformLiveFavoriteError,
-    ) {
-        itemsIndexed(state.platformLiveRooms, key = { _, room -> room.id }) { index, room ->
-            PlatformLiveRoomCard(
-                room = room,
-                onClick = { actions.openPlatformLiveRoom(room) },
-                isFavorite = state.platformLiveFavorites.any { it.id == room.id },
-                onToggleFavorite = { actions.togglePlatformLiveFavorite(room) },
-                favoritesMode = favoritesMode,
-                modifier = if (index == selectedRoomIndex) {
-                    Modifier.focusRequester(selectedRoomFocusRequester)
-                } else {
-                    Modifier
-                },
-            )
-        }
-        if (!favoritesMode && state.platformLiveRoomPage < state.platformLiveRoomPageCount) {
-            item(key = "load-more") {
-                PlatformLiveLoadMoreCard(
-                    loading = state.platformLiveLoadingMore,
-                    text = "加载更多（${state.platformLiveRoomPage}/${state.platformLiveRoomPageCount}）",
-                    onClick = actions::loadMorePlatformLiveRooms,
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun PlatformLiveBrowseSurface(
-    title: String,
-    subtitle: String,
-    loading: Boolean,
-    error: String?,
-    isEmpty: Boolean,
-    emptyMessage: String,
-    onRetry: () -> Unit,
-    gridState: LazyGridState? = null,
-    notice: String? = null,
-    content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit,
-) {
-    PageSurface { padding ->
+    val emptyMessage = if (favoritesMode) "还没有收藏的直播房间" else "这个分类暂时没有正在直播的房间"
+    Column(modifier) {
+        state.platformLiveFavoriteError?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 8.dp))
+        }
         when {
-            loading -> LoadingState(text = "正在加载$title", modifier = Modifier.padding(padding))
-            error != null -> ErrorState(message = error, onRetry = onRetry, modifier = Modifier.padding(padding))
-            isEmpty -> ErrorState(message = emptyMessage, onRetry = onRetry, modifier = Modifier.padding(padding))
-            else -> {
-                val resolvedGridState = gridState ?: rememberLazyGridState()
-                val headerVisible by remember {
-                    derivedStateOf {
-                        resolvedGridState.firstVisibleItemIndex == 0 && resolvedGridState.firstVisibleItemScrollOffset < 24
-                    }
+            loading -> LoadingState("正在加载直播间", Modifier.weight(1f))
+            error != null -> ErrorState(error, actions::refreshPlatformLive, Modifier.weight(1f))
+            state.platformLiveRooms.isEmpty() && !hasMore -> {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(emptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(horizontal = 28.dp, vertical = 18.dp),
+            }
+            else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val columns = when {
+                    !cinema && maxWidth >= 780.dp -> 4
+                    maxWidth >= if (cinema) 620.dp else 540.dp -> 3
+                    else -> 2
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    state = gridState,
+                    contentPadding = PaddingValues(horizontal = 5.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    AnimatedVisibility(visible = headerVisible) {
-                        Column {
-                            Text(text = title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    itemsIndexed(rooms, key = { _, room -> room.id }) { index, room ->
+                        PlatformLiveRoomCard(
+                            room = room,
+                            onClick = { actions.openPlatformLiveRoom(room) },
+                            isFavorite = state.platformLiveFavorites.any { it.id == room.id },
+                            onToggleFavorite = { actions.togglePlatformLiveFavorite(room) },
+                            favoritesMode = favoritesMode,
+                            modifier = if (index == selectedRoomIndex) {
+                                Modifier.focusRequester(selectedRoomFocusRequester)
+                            } else {
+                                Modifier
+                            },
+                        )
+                    }
+                    if (searching && rooms.isEmpty() && !state.platformLiveLoadingMore) {
+                        item(key = "room-search-empty", span = { GridItemSpan(maxLineSpan) }) {
                             Text(
-                                text = subtitle,
-                                modifier = Modifier.padding(top = 5.dp, bottom = 18.dp),
+                                text = if (hasMore) "已查页面暂无匹配，可继续搜索。" else "当前分类没有匹配的直播间。",
+                                modifier = Modifier.padding(vertical = 14.dp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
                             )
-                            if (notice != null) {
-                                Text(text = notice, color = MaterialTheme.colorScheme.error)
-                            }
                         }
                     }
-                    LazyVerticalGrid(
-                        state = resolvedGridState,
-                        columns = GridCells.Fixed(TvLayout.PlatformLiveColumns),
-                        contentPadding = PaddingValues(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        content()
+                    if (hasMore) {
+                        item(key = "load-more") {
+                            PlatformLiveLoadMoreCard(
+                                loading = state.platformLiveLoadingMore,
+                                text = when {
+                                    state.platformLiveLoadMoreFailed -> "加载失败，重试本页"
+                                    searching -> "继续搜索"
+                                    else -> "加载更多（${state.platformLiveRoomPage}/${state.platformLiveRoomPageCount}）"
+                                },
+                                onClick = actions::loadMorePlatformLiveRooms,
+                            )
+                        }
                     }
                 }
             }
@@ -358,49 +201,64 @@ private fun PlatformLiveBrowseSurface(
 }
 
 @Composable
-private fun PlatformLiveSiteCard(
-    site: PlatformLiveSite,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PlatformLiveTextCard(
-        title = site.name,
-        subtitle = site.description.ifBlank { "直播分类与房间浏览" },
-        label = "直播平台",
-        onClick = onClick,
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun PlatformLiveParentCategoryCard(
-    category: PlatformLiveParentCategory,
-    childCount: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PlatformLiveTextCard(
-        title = category.name,
-        subtitle = if (childCount > 0) "$childCount 个二级分类" else "选择二级分类",
-        label = "",
-        onClick = onClick,
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun PlatformLiveCategoryCard(
-    category: PlatformLiveCategory,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PlatformLiveImageCard(
-        title = category.name,
-        subtitle = category.parentName.ifBlank { "直播分类" },
-        imageUrl = category.cover,
-        onClick = onClick,
-        modifier = modifier,
-    )
+internal fun PlatformLiveRoomSearch(state: TvBoxUiState, actions: TvBoxViewModel, modifier: Modifier = Modifier) {
+    var draft by rememberSaveable(state.platformLiveSelectedSite?.id, state.platformLiveSelectedCategory?.id) {
+        mutableStateOf(state.platformLiveRoomQuery)
+    }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val inputFocus = remember { FocusRequester() }
+    val submit = {
+        keyboard?.hide()
+        actions.searchPlatformLiveRooms(draft)
+    }
+    val canClear = draft.isNotEmpty() || state.platformLiveRoomQuery.isNotEmpty()
+    Column(modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                modifier = Modifier.weight(1f).focusRequester(inputFocus)
+                    .semantics { contentDescription = "用户名或直播标题" },
+                placeholder = { Text("用户名或直播标题", maxLines = 1) },
+                trailingIcon = if (canClear) {
+                    {
+                        IconButton(
+                            onClick = {
+                                draft = ""
+                                keyboard?.hide()
+                                actions.searchPlatformLiveRooms("")
+                                inputFocus.requestFocus()
+                            },
+                            modifier = Modifier.semantics { contentDescription = "清除搜索" },
+                        ) { Text("×", style = MaterialTheme.typography.titleLarge) }
+                    }
+                } else null,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { submit() }),
+            )
+            val shape = RoundedCornerShape(8.dp)
+            Button(
+                onClick = submit,
+                enabled = !state.platformLiveLoading,
+                shape = shape,
+                modifier = Modifier.tvFocusScale(shape, focusedBorder = Color.White, idleBorder = Color.Transparent),
+            ) { Text("搜索") }
+        }
+        if (state.platformLiveRoomQuery.isNotEmpty()) {
+            Text(
+                text = if (state.platformLiveLoadingMore) "已查前 ${state.platformLiveRoomPage} 页 · 正在搜索后续页面"
+                    else "已查前 ${state.platformLiveRoomPage} 页",
+                modifier = Modifier.padding(bottom = 6.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
 }
 
 @Composable
@@ -412,138 +270,75 @@ private fun PlatformLiveRoomCard(
     favoritesMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    PlatformLiveImageCard(
-        title = room.title,
-        subtitle = if (favoritesMode) {
-            listOf(room.anchor, room.site.uppercase()).filter { it.isNotBlank() }.joinToString(" / ")
-        } else {
-            listOf(room.anchor, formatOnline(room.online)).filter { it.isNotBlank() }.joinToString(" / ")
-        },
-        imageUrl = room.cover,
-        onClick = onClick,
-        favorite = isFavorite,
-        onFavoriteClick = onToggleFavorite,
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun PlatformLiveTextCard(
-    title: String,
-    subtitle: String,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var focused by remember { mutableStateOf(false) }
+    val subtitle = listOf(room.anchor, if (favoritesMode) room.site.uppercase() else formatOnline(room.online))
+        .filter { it.isNotBlank() }
+        .joinToString(" / ")
     val shape = MaterialTheme.shapes.medium
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .tvFocusScale(shape = shape)
-            .clip(shape)
-            .onFocusChanged { focused = it.isFocused || it.hasFocus }
-            .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .focusable()
-            .padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (label.isNotBlank()) {
-            Text(text = label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-        }
-        Text(text = title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(
-            text = subtitle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun PlatformLiveImageCard(
-    title: String,
-    subtitle: String,
-    imageUrl: String,
-    onClick: () -> Unit,
-    favorite: Boolean? = null,
-    onFavoriteClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-) {
     var focused by remember { mutableStateOf(false) }
-    val shape = MaterialTheme.shapes.medium
     Box(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .tvFocusScale(shape = shape)
-                .clip(shape)
-                .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            modifier = modifier.fillMaxWidth().tvFocusScale(shape).clip(shape)
+                .onFocusChanged { focused = it.isFocused }
                 .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
-                .clickable(onClick = onClick)
-                .focusable(),
+                .clickable(onClick = onClick),
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
             ) {
-                if (imageUrl.isNotBlank()) {
+                if (room.cover.isBlank()) {
+                    Text("直播", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
                     AsyncImage(
-                        model = imageUrl,
-                        contentDescription = title,
+                        model = room.cover,
+                        contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Text(
-                        text = "直播",
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             Text(
-                text = title,
-                modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = if (favorite == null) 12.dp else 62.dp),
+                text = room.title,
+                modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = 12.dp),
                 style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
+                maxLines = 2,
+                minLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = subtitle.ifBlank { "正在直播" },
-                modifier = Modifier.padding(start = 12.dp, top = 3.dp, end = if (favorite == null) 12.dp else 62.dp, bottom = 12.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (favorite != null && onFavoriteClick != null) {
-            var starFocused by remember { mutableStateOf(false) }
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 8.dp, bottom = 8.dp)
-                    .size(44.dp)
-                    .tvFocusScale(shape = MaterialTheme.shapes.small, focusedBorder = Color.White)
-                    .clip(MaterialTheme.shapes.small)
-                    .onFocusChanged { starFocused = it.isFocused }
-                    .background(if (starFocused) MaterialTheme.colorScheme.primary else Color(0xCC101010))
-                    .semantics { contentDescription = if (favorite) "取消收藏 $title" else "收藏 $title" }
-                    .clickable(onClick = onFavoriteClick),
-                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp).padding(start = 12.dp, end = 62.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
-                    text = if (favorite) "★" else "☆",
-                    color = if (starFocused) MaterialTheme.colorScheme.onPrimary else Color.White,
-                    style = MaterialTheme.typography.headlineSmall,
+                    text = subtitle.ifBlank { "正在直播" },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        var starFocused by remember { mutableStateOf(false) }
+        val starShape = MaterialTheme.shapes.small
+        Box(
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 4.dp).size(44.dp)
+                .tvFocusScale(starShape, focusedBorder = Color.White).clip(starShape)
+                .onFocusChanged { starFocused = it.isFocused }
+                .background(if (starFocused) MaterialTheme.colorScheme.primary else Color(0xCC101010))
+                .semantics { contentDescription = if (isFavorite) "取消收藏 ${room.title}" else "收藏 ${room.title}" }
+                .clickable(onClick = onToggleFavorite),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (isFavorite) "★" else "☆",
+                color = when {
+                    starFocused -> MaterialTheme.colorScheme.onPrimary
+                    isFavorite -> MaterialTheme.colorScheme.primary
+                    else -> Color.White
+                },
+                style = MaterialTheme.typography.headlineSmall,
+            )
         }
     }
 }
@@ -559,8 +354,7 @@ private fun PlatformLiveLoadMoreCard(loading: Boolean, text: String, onClick: ()
             .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .background(if (focused) Color(0xFF252525) else MaterialTheme.colorScheme.surface)
-            .clickable(enabled = !loading, onClick = onClick)
-            .focusable()
+            .clickable { if (!loading) onClick() }
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -588,6 +382,7 @@ private fun PlatformLivePlayerScreen(
         return
     }
     KeepScreenOnWhileVisible()
+    FullscreenWhilePlayingPageVisible(LocalActivity.current)
     val stream = state.platformLiveStream?.takeIf { it.channelId == room.id }
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember(stream?.url, stream?.headers) {

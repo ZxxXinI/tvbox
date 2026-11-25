@@ -25,6 +25,7 @@ data class MultiSourceSearchUpdate(
     val movies: List<Movie>,
     val completedSources: Int,
     val totalSources: Int,
+    val successfulSources: Int,
 )
 
 data class MovieDetailUpdate(
@@ -38,13 +39,21 @@ interface MovieRepository {
     fun updateCustomApiLines(customApiLines: List<ApiLine>)
     suspend fun getCategories(apiLineId: String): List<Category>
     suspend fun getMovies(apiLineId: String, page: Int, typeId: Int? = null, keyword: String? = null): PagedMovies
+    suspend fun getHomeCatalogMovies(apiLineId: String, page: Int): PagedMovies =
+        getMovies(apiLineId = apiLineId, page = page, typeId = homeCatalogTypeId(apiLineId))
+
     suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies
     suspend fun getDetail(apiLineId: String, id: Int): Movie?
     suspend fun getResumeDetail(apiLineId: String, id: Int): Movie? = getDetail(apiLineId, id)
 
-    fun searchProgressively(apiLineId: String, page: Int, keyword: String): Flow<MultiSourceSearchUpdate> = flow {
+    fun searchProgressively(
+        apiLineId: String,
+        page: Int,
+        keyword: String,
+        retryUnavailableSources: Boolean = false,
+    ): Flow<MultiSourceSearchUpdate> = flow {
         val result = getMovies(apiLineId = apiLineId, page = page, keyword = keyword)
-        emit(MultiSourceSearchUpdate(result.movies, completedSources = 1, totalSources = 1))
+        emit(MultiSourceSearchUpdate(result.movies, completedSources = 1, totalSources = 1, successfulSources = 1))
     }
 
     fun getDetailProgressively(apiLineId: String, id: Int): Flow<MovieDetailUpdate> = flow {
@@ -88,6 +97,15 @@ class DefaultMovieRepository(
     override suspend fun getMovies(apiLineId: String, page: Int, typeId: Int?, keyword: String?): PagedMovies = withContext(Dispatchers.IO) {
         val line = requireLine(apiLineId)
         loadMovies(line = line, page = page, typeId = typeId, keyword = keyword)
+    }
+
+    override suspend fun getHomeCatalogMovies(apiLineId: String, page: Int): PagedMovies = withContext(Dispatchers.IO) {
+        loadMovies(
+            line = requireLine(apiLineId),
+            page = page,
+            typeId = homeCatalogTypeId(apiLineId),
+            allowCachedEmpty = page > 1,
+        )
     }
 
     override suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies = withContext(Dispatchers.IO) {
@@ -152,9 +170,14 @@ class DefaultMovieRepository(
         loadPrimaryDetail(apiLineId, id)
     }
 
-    override fun searchProgressively(apiLineId: String, page: Int, keyword: String): Flow<MultiSourceSearchUpdate> = channelFlow {
+    override fun searchProgressively(
+        apiLineId: String,
+        page: Int,
+        keyword: String,
+        retryUnavailableSources: Boolean,
+    ): Flow<MultiSourceSearchUpdate> = channelFlow {
         val requestedPage = page.coerceAtLeast(1)
-        val lines = prioritizedLines(apiLineId)
+        val lines = prioritizedLines(apiLineId, includeCoolingDown = retryUnavailableSources)
         if (lines.isEmpty()) {
             return@channelFlow
         }
@@ -163,6 +186,7 @@ class DefaultMovieRepository(
         val updatesMutex = Mutex()
         val completedMovies = mutableMapOf<String, List<Movie>>()
         var completedSources = 0
+        var successfulSources = 0
 
         coroutineScope {
             lines.map { line ->
@@ -192,12 +216,14 @@ class DefaultMovieRepository(
 
                     updatesMutex.withLock {
                         completedSources += 1
+                        if (completedNormally) successfulSources += 1
                         completedMovies[line.id] = result
                         trySend(
                             MultiSourceSearchUpdate(
                                 movies = mergeMovies(lines, completedMovies),
                                 completedSources = completedSources,
                                 totalSources = lines.size,
+                                successfulSources = successfulSources,
                             ),
                         )
                     }
@@ -344,10 +370,13 @@ class DefaultMovieRepository(
         page: Int,
         typeId: Int? = null,
         keyword: String? = null,
+        allowCachedEmpty: Boolean = true,
     ): PagedMovies {
         val normalizedKeyword = keyword?.trim().orEmpty()
         val key = "movies:${line.id}:${page.coerceAtLeast(1)}:${typeId ?: "all"}:$normalizedKeyword"
-        moviesCache.get(key, nowMs())?.let { return it }
+        moviesCache.get(key, nowMs())
+            ?.takeIf { allowCachedEmpty || it.movies.isNotEmpty() }
+            ?.let { return it }
         val result = withFallback(line) { api ->
             api.getVod(
                 action = "videolist",
@@ -374,13 +403,13 @@ class DefaultMovieRepository(
         return detail
     }
 
-    private fun prioritizedLines(primaryLineId: String): List<ApiLine> {
+    private fun prioritizedLines(primaryLineId: String, includeCoolingDown: Boolean = false): List<ApiLine> {
         val primary = requireLine(primaryLineId)
         return buildList {
             add(primary)
             addAll(
                 apiLines
-                    .filterNot { it.id == primary.id || sourceHealth.isCoolingDown(it.id) }
+                    .filter { it.id != primary.id && (includeCoolingDown || !sourceHealth.isCoolingDown(it.id)) }
                     .sortedByDescending { sourceHealth.score(it.id) },
             )
         }
