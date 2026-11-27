@@ -2,6 +2,8 @@
 
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.Category
+import com.tvbox.app.domain.WatchHistoryItem
+import com.tvbox.app.domain.resumeEpisodeIndex
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -360,6 +362,114 @@ class MovieRepositoryTest {
         assertEquals(3, updates.last().completedSources)
         assertEquals(listOf("primary", "backup", "extra"), updates.last().movie.playSources.map { it.lineId })
     }
+
+    @Test
+    fun scanBypassesCachedHomePageAndKeepsDistinctFailureStatuses() = runBlocking {
+        val cached = line("liangzi")
+        val empty = line("empty")
+        val slow = line("slow")
+        val failed = line("failed")
+        val lines = listOf(cached, empty, slow, failed)
+        val calls = AtomicInteger()
+        val repo = repository(lines, mapOf(
+            cached.baseUrls.single() to fakeApi { _, page, typeId, _, _, _ ->
+                assertEquals(1, page)
+                assertEquals(13, typeId)
+                response(vod(calls.incrementAndGet(), "首页数据"))
+            },
+            empty.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> response() },
+            slow.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> delay(1_000); response() },
+            failed.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> throw IOException("unavailable") },
+        ))
+        assertEquals(1, repo.getHomeCatalogMovies(cached.id, 1).movies.single().id)
+        val statuses = repo.probeHomeSources(lines, sourceTimeoutMs = 120).toList().associateBy { it.apiLineId }
+        assertEquals(HomeSourceProbeStatus.Available, statuses[cached.id]?.status)
+        assertEquals(HomeSourceProbeStatus.Empty, statuses[empty.id]?.status)
+        assertEquals(HomeSourceProbeStatus.Timeout, statuses[slow.id]?.status)
+        assertEquals(HomeSourceProbeStatus.Failed, statuses[failed.id]?.status)
+        assertEquals(2, repo.getHomeCatalogMovies(cached.id, 1).movies.single().id)
+    }
+
+    @Test
+    fun scanLimitsRequestsToSixAndStopsActiveRequestsOnCancellation() = runBlocking {
+        val lines = (1..12).map { line("latency-$it") }
+        val active = AtomicInteger()
+        val started = AtomicInteger()
+        val saturated = CompletableDeferred<Unit>()
+        val repo = repository(lines, lines.associate { source ->
+            source.baseUrls.single() to fakeApi { _, _, _, _, _, _ ->
+                active.incrementAndGet()
+                if (started.incrementAndGet() == 6) saturated.complete(Unit)
+                try {
+                    awaitCancellation()
+                } finally {
+                    active.decrementAndGet()
+                }
+            }
+        })
+        val scan = launch { repo.probeHomeSources(lines).toList() }
+        withTimeout(2_000) { saturated.await() }
+        assertEquals(6, active.get())
+        scan.cancelAndJoin()
+        assertEquals(0, active.get())
+        assertEquals(6, started.get())
+    }
+
+    @Test
+    fun resumeFindsExactMovieAcrossSourcesWhenOriginalFailsAndRejectsOtherYearsAndMissingEpisodes() = runBlocking {
+        val original = line("primary")
+        val wrongYear = line("other-year")
+        val missing = line("missing")
+        val backup = line("backup")
+        val item = resumeRecord()
+        val repo = repository(listOf(original, wrongYear, missing, backup), mapOf(
+            original.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> throw IOException("unavailable") },
+            wrongYear.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> response(vod(2, item.movieName, year = "2023")) },
+            missing.baseUrls.single() to fakeApi { _, _, _, _, _, ids ->
+                response(vod(3, item.movieName, sourceName = "m3u8",
+                    episodeUrl = if (ids == "3") "https://missing.test/1" else ""))
+            },
+            backup.baseUrls.single() to fakeApi { _, _, _, _, _, ids ->
+                response(vod(8, item.movieName, sourceName = "m3u8").let {
+                    if (ids == "8") it.copy(vodPlayUrl = "EP 03\$https://backup.test/3") else it
+                })
+            },
+        ))
+        val result = repo.findResumeSources(item).toList().single()
+        assertEquals("backup", result.apiLineId)
+        val playlist = result.playSources.single()
+        assertEquals(8, playlist.movieId)
+        assertEquals(0, playlist.resumeEpisodeIndex(item))
+    }
+
+    @Test
+    fun resumeTriesTheActualLastPlayedMovieIdBeforeTheOriginalInterface() = runBlocking {
+        val original = line("primary")
+        val actual = line("actual")
+        val calls = mutableListOf<Pair<String, String?>>()
+        val item = resumeRecord().copy(playedApiLineId = actual.id, playedMovieId = 17)
+        val repo = repository(listOf(original, actual), mapOf(
+            actual.baseUrls.single() to fakeApi { _, _, _, _, _, ids ->
+                calls += actual.id to ids
+                response(vod(17, item.movieName, sourceName = "m3u8")
+                    .copy(vodPlayUrl = "第03集\$https://actual.test/3"))
+            },
+            original.baseUrls.single() to fakeApi { _, _, _, _, _, ids ->
+                calls += original.id to ids
+                response()
+            },
+        ))
+        assertEquals("actual", repo.findResumeSources(item).toList().first().apiLineId)
+        assertEquals(actual.id to "17", calls.first())
+    }
+
+    private fun resumeRecord() = WatchHistoryItem(
+        movieId = 1, apiLineId = "primary", apiLineName = "Primary",
+        movieName = "续播剧集", posterUrl = "", typeName = "", remarks = "",
+        sourceIndex = 0, sourceName = "m3u8", episodeIndex = 2, episodeTitle = "第03集",
+        episodeUrl = "https://primary.test/3", positionMs = 5_000, durationMs = 10_000,
+        updatedAtEpochMs = 1, movieYear = "2026",
+    )
 
     private fun repository(
         lines: List<ApiLine>,

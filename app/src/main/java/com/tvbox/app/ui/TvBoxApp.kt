@@ -136,13 +136,25 @@ fun TvBoxApp(
                 onStartAiVoiceInput = onStartAiVoiceInput,
             )
         }
-        AppUpdateDialog(
-            state = state,
-            actions = actions,
-            onStartUpdateDownload = onStartUpdateDownload,
-            onInstallUpdate = onInstallUpdate,
-            onSaveUpdateApk = onSaveUpdateApk,
-        )
+        val picker = state.homeSourcePicker
+        if (picker != null) {
+            HomeSourcePicker(
+                picker = picker,
+                lines = state.apiLines,
+                current = state.preferredHomeApiLine,
+                onScan = actions::startHomeSourceProbe,
+                onSelect = actions::selectHomeSource,
+                onDismiss = actions::dismissHomeSourcePicker,
+            )
+        } else {
+            AppUpdateDialog(
+                state = state,
+                actions = actions,
+                onStartUpdateDownload = onStartUpdateDownload,
+                onInstallUpdate = onInstallUpdate,
+                onSaveUpdateApk = onSaveUpdateApk,
+            )
+        }
         UpdateDownloadCard(
             state = state,
             onRetry = onStartUpdateDownload,

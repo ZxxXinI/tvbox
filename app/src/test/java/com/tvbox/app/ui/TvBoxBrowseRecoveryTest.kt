@@ -6,6 +6,7 @@ import com.tvbox.app.data.DoubanHotRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.MovieDetailUpdate
 import com.tvbox.app.data.MovieRepository
+import com.tvbox.app.data.AppSettingsRepository
 import com.tvbox.app.data.MultiSourceSearchUpdate
 import com.tvbox.app.data.PlatformLiveCategoryTree
 import com.tvbox.app.data.PlatformLiveFavoritesRepository
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -402,10 +404,203 @@ class TvBoxBrowseRecoveryTest {
         }
     }
 
+    @Test
+    fun onboardingRecommendsFastestWithoutSavingUntilConfirmedAndOnlyShowsOnce() = runBlocking {
+        val fast = ApiLine("fast", "Fast", listOf("https://fast.test/"))
+        val stored = Settings(AppSettings(homeApiLineId = apiLine.id))
+        val repository = Movies(listOf(apiLine, fast)).apply {
+            probe = { source ->
+                if (source == apiLine.id) delay(70)
+                catalog(1)
+            }
+        }
+        withViewModel(movies = repository, settings = stored) { vm ->
+            val completed = vm.await { it.homeSourcePicker?.tested == true }
+            assertEquals(fast.id, completed.homeSourcePicker?.recommendation(completed.apiLines))
+            assertEquals(apiLine.id, stored.value.homeApiLineId)
+            vm.selectHomeSource(fast.id)
+            vm.await { it.homeSourcePicker == null && it.preferredHomeApiLine == fast }
+            withTimeout(2_000) { stored.saved.await() }
+        }
+        assertEquals(fast.id, stored.value.homeApiLineId)
+        assertTrue(stored.value.homeSourcePromptHandled)
+        withViewModel(movies = repository, settings = stored) { vm ->
+            vm.await { it.homeItemCount > 0 }
+            assertNull(vm.state.value.homeSourcePicker)
+        }
+    }
+
+    @Test
+    fun dismissingUpgradePickerCancelsTheScanAndRetainsPreviouslySelectedSource() = runBlocking {
+        val old = ApiLine("old", "Previously selected", listOf("https://old.test/"))
+        val stored = Settings(AppSettings(homeApiLineId = old.id))
+        val started = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val repository = Movies(listOf(apiLine, old)).apply {
+            probe = {
+                started.complete(Unit)
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    cancelled.complete(Unit)
+                }
+            }
+        }
+        withViewModel(movies = repository, settings = stored) { vm ->
+            withTimeout(2_000) { started.await() }
+            vm.dismissHomeSourcePicker()
+            withTimeout(2_000) { cancelled.await() }
+            assertNull(vm.state.value.homeSourcePicker)
+            assertEquals(old.id, vm.state.value.appSettings.homeApiLineId)
+            withTimeout(2_000) { stored.saved.await() }
+        }
+        assertTrue(stored.value.homeSourcePromptHandled)
+        assertEquals(old.id, stored.value.homeApiLineId)
+    }
+
+    @Test
+    fun unsuccessfulSettingsScanDoesNotChangeTheSelectedSource() = runBlocking {
+        val stored = Settings(AppSettings(homeSourcePromptHandled = true))
+        val repository = Movies().apply { probe = { throw IOException("unavailable") } }
+        withViewModel(movies = repository, settings = stored) { vm ->
+            vm.await { it.homeItemCount > 0 }
+            vm.openSettings()
+            vm.openHomeSourcePicker()
+            assertFalse(vm.state.value.homeSourcePicker?.onboarding ?: true)
+            vm.startHomeSourceProbe()
+            val completed = vm.await { it.homeSourcePicker?.tested == true }
+            assertNull(completed.homeSourcePicker?.recommendation(completed.apiLines))
+            vm.dismissHomeSourcePicker()
+            assertEquals(TvScreen.Settings, vm.state.value.screen)
+            assertEquals(apiLine.id, stored.value.homeApiLineId)
+        }
+    }
+
+    @Test
+    fun resumeWaitsForLateSourcesAndPreservesPositionAndHistoryIdentityWhilePaused() = runBlocking {
+        val releaseBackup = CompletableDeferred<Unit>()
+        val backup = playlist("backup").copy(episodes = playlist("backup").episodes.reversed(), movieId = 42)
+        val repository = Movies().apply {
+            resumeCandidates = {
+                flow {
+                    emit(movie(sources = listOf(playlist("resume"))))
+                    releaseBackup.await()
+                    emit(movie(42, listOf(backup)).copy(apiLineId = "backup"))
+                }
+            }
+        }
+        withViewModel(movies = repository) { vm ->
+            vm.resumeHistory(history)
+            vm.await { it.screen == TvScreen.Player }
+            assertTrue(vm.reportHistoryPlaybackFailure(53_000L, null))
+            assertFalse(vm.recoverHistoryPlayback())
+            assertTrue(vm.state.value.historyResume?.searching == true)
+            vm.updatePlayerPlayIntent(false)
+            releaseBackup.complete(Unit)
+            vm.await { it.historyResume?.searching == false }
+            assertFalse(vm.recoverHistoryPlayback())
+            vm.updatePlayerPlayIntent(true)
+            assertTrue(vm.recoverHistoryPlayback())
+            val playing = vm.state.value
+            assertEquals(1, playing.playerSourceIndex)
+            assertEquals(1, playing.playerEpisodeIndex)
+            assertEquals(53_000L, playing.playerStartPositionMs)
+            assertFalse(playing.playerCanSkipIntro)
+            vm.savePlaybackProgress(54_000L, 100_000L)
+            val recorded = vm.await { it.historyItems.firstOrNull()?.positionMs == 54_000L }.historyItems.single()
+            assertEquals(history.movieId, recorded.movieId)
+            assertEquals(history.apiLineId, recorded.apiLineId)
+            assertEquals("backup", recorded.playedApiLineId)
+            assertEquals(42, recorded.playedMovieId)
+        }
+    }
+
+    @Test
+    fun switchingEpisodeCancelsRecoveryAndLateSourceCannotMovePlayback() = runBlocking {
+        val stopped = CompletableDeferred<Unit>()
+        val repository = Movies().apply {
+            resumeCandidates = {
+                flow {
+                    try {
+                        emit(movie(sources = listOf(playlist("resume"))))
+                        kotlinx.coroutines.awaitCancellation()
+                    } finally {
+                        stopped.complete(Unit)
+                    }
+                }
+            }
+        }
+        withViewModel(movies = repository) { vm ->
+            vm.resumeHistory(history)
+            vm.await { it.screen == TvScreen.Player }
+            assertTrue(vm.reportHistoryPlaybackFailure(50_000L, null))
+            vm.syncPlayerEpisode(5)
+            withTimeout(2_000) { stopped.await() }
+            val current = vm.state.value
+            assertNull(current.historyResume?.failurePositionMs)
+            assertEquals(5, current.playerEpisodeIndex)
+            assertFalse(vm.recoverHistoryPlayback())
+        }
+    }
+
+    @Test
+    fun exitingCancelsBackupLookupWhenAutoSwitchIsDisabled() = runBlocking {
+        val stopped = CompletableDeferred<Unit>()
+        val repository = Movies().apply {
+            resumeCandidates = {
+                flow {
+                    try {
+                        emit(movie(sources = listOf(playlist("resume"))))
+                        kotlinx.coroutines.awaitCancellation()
+                    } finally {
+                        stopped.complete(Unit)
+                    }
+                }
+            }
+        }
+        withViewModel(movies = repository) { vm ->
+            vm.await { it.homeItemCount > 0 }
+            vm.updatePlaybackAgentAutoSwitch(false)
+            vm.resumeHistory(history)
+            vm.await { it.screen == TvScreen.Player }
+            assertFalse(vm.reportHistoryPlaybackFailure(50_000L, null))
+            assertFalse(vm.recoverHistoryPlayback())
+            assertTrue(vm.goBack())
+            withTimeout(2_000) { stopped.await() }
+            assertEquals(TvScreen.Detail, vm.state.value.screen)
+            assertNull(vm.state.value.historyResume?.failurePositionMs)
+        }
+    }
+
+    @Test
+    fun exhaustedPlaybackRetryUsesTheSameHistoryAndLatestResumePosition() = runBlocking {
+        val requests = mutableListOf<WatchHistoryItem>()
+        val repository = Movies().apply {
+            resumeCandidates = { item ->
+                flow {
+                    requests += item
+                    emit(movie(sources = listOf(playlist("resume"))))
+                }
+            }
+        }
+        withViewModel(movies = repository) { vm ->
+            vm.resumeHistory(history, TvScreen.History)
+            vm.await { it.screen == TvScreen.Player && it.historyResume?.searching == false }
+            assertTrue(vm.reportHistoryPlaybackFailure(55_000L, null))
+            assertFalse(vm.recoverHistoryPlayback())
+            vm.retryHistoryPlayback()
+            val restarted = vm.await { it.screen == TvScreen.Player && it.playerStartPositionMs == 55_000L }
+            assertEquals(listOf(history, history.copy(positionMs = 55_000L)), requests)
+            assertEquals(TvScreen.History, restarted.detailReturnScreen)
+            assertEquals(history.episodeIndex, restarted.playerEpisodeIndex)
+        }
+    }
+
     private suspend fun CoroutineScope.withViewModel(
         movies: Movies = Movies(),
         douban: DoubanHotRepository = Douban { _, _ -> throw IOException("Douban unavailable") },
         platformLive: PlatformLiveRepository = DefaultPlatformLiveRepository(),
+        settings: Settings = Settings(AppSettings(homeSourcePromptHandled = true)),
         test: suspend (TvBoxViewModel) -> Unit,
     ) {
         val scope = CoroutineScope(coroutineContext + SupervisorJob())
@@ -414,6 +609,7 @@ class TvBoxBrowseRecoveryTest {
                 repository = movies,
                 doubanHotRepository = douban,
                 platformLiveRepository = platformLive,
+                appSettingsRepository = settings,
                 historyRepository = object : HistoryRepository {
                     override suspend fun getHistory() = listOf(history)
                     override suspend fun saveProgress(item: WatchHistoryItem) = listOf(item)
@@ -440,10 +636,21 @@ class TvBoxBrowseRecoveryTest {
             load(page, forceRefresh)
     }
 
-    private class Movies : MovieRepository {
-        override val apiLines = listOf(apiLine)
+    private class Settings(var value: AppSettings) : AppSettingsRepository {
+        val saved = CompletableDeferred<Unit>()
+        override suspend fun getSettings() = value
+        override suspend fun saveSettings(settings: AppSettings): AppSettings {
+            value = settings
+            saved.complete(Unit)
+            return value
+        }
+    }
+
+    private class Movies(override val apiLines: List<ApiLine> = listOf(apiLine)) : MovieRepository {
         var catalog: suspend (Int) -> PagedMovies =
             { page -> PagedMovies(page, 1, 1, apiLine, listOf(category), listOf(movie())) }
+        var probe: suspend (String) -> PagedMovies = { catalog(1) }
+        var resumeCandidates: ((WatchHistoryItem) -> Flow<Movie>)? = null
         var detail: (String, Int) -> Flow<MovieDetailUpdate> = { _, _ -> emptyFlow() }
         var resume: suspend (String, Int) -> Movie? = { _, _ -> null }
         var search: (String, Boolean) -> Flow<MultiSourceSearchUpdate> = { _, _ -> emptyFlow() }
@@ -454,6 +661,9 @@ class TvBoxBrowseRecoveryTest {
         override suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>) = catalog(page)
         override suspend fun getDetail(apiLineId: String, id: Int): Movie? = null
         override suspend fun getResumeDetail(apiLineId: String, id: Int) = resume(apiLineId, id)
+        override suspend fun probeHomeCatalog(apiLineId: String) = probe(apiLineId)
+        override fun findResumeSources(item: WatchHistoryItem) =
+            resumeCandidates?.invoke(item) ?: super.findResumeSources(item)
         override fun getDetailProgressively(apiLineId: String, id: Int) = detail(apiLineId, id)
         override fun searchProgressively(apiLineId: String, page: Int, keyword: String, retryUnavailableSources: Boolean) =
             search(keyword, retryUnavailableSources)

@@ -1,4 +1,4 @@
-﻿package com.tvbox.app.data
+package com.tvbox.app.data
 
 import android.content.Context
 import com.tvbox.app.domain.AppSettings
@@ -31,6 +31,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
         AppSettings(
             homeApiLineId = prefs.getString(KEY_HOME_API_LINE_ID, AppSettings().homeApiLineId)
                 ?: AppSettings().homeApiLineId,
+            homeSourcePromptHandled = prefs.getBoolean(KEY_HOME_SOURCE_PROMPT_HANDLED, false),
             customVideoApiLines = readCustomVideoApiLines(),
             theme = TvTheme.fromStorageKey(prefs.getString(KEY_THEME, TvTheme.Default.storageKey)),
             fontScale = TvFontScale.fromStorageKey(prefs.getString(KEY_FONT_SCALE, TvFontScale.Normal.storageKey)),
@@ -55,6 +56,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
     override suspend fun saveSettings(settings: AppSettings): AppSettings = withContext(Dispatchers.IO) {
         prefs.edit()
             .putString(KEY_HOME_API_LINE_ID, settings.homeApiLineId)
+            .putBoolean(KEY_HOME_SOURCE_PROMPT_HANDLED, settings.homeSourcePromptHandled)
             .putString(KEY_CUSTOM_VIDEO_API_LINES, json.encodeToString(settings.customVideoApiLines))
             .putString(KEY_THEME, settings.theme.storageKey)
             .putString(KEY_FONT_SCALE, settings.fontScale.storageKey)
@@ -80,6 +82,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
 
     private companion object {
         const val KEY_HOME_API_LINE_ID = "home_api_line_id"
+        const val KEY_HOME_SOURCE_PROMPT_HANDLED = "home_source_prompt_handled"
         const val KEY_CUSTOM_VIDEO_API_LINES = "custom_video_api_lines"
         const val KEY_THEME = "theme"
         const val KEY_FONT_SCALE = "font_scale"

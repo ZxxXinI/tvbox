@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 data class AppSettings(
     val homeApiLineId: String = "liangzi",
+    val homeSourcePromptHandled: Boolean = false,
     val customVideoApiLines: List<CustomVideoApiLine> = emptyList(),
     val theme: TvTheme = TvTheme.Default,
     val fontScale: TvFontScale = TvFontScale.Normal,

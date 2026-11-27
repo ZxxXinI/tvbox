@@ -1,6 +1,9 @@
 ﻿package com.tvbox.app.data
 
 import com.tvbox.app.domain.ApiLine
+import com.tvbox.app.domain.WatchHistoryItem
+import com.tvbox.app.domain.normalizeResumeTitle
+import com.tvbox.app.domain.resumeEpisodeIndex
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.PagedMovies
@@ -14,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -42,9 +46,17 @@ interface MovieRepository {
     suspend fun getHomeCatalogMovies(apiLineId: String, page: Int): PagedMovies =
         getMovies(apiLineId = apiLineId, page = page, typeId = homeCatalogTypeId(apiLineId))
 
+    suspend fun probeHomeCatalog(apiLineId: String): PagedMovies = getHomeCatalogMovies(apiLineId, page = 1)
+
     suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies
     suspend fun getDetail(apiLineId: String, id: Int): Movie?
     suspend fun getResumeDetail(apiLineId: String, id: Int): Movie? = getDetail(apiLineId, id)
+
+    fun findResumeSources(item: WatchHistoryItem): Flow<Movie> = flow {
+        val apiLineId = item.playedApiLineId ?: item.apiLineId
+        val movieId = item.playedMovieId ?: item.movieId
+        getResumeDetail(apiLineId, movieId)?.withResumeSources(item)?.let { emit(it) }
+    }
 
     fun searchProgressively(
         apiLineId: String,
@@ -108,6 +120,15 @@ class DefaultMovieRepository(
         )
     }
 
+    override suspend fun probeHomeCatalog(apiLineId: String): PagedMovies = withContext(Dispatchers.IO) {
+        loadMovies(
+            line = requireLine(apiLineId),
+            page = 1,
+            typeId = homeCatalogTypeId(apiLineId),
+            bypassCache = true,
+        )
+    }
+
     override suspend fun getMoviesByTypeIds(apiLineId: String, page: Int, typeIds: List<Int>): PagedMovies = withContext(Dispatchers.IO) {
         val line = requireLine(apiLineId)
         val distinctTypeIds = typeIds
@@ -167,7 +188,57 @@ class DefaultMovieRepository(
 
     override suspend fun getResumeDetail(apiLineId: String, id: Int): Movie? = withContext(Dispatchers.IO) {
         require(apiLines.any { it.id == apiLineId }) { "原影视接口已不可用，请从搜索重新打开影片" }
-        loadPrimaryDetail(apiLineId, id)
+        loadPrimaryDetail(apiLineId, id, bypassCache = true)
+    }
+
+    override fun findResumeSources(item: WatchHistoryItem): Flow<Movie> = channelFlow {
+        val available = apiLines.distinctBy { it.id }
+        val playedLineId = item.playedApiLineId
+        val legacyLine = if (playedLineId == null) {
+            available.singleOrNull { it.name == item.sourceName }
+        } else null
+        val primaryLine = available.firstOrNull { it.id == (playedLineId ?: legacyLine?.id ?: item.apiLineId) }
+        val primaryId = item.playedMovieId?.takeIf { playedLineId != null }
+            ?: item.movieId.takeIf { primaryLine?.id == item.apiLineId }
+        val primary = primaryLine?.let { line ->
+            tryResumeSource {
+                withContext(Dispatchers.IO) {
+                    if (primaryId != null) loadPrimaryDetail(line.id, primaryId, bypassCache = true)
+                    else findExactResumeMovie(line, item, item.movieYear)
+                }
+            }?.takeIf { it.isResumeMovie(item.movieName, item.movieYear) }
+        }
+        val match = primary?.withResumeSources(item)
+        if (match != null) send(match)
+        val year = item.movieYear?.takeIf { it.isNotBlank() } ?: primary?.year
+        val alternatives = available
+            .filterNot { match != null && it.id == primaryLine.id }
+            .sortedWith(compareByDescending<ApiLine> { it.id == item.apiLineId }
+                .thenByDescending { sourceHealth.score(it.id) })
+        val semaphore = Semaphore(MAX_PARALLEL_SOURCE_REQUESTS)
+        for (line in alternatives) {
+            launch {
+                val candidate = semaphore.withPermit {
+                    tryResumeSource {
+                        withContext(Dispatchers.IO) {
+                            val original = if (line.id == item.apiLineId &&
+                                (line.id != primaryLine?.id || primaryId != item.movieId)
+                            ) {
+                                try {
+                                    loadPrimaryDetail(line.id, item.movieId, bypassCache = true)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    null
+                                }?.takeIf { it.isResumeMovie(item.movieName, year) }?.withResumeSources(item)
+                            } else null
+                            original ?: findExactResumeMovie(line, item, year)
+                        }
+                    }
+                }
+                if (candidate != null) send(candidate)
+            }
+        }
     }
 
     override fun searchProgressively(
@@ -325,6 +396,28 @@ class DefaultMovieRepository(
         throw lastError ?: IllegalStateException("线路不可用：${line.name}")
     }
 
+    private suspend fun findExactResumeMovie(line: ApiLine, item: WatchHistoryItem, year: String?): Movie? {
+        if (normalizeResumeTitle(item.movieName).isEmpty()) return null
+        val matched = withFallback(line) { api ->
+            api.getVod(action = "videolist", page = 1, keyword = item.movieName).list
+                .mapNotNull { it.toDomainOrNull(line) }
+                .filter { it.isResumeMovie(item.movieName, year) }
+                .distinctBy { it.id }
+        }.singleOrNull() ?: return null
+        return loadPrimaryDetail(line.id, matched.id, bypassCache = true)
+            ?.takeIf { it.isResumeMovie(item.movieName, year) }
+            ?.withResumeSources(item)
+    }
+
+    private suspend fun tryResumeSource(request: suspend () -> Movie?): Movie? =
+        try {
+            withTimeoutOrNull(DETAIL_SOURCE_TIMEOUT_MS) { request() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+
     private suspend fun findSameMovie(line: ApiLine, movieName: String): Movie? {
         val normalizedName = normalizeTitle(movieName)
         val candidates = withFallback(line) { api ->
@@ -348,7 +441,7 @@ class DefaultMovieRepository(
         }
     }
 
-    private fun Movie.toLinePlaySource(): com.tvbox.app.domain.PlaySource? {
+    private fun Movie.toLinePlaySource(): PlaySource? {
         val selected = playSources.getOrNull(preferredSourceIndex()) ?: return null
         if (selected.episodes.isEmpty()) return null
         return selected.copy(
@@ -371,12 +464,15 @@ class DefaultMovieRepository(
         typeId: Int? = null,
         keyword: String? = null,
         allowCachedEmpty: Boolean = true,
+        bypassCache: Boolean = false,
     ): PagedMovies {
         val normalizedKeyword = keyword?.trim().orEmpty()
         val key = "movies:${line.id}:${page.coerceAtLeast(1)}:${typeId ?: "all"}:$normalizedKeyword"
-        moviesCache.get(key, nowMs())
-            ?.takeIf { allowCachedEmpty || it.movies.isNotEmpty() }
-            ?.let { return it }
+        if (!bypassCache) {
+            moviesCache.get(key, nowMs())
+                ?.takeIf { allowCachedEmpty || it.movies.isNotEmpty() }
+                ?.let { return it }
+        }
         val result = withFallback(line) { api ->
             api.getVod(
                 action = "videolist",
@@ -389,10 +485,10 @@ class DefaultMovieRepository(
         return result
     }
 
-    private suspend fun loadPrimaryDetail(apiLineId: String, id: Int): Movie? {
+    private suspend fun loadPrimaryDetail(apiLineId: String, id: Int, bypassCache: Boolean = false): Movie? {
         val line = requireLine(apiLineId)
         val key = "detail:${line.id}:$id"
-        detailsCache.get(key, nowMs())?.let { return it }
+        if (!bypassCache) detailsCache.get(key, nowMs())?.let { return it }
         val detail = withFallback(line) { api ->
             api.getVod(action = "videolist", ids = id.toString())
                 .list
@@ -431,6 +527,30 @@ class DefaultMovieRepository(
         const val MOVIES_CACHE_TTL_MS = 5 * 60_000L
         const val DETAIL_CACHE_TTL_MS = 30 * 60_000L
     }
+}
+
+private fun Movie.isResumeMovie(movieName: String, expectedYear: String?): Boolean {
+    val wanted = normalizeResumeTitle(movieName)
+    val referenceYear = expectedYear.orEmpty().trim().take(4).toIntOrNull()
+    val candidateYear = year.trim().take(4).toIntOrNull()
+    return wanted.isNotEmpty() && normalizeResumeTitle(name) == wanted &&
+        (referenceYear == null || candidateYear == null || referenceYear == candidateYear)
+}
+
+private fun Movie.withResumeSources(item: WatchHistoryItem): Movie? {
+    val matches = playSources.filter { it.resumeEpisodeIndex(item) != null }
+        .sortedWith(compareByDescending<PlaySource> { source ->
+            source.episodes.any { it.url.isNotBlank() && it.url == item.episodeUrl }
+        }.thenByDescending { source ->
+            source.sourceName == item.sourceName || source.name == item.sourceName
+        })
+        .map { source ->
+            source.copy(
+                name = if (playSources.size == 1) apiLineName else "$apiLineName · ${source.sourceName}",
+                lineId = apiLineId, lineName = apiLineName, movieId = id,
+            )
+        }
+    return if (matches.isEmpty()) null else copy(playSources = matches)
 }
 
 private class TimedLruCache<T>(

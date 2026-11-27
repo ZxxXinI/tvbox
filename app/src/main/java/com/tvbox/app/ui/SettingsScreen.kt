@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -37,7 +38,7 @@ import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.PageSurface
 
 private enum class SettingsEditor {
-    Device, Theme, Font, Intro, Statistics, ClearStatistics, Source, Provider,
+    Device, Theme, Font, Intro, Statistics, ClearStatistics, Provider,
 }
 
 @Composable
@@ -46,6 +47,16 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
     val provider = AiProviders.find(settings.aiProviderId)
     var editor by remember { mutableStateOf<SettingsEditor?>(null) }
     val dismiss = { editor = null }
+    val homeSourceFocus = remember { FocusRequester() }
+    var sourcePickerOpened by remember { mutableStateOf(false) }
+    LaunchedEffect(state.homeSourcePicker != null) {
+        if (state.homeSourcePicker != null) {
+            sourcePickerOpened = true
+        } else if (sourcePickerOpened) {
+            sourcePickerOpened = false
+            homeSourceFocus.requestPlayerControlFocus()
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, actions) {
         fun closePhoneForms() {
@@ -92,10 +103,6 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
             seconds = settings.defaultIntroSkipSeconds,
             onDismiss = dismiss,
             onSave = actions::updateDefaultIntroSkipSeconds,
-        )
-        SettingsEditor.Source -> SettingsChoices(
-            "首页数据源", state.apiLines, state.preferredHomeApiLine, { it.name }, dismiss,
-            onSelect = { actions.updateHomeApiLine(it.id) },
         )
         SettingsEditor.Provider -> SettingsChoices(
             "服务商", AiProviders.all, provider, { it.name }, dismiss,
@@ -186,8 +193,12 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
                 right = {
                     SettingsGroup("视频接口") {
                         SettingsRow(
-                            "首页数据源", state.preferredHomeApiLine?.name ?: "未选择", enabled = state.apiLines.isNotEmpty(),
-                        ) { editor = SettingsEditor.Source }
+                            "首页数据源", state.preferredHomeApiLine?.name ?: "未选择",
+                            enabled = state.apiLines.isNotEmpty(),
+                            modifier = Modifier.focusRequester(homeSourceFocus)
+                                .focusProperties { canFocus = state.apiLines.isNotEmpty() },
+                            onClick = actions::openHomeSourcePicker,
+                        )
                         SettingsDivider()
                         SettingsRow("扫码添加接口", onClick = actions::openVideoApiConfigDialog)
                     }
@@ -265,10 +276,17 @@ private fun SettingsDivider() {
 }
 
 @Composable
-private fun SettingsRow(title: String, value: String = "", enabled: Boolean = true, onClick: () -> Unit) {
+private fun SettingsRow(
+    title: String,
+    value: String = "",
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     SettingsRowContent(
         title, value, enabled,
         input = Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        modifier = modifier,
     ) {
         Text("›", Modifier.clearAndSetSemantics { }, color = MaterialTheme.colorScheme.primary)
     }
@@ -291,6 +309,7 @@ private fun SettingsRowContent(
     value: String,
     enabled: Boolean,
     input: Modifier,
+    modifier: Modifier = Modifier,
     announceValue: Boolean = true,
     trailing: @Composable () -> Unit,
 ) {
@@ -298,7 +317,7 @@ private fun SettingsRowContent(
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(8.dp)
     Row(
-        Modifier.fillMaxWidth().clip(shape)
+        modifier.fillMaxWidth().clip(shape)
             .background(if (focused) colors.primary.copy(alpha = 0.13f) else Color.Transparent)
             .border(2.dp, if (focused) colors.primary else Color.Transparent, shape)
             .onFocusChanged { focused = it.isFocused }

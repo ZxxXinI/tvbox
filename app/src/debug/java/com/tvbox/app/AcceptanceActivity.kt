@@ -16,6 +16,7 @@ import com.tvbox.app.ui.theme.TVBoxTheme
 
 /** Debug-only deterministic acceptance harness; never packaged in Release. */
 class AcceptanceActivity : ComponentActivity() {
+    private val verifySourcePicker get() = intent.getBooleanExtra("source_picker", false)
     private val vm: TvBoxViewModel by viewModels {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -28,18 +29,43 @@ class AcceptanceActivity : ComponentActivity() {
                     override suspend fun getRooms(serviceUrl: String, site: String, categoryId: String, page: Int) = platform.getRooms(service, site, categoryId, page)
                     override suspend fun resolve(serviceUrl: String, room: PlatformLiveRoom, forceRefresh: Boolean) = platform.resolve(service, room, forceRefresh)
                 }
+                val persistentSettings = SharedAppSettingsRepository(this@AcceptanceActivity)
+                val douban = if (verifySourcePicker) {
+                    object : DoubanHotRepository {
+                        override suspend fun getRecentHot(page: Int, forceRefresh: Boolean, category: DoubanHotCategory) =
+                            PagedDoubanHotMovies(page, pageCount = 1, total = 0, items = emptyList())
+                    }
+                } else DefaultDoubanHotRepository()
                 return TvBoxViewModel(
                     repository = DefaultMovieRepository(listOf(
                         ApiLine("acceptance", "验收接口", listOf("$service/api/")),
                         ApiLine("acceptance-alt", "验收备用", listOf("$service/alt-api/")),
                     )),
+                    doubanHotRepository = douban,
                     liveRepository = DefaultLiveRepository(listOf("$service/live.txt")),
                     platformLiveRepository = localPlatform,
                     appSettingsRepository = object : AppSettingsRepository {
-                        var settings = AppSettings(homeApiLineId = "acceptance", checkUpdatesOnStartup = false,
-                            theme = if (intent.getStringExtra("theme") == "cinema") TvTheme.Cinema else TvTheme.Default)
-                        override suspend fun getSettings() = settings
-                        override suspend fun saveSettings(settings: AppSettings): AppSettings { this.settings = settings; return settings }
+                        private val theme = if (intent.getStringExtra("theme") == "cinema") TvTheme.Cinema else TvTheme.Default
+                        private var settings = AppSettings(
+                            homeApiLineId = "acceptance",
+                            homeSourcePromptHandled = true,
+                            checkUpdatesOnStartup = false,
+                            theme = theme,
+                        )
+                        override suspend fun getSettings(): AppSettings {
+                            if (!verifySourcePicker) return settings
+                            val saved = persistentSettings.getSettings()
+                            val savedLine = saved.homeApiLineId
+                            return saved.copy(
+                                homeApiLineId = if (savedLine == AppSettings().homeApiLineId) "acceptance" else savedLine,
+                                checkUpdatesOnStartup = false,
+                                theme = theme,
+                            )
+                        }
+                        override suspend fun saveSettings(settings: AppSettings): AppSettings {
+                            this.settings = settings
+                            return if (verifySourcePicker) persistentSettings.saveSettings(settings) else settings
+                        }
                     },
                     historyRepository = SharedHistoryRepository(this@AcceptanceActivity),
                     platformLiveFavoritesRepository = SharedPlatformLiveFavoritesRepository(this@AcceptanceActivity),
@@ -51,7 +77,7 @@ class AcceptanceActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val state = vm.state.collectAsStateWithLifecycle().value
-            LaunchedEffect(Unit) { vm.selectParentCategory(2) }
+            LaunchedEffect(Unit) { if (!verifySourcePicker) vm.selectParentCategory(2) }
             TVBoxTheme(state.appSettings.theme, state.appSettings.fontScale) {
                 BackHandler(state.screen != TvScreen.Home) { vm.goBack() }
                 TvBoxApp(state, vm)

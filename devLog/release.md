@@ -1,5 +1,14 @@
 ﻿# Release - 2026-06-25
 
+## 2026-11-27 13:29 - 发布 v1.4.2
+
+- `app/build.gradle.kts` 升级至 `10402 / 1.4.2`，便于旧版通过 OTA 更新。
+- 纳入首页与设置共用的测速选源弹窗、续播跨源找回原集、迟到线路恢复及耗尽后重试。
+- `README.md`、`CHANGELOG.md` 同步版本说明。`update.json` 记录正式 APK 的地址、大小和校验值。
+- 本次 144 项单元测试和签名 Release 构建通过。v2 签名证书与上一版一致，ZIP 对齐通过。沿用本轮模拟器受控验收结果。
+- `TVBox-v1.4.2.apk` 为 5165505 字节，SHA-256 `2ad8acd7ed8bffa5674e9472fa5e2926073e5c6e4004da17198c5abcf5015817`。
+- [设置日志](settings.md) · [播放体验日志](playback-experience.md) · [GitHub Release](https://github.com/ZxxXinI/tvbox/releases/tag/v1.4.2)
+
 ## 2026-11-25 09:19 - 发布 v1.4.1
 
 - `app/build.gradle.kts` 升级为 `10401 / 1.4.1`，以便旧版收到更新。

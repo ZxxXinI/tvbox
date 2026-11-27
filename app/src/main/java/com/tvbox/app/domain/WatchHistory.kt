@@ -19,6 +19,9 @@ data class WatchHistoryItem(
     val positionMs: Long,
     val durationMs: Long,
     val updatedAtEpochMs: Long,
+    val playedApiLineId: String? = null,
+    val playedMovieId: Int? = null,
+    val movieYear: String? = null,
 ) {
     val progressPercent: Int
         get() {

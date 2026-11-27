@@ -19,7 +19,9 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,15 +108,20 @@ fun PlayerScreen(
     val session = rememberPlaybackSession()
     var loadedState by remember { mutableStateOf(state) }
     val resumeAnchor = remember { PlaybackResumeAnchor() }
+    var readyHistoryMediaId by remember { mutableStateOf<String?>(null) }
+    var readyHistoryDurationMs by remember { mutableStateOf(0L) }
     val introPolicy = remember { IntroSkipPolicy() }
     fun isCurrentPlayback(): Boolean = player.currentMediaItem?.mediaId?.let {
         it == actions.state.value.currentPlaybackKey()
     } == true
     fun saveCurrentProgress(positionMs: Long, durationMs: Long) {
+        val snapshot = loadedState.copy(playerEpisodeIndex = player.currentMediaItemIndex)
+        val mediaId = player.currentMediaItem?.mediaId ?: return
+        if (mediaId != readyHistoryMediaId || mediaId != snapshot.currentPlaybackKey()) return
+        if (durationMs > 0L) readyHistoryDurationMs = durationMs
         val position = if (player.playbackState == Player.STATE_READY) positionMs
             else resumeAnchor.positionForFailure(positionMs)
-        actions.savePlaybackProgress(position, durationMs,
-            loadedState.copy(playerEpisodeIndex = player.currentMediaItemIndex.coerceAtLeast(0)))
+        actions.savePlaybackProgress(position, readyHistoryDurationMs, snapshot)
     }
     BindPlaybackSession(session, player) {
         saveCurrentProgress(player.currentPosition, player.duration.takeIf { it > 0 } ?: 0)
@@ -198,16 +205,23 @@ fun PlayerScreen(
 
     val handlePlaybackIssue = issue@ { issueType: PlaybackIssueType, switchPrefix: String, finalPrefix: String, message: String ->
         val currentState = actions.state.value
-        if (!session.canPlay || !isCurrentPlayback()) return@issue
+        if (!isCurrentPlayback() || (!session.canPlay && issueType != PlaybackIssueType.Error)) return@issue
         val resumePosition = resumeAnchor.positionForFailure(player.currentPosition)
         saveCurrentProgress(resumePosition, player.duration.takeIf { it > 0 } ?: 0)
-        val failedSources = failedSourceIndexes + currentState.playerSourceIndex
-        failedSourceIndexes = failedSources
         val issueToRecord = if (attemptTracker.shouldRecordIssue(currentState.currentPlaybackKey(), issueType)) {
             issueType
         } else {
             null
         }
+        if (actions.reportHistoryPlaybackFailure(resumePosition, issueToRecord)) {
+            bufferingPlaybackKey = null
+            playbackIssue = null
+            playbackNotice = null
+            return@issue
+        }
+        if (!session.canPlay) return@issue
+        val failedSources = failedSourceIndexes + currentState.playerSourceIndex
+        failedSourceIndexes = failedSources
         val decision = actions.switchToNextPlayableSource(
             blockedSourceIndexes = failedSources,
             positionMs = resumePosition,
@@ -296,6 +310,8 @@ fun PlayerScreen(
                     .orEmpty()
                 if (episodeIndex in episodes.indices && episodeIndex != currentState.playerEpisodeIndex) {
                     resumeAnchor.update(player.currentPosition)
+                    readyHistoryMediaId = null
+                    readyHistoryDurationMs = 0L
                     failedSourceIndexes = emptySet()
                     playbackIssue = null
                     playbackNotice = null
@@ -338,6 +354,9 @@ fun PlayerScreen(
                     Player.STATE_READY -> {
                         bufferingPlaybackKey = null
                         resumeAnchor.update(player.currentPosition)
+                        readyHistoryMediaId = player.currentMediaItem?.mediaId
+                        saveCurrentProgress(player.currentPosition, player.duration)
+                        actions.clearHistoryPlaybackFailure()
                         playbackIssue = playbackIssue?.afterReady()
                         playbackNotice = null
                         failedSourceIndexes = emptySet()
@@ -389,6 +408,8 @@ fun PlayerScreen(
 
     LaunchedEffect(state.playerSourceIndex, source.episodes) {
         loadedState = state
+        readyHistoryMediaId = null
+        readyHistoryDurationMs = 0L
         resumeAnchor.update(state.playerStartPositionMs)
         introPolicy.begin(state.playerCanSkipIntro, state.appSettings.introSkipSeconds(movie.apiLineId, movie.id))
         actions.consumeIntroStartRequest(state.currentPlaybackKey())
@@ -407,10 +428,21 @@ fun PlayerScreen(
         player.prepare()
         player.setPlaybackSpeed(state.playerSpeed)
         if (!state.playerPlayWhenReady) session.pause(player) else session.preparePlayback(player)
-        saveCurrentProgress(
-            positionMs = state.playerStartPositionMs,
-            durationMs = 0L,
-        )
+    }
+
+    val resume = state.historyResume
+    val resumeTarget = if (resume?.failurePositionMs != null) state.historyPlaybackTarget() else null
+    val waitingForBackup = resume?.failurePositionMs != null && (resume.searching || resumeTarget != null)
+    val resumeFailed = resume?.failurePositionMs != null && !waitingForBackup
+    val canRecover = session.canPlay && state.playerPlayWhenReady
+    val retryFocus = remember { FocusRequester() }
+    LaunchedEffect(resumeTarget, canRecover, state.currentPlaybackKey()) {
+        if (resumeTarget != null && canRecover && player.playWhenReady) {
+            if (actions.recoverHistoryPlayback()) playbackNotice = "播放管家：已切换备用线路"
+        }
+    }
+    LaunchedEffect(resumeFailed, controlsVisible) {
+        if (resumeFailed && !controlsVisible) retryFocus.requestPlayerControlFocus()
     }
 
     LaunchedEffect(playbackNotice) {
@@ -875,7 +907,22 @@ fun PlayerScreen(
                 onScrubbing = { scrubbing = it },
             )
         }
-        val playbackStatus = playbackIssue?.message ?: playbackNotice
+        if (resumeFailed) {
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("这一集暂时无法播放")
+                SettingsActionButton(
+                    "重试续播", actions::retryHistoryPlayback, modifier = Modifier.focusRequester(retryFocus),
+                )
+            }
+        }
+        val playbackStatus = when {
+            waitingForBackup -> "正在查找备用线路"
+            else -> playbackIssue?.message ?: playbackNotice
+        }
         if (playbackStatus != null) {
             GesturePrompt(
                 text = playbackStatus,

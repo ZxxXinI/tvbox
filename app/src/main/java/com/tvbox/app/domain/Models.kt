@@ -1,4 +1,4 @@
-﻿package com.tvbox.app.domain
+package com.tvbox.app.domain
 
 data class Category(
     val id: Int,
@@ -51,6 +51,7 @@ data class PlaySource(
     val lineId: String = "",
     val lineName: String = name,
     val sourceName: String = name,
+    val movieId: Int? = null,
 )
 
 data class PlayEpisode(

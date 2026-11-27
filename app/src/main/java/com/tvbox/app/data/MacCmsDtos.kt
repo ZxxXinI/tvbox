@@ -141,7 +141,9 @@ data class VodDto(
             director = cleanHtml(vodDirector),
             duration = cleanHtml(vodDuration),
             description = cleanHtml(vodContent.ifBlank { vodBlurb }),
-            playSources = parsePlaySources(vodPlayFrom, vodPlayUrl),
+            playSources = parsePlaySources(vodPlayFrom, vodPlayUrl).map { source ->
+                source.copy(lineId = apiLine.id, lineName = apiLine.name, movieId = vodId)
+            },
         )
     }
 }
