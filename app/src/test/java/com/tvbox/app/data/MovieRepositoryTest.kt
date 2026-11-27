@@ -471,6 +471,24 @@ class MovieRepositoryTest {
         updatedAtEpochMs = 1, movieYear = "2026",
     )
 
+    @Test
+    fun replacingDefaultsKeepsCustomSourcesAndDoesNotReuseOldCatalogCache() = runBlocking {
+        val old = line("primary")
+        val fresh = old.copy(baseUrls = listOf("https://replacement.test/api/"))
+        val user = line("custom_keep")
+        val repo = repository(listOf(old), mapOf(
+            old.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> response(vod(1, "Old movie")) },
+            fresh.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> response(vod(2, "New movie")) },
+            user.baseUrls.single() to fakeApi { _, _, _, _, _, _ -> response(vod(3, "Custom movie")) },
+        ))
+        repo.updateCustomApiLines(listOf(user))
+        assertEquals(1, repo.getHomeCatalogMovies(old.id, 1).movies.single().id)
+        repo.replaceDefaultApiLines(listOf(fresh))
+        assertEquals(listOf(fresh, user), repo.apiLines)
+        assertEquals(2, repo.getHomeCatalogMovies(old.id, 1).movies.single().id)
+        assertEquals(3, repo.getHomeCatalogMovies(user.id, 1).movies.single().id)
+    }
+
     private fun repository(
         lines: List<ApiLine>,
         apiByBaseUrl: Map<String, MacCmsApi>,

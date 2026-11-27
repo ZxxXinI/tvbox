@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,10 +16,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -55,6 +59,7 @@ import com.tvbox.app.domain.DoubanHotItem
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.WatchHistoryItem
 import com.tvbox.app.ui.TvScreen
+import com.tvbox.app.ui.theme.LocalTvLayout
 import com.tvbox.app.ui.theme.TvColors
 import com.tvbox.app.ui.theme.TvDimens
 
@@ -134,34 +139,38 @@ fun AppNavigationRail(
     Surface(
         modifier = modifier
             .fillMaxHeight()
-            .width(TvDimens.RailWidth),
+            .width(LocalTvLayout.current.navigationRailWidth),
         color = TvColors.Background,
         contentColor = TvColors.TextPrimary,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 10.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Surface(
-                modifier = Modifier.size(42.dp),
-                shape = RoundedCornerShape(13.dp),
-                color = TvColors.Accent,
-                contentColor = TvColors.Background,
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight)
+                    .padding(horizontal = 10.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text("TV", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Surface(
+                    modifier = Modifier.size(42.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    color = TvColors.Accent,
+                    contentColor = TvColors.Background,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("TV", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                TvNavigationItem("首页", NavigationIcon.Home, screen.isHomeDestination(), onHome)
+                TvNavigationItem("电视", NavigationIcon.Live, screen == TvScreen.Live, onLive)
+                TvNavigationItem("直播", NavigationIcon.PlatformLive, screen == TvScreen.PlatformLive, onPlatformLive)
+                TvNavigationItem("推荐", NavigationIcon.Recommend, screen == TvScreen.AiRecommend, onAiRecommend)
+                Spacer(modifier = Modifier.weight(1f))
+                TvNavigationItem("设置", NavigationIcon.Settings, screen == TvScreen.Settings, onSettings)
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            TvNavigationItem("首页", NavigationIcon.Home, screen.isHomeDestination(), onHome)
-            TvNavigationItem("电视", NavigationIcon.Live, screen == TvScreen.Live, onLive)
-            TvNavigationItem("直播", NavigationIcon.PlatformLive, screen == TvScreen.PlatformLive, onPlatformLive)
-            TvNavigationItem("推荐", NavigationIcon.Recommend, screen == TvScreen.AiRecommend, onAiRecommend)
-            Spacer(modifier = Modifier.weight(1f))
-            TvNavigationItem("设置", NavigationIcon.Settings, screen == TvScreen.Settings, onSettings)
         }
     }
 }
@@ -202,7 +211,7 @@ private fun TvNavigationItem(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp),
+                .height(LocalTvLayout.current.navigationButtonHeight),
             contentAlignment = Alignment.Center,
         ) {
             NavigationGlyph(
@@ -234,11 +243,13 @@ private fun NavigationGlyph(
     tint: Color,
     label: String,
 ) {
-    val glyphSize = if (icon == NavigationIcon.Live) 22.sp else 26.sp
+    val iconSize = LocalTvLayout.current.navigationIconSize
+    val originalFontSize = if (icon == NavigationIcon.Live) 22 else 26
+    val glyphSize = (originalFontSize * (iconSize.value / 24f)).sp
     Text(
         text = icon.glyph,
         modifier = Modifier
-            .size(24.dp)
+            .size(iconSize)
             .semantics { contentDescription = label },
         color = tint,
         fontFamily = TvBoxIconFont,

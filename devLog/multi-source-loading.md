@@ -1,5 +1,16 @@
 ﻿# 多来源影视加载优化 - 2026-08-25
 
+## 2026-11-27 20:38 - 默认视频源在线清单
+
+- 内置文件为 `app/src/main/resources/tvbox/default-video-sources.json`。对应整理表的 16 条正常和 7 条新地址。保留 TVBox 原有来源 ID，电影天堂采用同源 JSON 端点。第 3 和第 15 条返回一致的片库总量及首屏影片，因此作为 `tyyszy` 的主备地址。
+- `VideoSourceCatalogRepository.kt` 每个北京时间自然日首次进入前台后台检查。发送已验证本地清单的 ETag，304 只更新检查日期。200 验签、校验结构及修订号再写入缓存。连接失败后下次符合重试间隔的前台进入可再检查。
+- `MovieRepository.kt` 与 `TvBoxViewModel.kt` 分开系统源和自定义源。启动读取可信缓存或内置默认值，已缓存的变更在下一次返回首页、刷新首页或打开选源时生效。接口变更使用新的数据缓存键。
+- 服务地址为 <http://120.46.147.127/tvbox/sources.json>。独立路径由 Caddy 提供，签名私钥保存在 flexus 的 `/etc/tvbox-catalog/signing-key.pem`，仅 root 读取。原站由同一 Caddy 配置继续转发。
+- 更新清单时编辑内置 JSON、递增 `revision`，再运行 `python tools/publish_video_sources.py`。命令经 SSH 在服务器签名并原子替换清单。回退内容时发布更高修订号，APK 可继续读取当前缓存。
+- 上游 23 个地址分两轮均返回过首屏片单。公网清单、304、APK 公钥验证以及原站 HTTP 200 均通过。独立 IP 统计尚待接入。
+- 150 项单元测试及签名 Release 构建通过。验收包 `app/build/outputs/tvbox-test-apks/TVBox-v1.4.2-remote-sources-test.apk`，仍为 1.4.2（10402），SHA-256 为 `552f02883d83c310c366cab4e25c01b8e7e5b49889e27c6ab09fe13d1a479641`。
+- [返回主日志](README.md)
+
 ## 2026-11-27 11:16 - 首页数据源测速与继续观看
 
 - `HomeCatalog.kt` 和 `MovieRepository.kt` 用实际首页首屏测量接口耗时。请求绕过缓存，最多 6 个并行，每个限 4 秒，区分可用、超时、请求失败和空片单。

@@ -73,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.Category
+import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.AppHeader
 import com.tvbox.app.ui.components.AppNavigationRail
@@ -685,9 +686,11 @@ private fun HistoryScreen(
 
 @Composable
 internal fun AiConfigDialog(state: TvBoxUiState, actions: TvBoxViewModel) {
+    val isCustom = state.appSettings.aiProviderId == AiProviders.custom.id
     PhoneConfigDialog(
-        title = "手机扫码配置 AI",
-        instructions = "在手机上填写模型名称和 API Key，提交后同步到电视。",
+        title = if (isCustom) "手机扫码配置大模型" else "手机扫码配置 AI",
+        instructions = if (isCustom) "在手机上填写 API 地址和 Key，然后获取或手动填写模型。"
+            else "在手机上填写模型名称和 API Key，提交后同步到电视。",
         url = state.aiConfigServerUrl,
         savedMessage = state.aiConfigSavedMessage,
         error = state.aiConfigServerError,

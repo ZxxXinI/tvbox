@@ -1,5 +1,27 @@
 ﻿# Settings - 2026-06-28
 
+## 2026-11-27 22:15 - 大模型自定义 API 与手机选模型
+
+- `SettingsScreen.kt` 和 `TvBoxApp.kt` 增加「自定义」服务商、API 地址与模型摘要、Key 配置状态和手机扫码入口。
+- `AppSettings.kt` 和 `AppSettingsRepository.kt` 分别保存各内置服务商的模型与 Key，以及一组自定义 API 配置。升级时将旧配置迁移到原服务商。
+- `TvBoxViewModel.kt` 按服务商打开扫码表单，在保存时核对会话和当前选择。
+- `CustomAiConfigServer.kt` 增加手机网页，支持获取模型、选择模型、显示失败原因、手填模型 ID 和提交。已存 Key 留在应用内，只有 API 地址相同的请求才能复用。
+- `PhoneFormServer.kt` 给自定义表单提供同会话校验的只读模型请求入口。`AiConfigServer.kt` 提供复用的保存成功页。
+- `AiModelCatalog.kt` 从同一个 API 基础地址生成 `/models` 和 `/chat/completions`。获取限制为 10 秒，列表去重，错误用中文提示。
+- `AiRecommendationRepository.kt` 让 AI 找片使用所选服务商的配置。自定义未完成时提示先配置，请求也不会携带该 Key 跟随重定向。
+- `PhoneConfigServerTest.kt` 用本机受控服务验证获取成功、手填回退、地址变化时的 Key 隔离及请求配置切换。
+- Edge 使用 390 px 手机视口打开本机测试服务的扫码页，验证选择前禁止保存、选中后保存，以及 404 后保留地址和 Key 并手填模型。电视实机验收待进行。
+- 153 项 Debug 单元测试和 Release 构建、关键 Lint 通过。签名和 ZIP 对齐校验通过。签名测试包为 `app/build/outputs/tvbox-test-apks/TVBox-v1.4.2-custom-ai-test.apk`，版本 1.4.2（10402）。
+- [返回主日志](README.md)
+
+## 2026-11-27 21:04 - 影院侧栏随字体档位放大
+
+- 反馈：14.6 英寸 1920×1080 车机上的影院侧栏图标和按钮偏小。
+- `Theme.kt` 在现有字体档位中加入侧栏宽度、图标区域和按钮高度。正常、大、超大分别为 76/24/44、92/30/56、112/36/64 dp。
+- `Common.kt` 同时应用三种尺寸。沿用现有焦点和页面选中样式，短屏允许侧栏滚动以访问底部设置。
+- 150 项单元测试、Release 构建和签名、ZIP 对齐校验通过。测试包 `TVBox-v1.4.2-cinema-rail-scale-test.apk`（10402）。车机和实际点击体验待验收。
+- [返回主日志](README.md)
+
 ## 2026-11-27 11:16 - 首页数据源测速与继续观看
 
 - `HomeSourcePicker.kt` 提供首页和设置共用的选择弹窗。首次在本机使用这个功能时批量测速，按确认才保存数据源，返回或跳过沿用原源。选择和跳过均写入同一个持久化标记。

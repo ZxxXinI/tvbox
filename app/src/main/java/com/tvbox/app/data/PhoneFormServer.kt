@@ -29,6 +29,12 @@ internal sealed interface PhoneFormSubmission {
     data class Inactive(val message: String) : PhoneFormSubmission
 }
 
+internal class PhoneFormDataRoute(
+    val path: String,
+    val scriptNonce: String,
+    val respond: suspend (Map<String, String>) -> String,
+)
+
 internal class PhoneFormServer(
     parentScope: CoroutineScope,
     private val submitPath: String,
@@ -40,6 +46,7 @@ internal class PhoneFormServer(
     private val closeAfterDelivery: Boolean = true,
     private val hostProvider: () -> String = ::phoneFormLocalAddress,
     private val ttlMillis: Long = PHONE_FORM_TTL_MILLIS,
+    private val dataRoute: PhoneFormDataRoute? = null,
 ) {
     private val scope = CoroutineScope(
         parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]) + Dispatchers.IO,
@@ -127,7 +134,7 @@ internal class PhoneFormServer(
                     if (valid(query["token"])) respond(socket, 200, renderForm(token, emptyMap(), null))
                     else respondMessage(socket, 403, EXPIRED_MESSAGE)
                 }
-                method == "POST" && path == submitPath -> {
+                method == "POST" && (path == submitPath || path == dataRoute?.path) -> {
                     if (headers["transfer-encoding"] != null) throw BadRequest()
                     val length = headers["content-length"]?.toIntOrNull() ?: throw BadRequest()
                     if (length !in 0..4_096) {
@@ -139,7 +146,17 @@ internal class PhoneFormServer(
                         return
                     }
                     val values = readForm(input, length)
-                    if (!valid(values["token"]) || !claimed.compareAndSet(false, true) || !isSessionActive) {
+                    if (!valid(values["token"])) {
+                        respondMessage(socket, 403, EXPIRED_MESSAGE)
+                        return
+                    }
+                    if (dataRoute != null && path == dataRoute.path) {
+                        val json = dataRoute.respond(values)
+                        if (valid(values["token"])) respond(socket, 200, json, "application/json")
+                        else respondMessage(socket, 403, EXPIRED_MESSAGE)
+                        return
+                    }
+                    if (!claimed.compareAndSet(false, true) || !isSessionActive) {
                         respondMessage(socket, 403, EXPIRED_MESSAGE)
                         return
                     }
@@ -231,8 +248,8 @@ internal class PhoneFormServer(
     private fun respondMessage(socket: Socket, status: Int, message: String) =
         respond(socket, status, phoneFormDocument("<main class=panel><p>${message.phoneFormEscape()}</p></main>"))
 
-    private fun respond(socket: Socket, status: Int, html: String) {
-        val bytes = html.toByteArray(Charsets.UTF_8)
+    private fun respond(socket: Socket, status: Int, body: String, contentType: String = "text/html") {
+        val bytes = body.toByteArray(Charsets.UTF_8)
         val reason = when (status) {
             200 -> "OK"
             400 -> "Bad Request"
@@ -243,10 +260,11 @@ internal class PhoneFormServer(
             413 -> "Payload Too Large"
             else -> "Unsupported Media Type"
         }
-        val headers = "HTTP/1.1 $status $reason\r\nContent-Type: text/html; charset=utf-8\r\n" +
+        val scriptPolicy = dataRoute?.let { "script-src 'nonce-${it.scriptNonce}'; connect-src 'self'; " }.orEmpty()
+        val headers = "HTTP/1.1 $status $reason\r\nContent-Type: $contentType; charset=utf-8\r\n" +
             "Content-Length: ${bytes.size}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n" +
             "X-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; " +
-            "form-action 'self'; frame-ancestors 'none'; base-uri 'none'\r\nConnection: close\r\n\r\n"
+            "${scriptPolicy}form-action 'self'; frame-ancestors 'none'; base-uri 'none'\r\nConnection: close\r\n\r\n"
         socket.getOutputStream().apply {
             write(headers.toByteArray(Charsets.US_ASCII))
             write(bytes)

@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tvbox.app.data.AppSettingsRepository
 import com.tvbox.app.BuildConfig
-import com.tvbox.app.data.AiRequestConfig
 import com.tvbox.app.data.AiRecommendationRepository
 import com.tvbox.app.data.AppUpdateRepository
 import com.tvbox.app.data.DefaultAiRecommendationRepository
@@ -15,6 +14,7 @@ import com.tvbox.app.data.DoubanHotRepository
 import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.LiveRepository
 import com.tvbox.app.data.MovieRepository
+import com.tvbox.app.data.VideoSourceCatalogRepository
 import com.tvbox.app.data.MovieDetailUpdate
 import com.tvbox.app.data.PlaybackHealthRepository
 import com.tvbox.app.data.DefaultPlatformLiveRepository
@@ -24,11 +24,14 @@ import com.tvbox.app.data.PhoneFormServer
 import com.tvbox.app.data.PhoneFormSubmission
 import com.tvbox.app.data.PhoneSearchServer
 import com.tvbox.app.data.aiConfigServer
+import com.tvbox.app.data.customAiConfigServer
+import com.tvbox.app.data.userAiRequestConfigOrNull
 import com.tvbox.app.data.videoApiConfigServer
 import com.tvbox.app.data.getHomeCategoriesOrNull
 import com.tvbox.app.data.loadAvailableHomeCatalog
 import com.tvbox.app.data.probeHomeSources
 import com.tvbox.app.domain.AiRecommendationItem
+import com.tvbox.app.domain.AiModelConfig
 import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.introSkipKey
 import com.tvbox.app.domain.withIntroSkipOverride
@@ -254,6 +257,7 @@ class TvBoxViewModel(
     private val aiRecommendationRepository: AiRecommendationRepository = DefaultAiRecommendationRepository(BuildConfig.AI_API_KEY),
     private val appUpdateRepository: AppUpdateRepository = DefaultAppUpdateRepositoryPlaceholder(),
     private val appSettingsRepository: AppSettingsRepository = DefaultAppSettingsRepositoryPlaceholder(),
+    private val videoSourceCatalogRepository: VideoSourceCatalogRepository? = null,
     private val playbackHealthRepository: PlaybackHealthRepository = DefaultPlaybackHealthRepositoryPlaceholder(),
     private val historyRepository: HistoryRepository,
     private val platformLiveFavoritesRepository: PlatformLiveFavoritesRepository,
@@ -265,6 +269,9 @@ class TvBoxViewModel(
 
     private var homeJob: Job? = null
     private var homeSourceProbeJob: Job? = null
+    private var videoSourceSyncJob: Job? = null
+    private var videoSourceSettingsLoaded = false
+    private var pendingDefaultVideoSources: List<ApiLine>? = null
     private var doubanHotResolveJob: Job? = null
     private var searchJob: Job? = null
     private var detailJob: Job? = null
@@ -302,36 +309,88 @@ class TvBoxViewModel(
         viewModelScope.launch {
             val settings = runCatching { appSettingsRepository.getSettings() }
                 .getOrDefault(AppSettings())
+            videoSourceCatalogRepository?.loadCachedSources()?.let(repository::replaceDefaultApiLines)
             repository.updateCustomApiLines(settings.customVideoApiLines.toApiLines())
             val availableApiLines = repository.apiLines
             val selectedApiLineId = settings.homeApiLineId
                 .takeIf { apiLineId -> availableApiLines.any { it.id == apiLineId } }
-                ?: defaultApiLineId
-            val normalizedSettings = settings.copy(homeApiLineId = selectedApiLineId)
+                ?: availableApiLines.firstOrNull()?.id.orEmpty()
             val playbackHealth = runCatching { playbackHealthRepository.getSnapshot() }
                 .getOrDefault(PlaybackHealthSnapshot())
             _state.update {
                 it.copy(
                     apiLines = availableApiLines,
                     selectedApiLineId = selectedApiLineId,
-                    appSettings = normalizedSettings,
+                    appSettings = settings,
                     playbackHealth = playbackHealth,
                 )
             }
             loadHistory()
-            if (normalizedSettings.homeSourcePromptHandled) {
+            videoSourceSettingsLoaded = true
+            syncVideoSources()
+            if (settings.homeSourcePromptHandled) {
                 refreshHome()
             } else {
                 _state.update { it.copy(homeSourcePicker = HomeSourcePickerState(onboarding = true)) }
                 startHomeSourceProbe()
             }
-            if (normalizedSettings.checkUpdatesOnStartup) {
+            if (settings.checkUpdatesOnStartup) {
                 checkForAppUpdate()
             }
         }
     }
 
+    fun syncVideoSources() {
+        val catalog = videoSourceCatalogRepository ?: return
+        if (!videoSourceSettingsLoaded || videoSourceSyncJob?.isActive == true) return
+        videoSourceSyncJob = viewModelScope.launch {
+            try {
+                catalog.refreshSources()?.let { pendingDefaultVideoSources = it }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // A network or verification failure leaves the active list intact.
+            }
+        }
+    }
+
+    // Apply only at navigation or refresh boundaries so a scan or playback keeps its source set.
+    private fun applyPendingVideoSources(): Boolean {
+        val pending = pendingDefaultVideoSources ?: return false
+        val state = _state.value
+        if (state.homeSourcePicker != null) return false
+        pendingDefaultVideoSources = null
+        repository.replaceDefaultApiLines(pending)
+        val lines = repository.apiLines
+        if (lines == state.apiLines) return false
+        val active = lines.firstOrNull { it.id == state.selectedApiLineId }
+            ?: lines.firstOrNull { it.id == state.appSettings.homeApiLineId }
+            ?: lines.firstOrNull()
+        val homeChanged = active != state.selectedApiLine
+        if (homeChanged) homeJob?.cancel()
+        _state.update {
+            if (homeChanged) {
+                it.copy(
+                    apiLines = lines,
+                    selectedApiLineId = active?.id.orEmpty(),
+                    selectedParentCategoryId = null,
+                    selectedCategoryId = null,
+                    categories = emptyList(),
+                    movies = emptyList(),
+                    doubanHotMovies = emptyList(),
+                    page = 1,
+                    pageCount = 1,
+                    total = 0,
+                    homeError = null,
+                    homeNotice = null,
+                )
+            } else it.copy(apiLines = lines)
+        }
+        return homeChanged
+    }
+
     fun refreshHome(forceRefresh: Boolean = false) {
+        if (_state.value.screen == TvScreen.Home) applyPendingVideoSources()
         _state.update { state ->
             if (state.homeFeedMode == HomeFeedMode.DoubanHot) {
                 state.copy(doubanHotFallbackActive = false, homeNotice = null)
@@ -411,6 +470,7 @@ class TvBoxViewModel(
 
     fun openHomeSourcePicker() {
         if (_state.value.homeSourcePicker != null) return
+        if (applyPendingVideoSources()) refreshHome()
         _state.update { it.copy(homeSourcePicker = HomeSourcePickerState(onboarding = false)) }
     }
 
@@ -507,6 +567,7 @@ class TvBoxViewModel(
                 platformLiveStream = null,
             )
         }
+        if (applyPendingVideoSources()) refreshHome()
     }
 
     fun openSearch() {
@@ -764,59 +825,70 @@ class TvBoxViewModel(
 
     fun updateAiProvider(providerId: String) {
         val provider = AiProviders.find(providerId)
-        val settings = _state.value.appSettings.copy(
-            aiProviderId = provider.id,
-            aiModelName = provider.defaultModel,
-        )
-        saveSettings(settings)
-        _state.update { it.copy(appSettings = settings, aiError = null) }
-    }
-
-    fun updateAiModelName(modelName: String) {
-        val settings = _state.value.appSettings.copy(aiModelName = modelName)
-        saveSettings(settings)
-        _state.update { it.copy(appSettings = settings, aiError = null) }
-    }
-
-    fun updateAiApiKey(apiKey: String) {
-        val settings = _state.value.appSettings.copy(aiApiKey = apiKey)
+        val current = _state.value.appSettings
+        if (current.aiProviderId == provider.id) return
+        closeAiConfigDialog()
+        val settings = current.copy(aiProviderId = provider.id)
         saveSettings(settings)
         _state.update { it.copy(appSettings = settings, aiError = null) }
     }
 
     fun openAiConfigDialog() {
         closeAiConfigDialog(stopOnly = true)
-        val current = _state.value
-        val provider = AiProviders.find(current.appSettings.aiProviderId)
-        val modelName = current.appSettings.aiModelName.ifBlank { provider.defaultModel }
+        val current = _state.value.appSettings
+        val provider = AiProviders.find(current.aiProviderId)
         lateinit var server: PhoneFormServer
-        server = aiConfigServer(
-            scope = viewModelScope,
-            provider = provider,
-            modelName = modelName,
-            onSubmit = { submittedModel, submittedKey ->
-                withContext(Dispatchers.Main.immediate) {
-                    if (activeAiConfigServer !== server || !server.isSessionActive ||
-                        _state.value.screen != TvScreen.Settings ||
-                        AiProviders.find(_state.value.appSettings.aiProviderId).id != provider.id
-                    ) {
-                        PhoneFormSubmission.Inactive("电视已离开此配置会话，请重新扫码。")
-                    } else {
-                        applyAiConfigFromPhone(submittedModel, submittedKey)
-                        PhoneFormSubmission.Accepted
+        suspend fun acceptConfig(update: (AppSettings) -> AppSettings): PhoneFormSubmission =
+            withContext(Dispatchers.Main.immediate) {
+                val state = _state.value
+                if (activeAiConfigServer !== server || !server.isSessionActive ||
+                    state.screen != TvScreen.Settings || AiProviders.find(state.appSettings.aiProviderId) != provider
+                ) {
+                    PhoneFormSubmission.Inactive("电视已离开此配置会话，请重新扫码。")
+                } else {
+                    val settings = update(state.appSettings)
+                    saveSettings(settings)
+                    _state.update {
+                        it.copy(
+                            appSettings = settings,
+                            aiError = null,
+                            aiConfigServerUrl = null,
+                            aiConfigServerError = null,
+                            aiConfigSavedMessage = "大模型配置已保存。",
+                        )
+                    }
+                    PhoneFormSubmission.Accepted
+                }
+            }
+        val onExpired: suspend () -> Unit = {
+            withContext(Dispatchers.Main.immediate) {
+                if (activeAiConfigServer === server && _state.value.aiConfigSavedMessage == null) {
+                    _state.update {
+                        it.copy(aiConfigServerUrl = null, aiConfigServerError = "二维码已过期，请重新生成。")
                     }
                 }
-            },
-            onExpired = {
-                withContext(Dispatchers.Main.immediate) {
-                    if (activeAiConfigServer === server && _state.value.aiConfigSavedMessage == null) {
-                        _state.update {
-                            it.copy(aiConfigServerUrl = null, aiConfigServerError = "二维码已过期，请重新生成。")
-                        }
+            }
+        }
+        server = if (provider.isCustom) {
+            customAiConfigServer(
+                scope = viewModelScope,
+                saved = current.customAiConfig,
+                onSubmit = { config -> acceptConfig { it.copy(customAiConfig = config) } },
+                onExpired = onExpired,
+            )
+        } else {
+            aiConfigServer(
+                scope = viewModelScope,
+                provider = provider,
+                modelName = current.aiModelConfigs[provider.id]?.modelId.orEmpty().ifBlank { provider.defaultModel },
+                onSubmit = { model, apiKey ->
+                    acceptConfig {
+                        it.copy(aiModelConfigs = it.aiModelConfigs + (provider.id to AiModelConfig(model, apiKey)))
                     }
-                }
-            },
-        )
+                },
+                onExpired = onExpired,
+            )
+        }
         activeAiConfigServer = server
         _state.update {
             it.copy(
@@ -938,22 +1010,6 @@ class TvBoxViewModel(
                     videoApiConfigSavedMessage = null,
                 )
             }
-        }
-    }
-
-    private fun applyAiConfigFromPhone(modelName: String, apiKey: String) {
-        val settings = _state.value.appSettings.copy(
-            aiModelName = modelName.trim(),
-            aiApiKey = apiKey.trim(),
-        )
-        saveSettings(settings)
-        _state.update {
-            it.copy(
-                appSettings = settings,
-                aiConfigServerUrl = null,
-                aiConfigServerError = null,
-                aiConfigSavedMessage = "已收到手机配置，模型和 API Key 已保存。",
-            )
         }
     }
 
@@ -2062,7 +2118,7 @@ class TvBoxViewModel(
 
     fun goBack(): Boolean {
         val current = _state.value
-        return when (current.screen) {
+        val handled = when (current.screen) {
             TvScreen.Player -> {
                 stopHistoryRecovery()
                 _state.update {
@@ -2112,6 +2168,8 @@ class TvBoxViewModel(
             }
             TvScreen.Home -> false
         }
+        if (handled && _state.value.screen == TvScreen.Home && applyPendingVideoSources()) refreshHome()
+        return handled
     }
 
     private fun loadHomePage(reset: Boolean, forceRefresh: Boolean = false) {
@@ -2786,17 +2844,6 @@ private fun TvBoxUiState.playbackHealthKeyOrNull(): String? {
         movieId = movie.id,
         episodeIndex = playerEpisodeIndex,
         source = source,
-    )
-}
-
-private fun AppSettings.userAiRequestConfigOrNull(): AiRequestConfig? {
-    val apiKey = aiApiKey.trim()
-    if (apiKey.isBlank()) return null
-    val provider = AiProviders.find(aiProviderId)
-    return AiRequestConfig(
-        chatCompletionsUrl = provider.chatCompletionsUrl,
-        model = aiModelName.trim().ifBlank { provider.defaultModel },
-        apiKey = apiKey,
     )
 }
 

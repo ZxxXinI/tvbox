@@ -1,0 +1,160 @@
+﻿{
+  "revision": 1,
+  "sources": [
+    {
+      "id": "liangzi",
+      "name": "量子",
+      "baseUrls": [
+        "https://lzzyapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "ruyi",
+      "name": "如意",
+      "baseUrls": [
+        "https://bycj.rytvapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "360",
+      "name": "360",
+      "baseUrls": [
+        "https://360zy.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "dyttzy",
+      "name": "电影天堂",
+      "baseUrls": [
+        "https://api.dyttcj.com/api.php/provide/vod/at/json/"
+      ]
+    },
+    {
+      "id": "bfzy",
+      "name": "暴风",
+      "baseUrls": [
+        "https://apibfzy.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "tyyszy",
+      "name": "天涯",
+      "baseUrls": [
+        "https://tyyszy.com/api.php/provide/vod/",
+        "https://tyyszyapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "ffzy",
+      "name": "非凡",
+      "baseUrls": [
+        "https://api.ffzyapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "maotaizy",
+      "name": "茅台",
+      "baseUrls": [
+        "https://caiji.maotaizy.cc/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "jisu",
+      "name": "极速",
+      "baseUrls": [
+        "https://jszyapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "mdzy",
+      "name": "魔都",
+      "baseUrls": [
+        "https://www.mdzyapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "zuid",
+      "name": "最大",
+      "baseUrls": [
+        "https://api.zuidapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "wujin",
+      "name": "无尽",
+      "baseUrls": [
+        "https://api.wujinapi.me/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "bdzy",
+      "name": "百度",
+      "baseUrls": [
+        "https://api.apibdzy.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "hongniu",
+      "name": "红牛",
+      "baseUrls": [
+        "https://www.hongniuzy2.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "xinlangaa",
+      "name": "新浪",
+      "baseUrls": [
+        "https://api.xinlangapi.me/xinlangapi.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "ckzy",
+      "name": "CK",
+      "baseUrls": [
+        "https://ckzy.me/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "hhzyapi",
+      "name": "豪华",
+      "baseUrls": [
+        "https://hhzyapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "subocaiji",
+      "name": "速博",
+      "baseUrls": [
+        "https://subocj.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "aqyzy",
+      "name": "爱奇艺",
+      "baseUrls": [
+        "https://iqiyizyapi.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "myzy",
+      "name": "猫眼",
+      "baseUrls": [
+        "https://api.maoyanapi.top/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "jinyingzy",
+      "name": "金鹰点播",
+      "baseUrls": [
+        "https://jinyingzy.com/api.php/provide/vod/"
+      ]
+    },
+    {
+      "id": "guangsuapi",
+      "name": "光速",
+      "baseUrls": [
+        "https://api.guangsuapi.com/api.php/provide/vod/"
+      ]
+    }
+  ]
+}

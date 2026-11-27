@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collect
 import com.tvbox.app.data.DefaultAppUpdateRepository
+import com.tvbox.app.data.videoSourceCatalogRepository
 import com.tvbox.app.data.DefaultDoubanHotRepository
 import com.tvbox.app.data.DefaultMovieRepository
 import com.tvbox.app.data.SharedAppSettingsRepository
@@ -138,6 +139,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.syncVideoSources()
     }
 
     override fun onPause() {
@@ -450,6 +456,7 @@ private class TvBoxViewModelFactory(
                 cache = SharedDoubanHotCache(activity.applicationContext),
             ),
             appUpdateRepository = DefaultAppUpdateRepository(activity.applicationContext),
+            videoSourceCatalogRepository = videoSourceCatalogRepository(activity.applicationContext),
             appSettingsRepository = SharedAppSettingsRepository(activity.applicationContext),
             playbackHealthRepository = SharedPlaybackHealthRepository(activity.applicationContext),
             historyRepository = SharedHistoryRepository(activity.applicationContext),

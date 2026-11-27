@@ -78,6 +78,9 @@ data class TvLayoutTokens(
     val historyGridMinWidth: Dp,
     val episodeGridMinWidth: Dp,
     val settingsGridMinWidth: Dp,
+    val navigationRailWidth: Dp,
+    val navigationIconSize: Dp,
+    val navigationButtonHeight: Dp,
 )
 
 private val NormalLayoutTokens = TvLayoutTokens(
@@ -85,6 +88,9 @@ private val NormalLayoutTokens = TvLayoutTokens(
     historyGridMinWidth = 230.dp,
     episodeGridMinWidth = 132.dp,
     settingsGridMinWidth = 176.dp,
+    navigationRailWidth = 76.dp,
+    navigationIconSize = 24.dp,
+    navigationButtonHeight = 44.dp,
 )
 
 private val LargeLayoutTokens = TvLayoutTokens(
@@ -92,6 +98,9 @@ private val LargeLayoutTokens = TvLayoutTokens(
     historyGridMinWidth = 276.dp,
     episodeGridMinWidth = 156.dp,
     settingsGridMinWidth = 210.dp,
+    navigationRailWidth = 92.dp,
+    navigationIconSize = 30.dp,
+    navigationButtonHeight = 56.dp,
 )
 
 private val ExtraLargeLayoutTokens = TvLayoutTokens(
@@ -99,6 +108,9 @@ private val ExtraLargeLayoutTokens = TvLayoutTokens(
     historyGridMinWidth = 322.dp,
     episodeGridMinWidth = 184.dp,
     settingsGridMinWidth = 250.dp,
+    navigationRailWidth = 112.dp,
+    navigationIconSize = 36.dp,
+    navigationButtonHeight = 64.dp,
 )
 
 val LocalTvLayout = staticCompositionLocalOf { NormalLayoutTokens }
@@ -129,7 +141,6 @@ object TvLayout {
 }
 
 object TvDimens {
-    val RailWidth = 76.dp
     val PageHorizontalPadding = 28.dp
     val PageVerticalPadding = 24.dp
     val SectionGap = 16.dp

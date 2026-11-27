@@ -1,11 +1,14 @@
 package com.tvbox.app.domain
 
+import kotlinx.serialization.Serializable
+
 data class Category(
     val id: Int,
     val parentId: Int,
     val name: String,
 )
 
+@Serializable
 data class ApiLine(
     val id: String,
     val name: String,

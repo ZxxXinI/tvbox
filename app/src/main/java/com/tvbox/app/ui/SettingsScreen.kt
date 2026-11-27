@@ -107,7 +107,7 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
         SettingsEditor.Provider -> SettingsChoices(
             "服务商", AiProviders.all, provider, { it.name }, dismiss,
             onSelect = { actions.updateAiProvider(it.id) },
-            optionDetail = { it.defaultModel },
+            optionDetail = { if (it.isCustom) "OpenAI 兼容接口" else it.defaultModel },
         )
         SettingsEditor.Statistics -> {
             val health = state.playbackHealth
@@ -205,10 +205,25 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
                     SettingsGroup("大模型") {
                         SettingsRow("服务商", provider.name) { editor = SettingsEditor.Provider }
                         SettingsDivider()
-                        SettingsRow("模型", settings.aiModelName.ifBlank { provider.defaultModel }, onClick = actions::openAiConfigDialog)
-                        SettingsDivider()
-                        SettingsRow("API Key", if (settings.aiApiKey.isBlank()) "未配置" else "已配置",
-                            onClick = actions::openAiConfigDialog)
+                        if (provider.isCustom) {
+                            val config = settings.customAiConfig
+                            SettingsRowContent("API 地址", config?.apiBaseUrl ?: "未配置", enabled = true, input = Modifier) {}
+                            SettingsDivider()
+                            SettingsRowContent("模型", config?.modelId ?: "未选择", enabled = true, input = Modifier) {}
+                            SettingsDivider()
+                            SettingsRow(
+                                "手机扫码配置",
+                                if (config?.apiKey.isNullOrBlank()) "API Key 未配置" else "API Key 已配置",
+                                onClick = actions::openAiConfigDialog,
+                            )
+                        } else {
+                            val config = settings.aiModelConfigs[provider.id]
+                            SettingsRow("模型", config?.modelId.orEmpty().ifBlank { provider.defaultModel },
+                                onClick = actions::openAiConfigDialog)
+                            SettingsDivider()
+                            SettingsRow("API Key", if (config?.apiKey.isNullOrBlank()) "未配置" else "已配置",
+                                onClick = actions::openAiConfigDialog)
+                        }
                     }
                     SettingsGroup("更新") {
                         SettingsSwitchRow("启动时检查更新", settings.checkUpdatesOnStartup, actions::updateStartupUpdateCheck)

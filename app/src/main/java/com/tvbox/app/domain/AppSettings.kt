@@ -9,8 +9,8 @@ data class AppSettings(
     val theme: TvTheme = TvTheme.Default,
     val fontScale: TvFontScale = TvFontScale.Normal,
     val aiProviderId: String = AiProviders.default.id,
-    val aiModelName: String = AiProviders.default.defaultModel,
-    val aiApiKey: String = "",
+    val aiModelConfigs: Map<String, AiModelConfig> = emptyMap(),
+    val customAiConfig: CustomAiConfig? = null,
     val checkUpdatesOnStartup: Boolean = true,
     val playbackAgentAutoSwitchEnabled: Boolean = true,
     val videoScaleMode: VideoScaleMode = VideoScaleMode.Fit,
@@ -91,11 +91,18 @@ fun List<CustomVideoApiLine>.toApiLines(): List<ApiLine> {
     return map { it.toApiLine() }
 }
 
+@Serializable
+data class AiModelConfig(val modelId: String, val apiKey: String)
+
+@Serializable
+data class CustomAiConfig(val apiBaseUrl: String, val modelId: String, val apiKey: String)
+
 data class AiProvider(
     val id: String,
     val name: String,
     val apiBaseUrl: String,
     val defaultModel: String,
+    val isCustom: Boolean = false,
 ) {
     val chatCompletionsUrl: String
         get() {
@@ -109,6 +116,8 @@ data class AiProvider(
 }
 
 object AiProviders {
+    val custom = AiProvider("custom", "自定义", "", "", isCustom = true)
+
     val all = listOf(
         AiProvider(
             id = "agnes",
@@ -134,6 +143,7 @@ object AiProviders {
             apiBaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
             defaultModel = "qwen-plus",
         ),
+        custom,
     )
 
     val default: AiProvider = all.first()

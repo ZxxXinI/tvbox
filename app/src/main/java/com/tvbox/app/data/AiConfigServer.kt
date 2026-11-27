@@ -17,7 +17,7 @@ internal fun aiConfigServer(
     renderForm = { token, values, error ->
         configPage(token, provider, values["modelName"] ?: modelName, error)
     },
-    savedPage = ::savedPage,
+    savedPage = ::aiConfigSavedPage,
     onSubmit = { values ->
         val submittedModel = values["modelName"].orEmpty().trim()
         val submittedKey = values["apiKey"].orEmpty().trim()
@@ -80,7 +80,7 @@ private fun configPage(
     """.trimIndent()
 }
 
-private fun savedPage(): String {
+internal fun aiConfigSavedPage(): String {
     return """
         <!doctype html>
         <html lang="zh-CN">

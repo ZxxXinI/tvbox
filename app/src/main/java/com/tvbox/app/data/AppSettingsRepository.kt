@@ -1,7 +1,10 @@
 package com.tvbox.app.data
 
 import android.content.Context
+import com.tvbox.app.domain.AiModelConfig
+import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.AppSettings
+import com.tvbox.app.domain.CustomAiConfig
 import com.tvbox.app.domain.DeviceMode
 import com.tvbox.app.domain.CustomVideoApiLine
 import com.tvbox.app.domain.TvFontScale
@@ -28,6 +31,7 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
     }
 
     override suspend fun getSettings(): AppSettings = withContext(Dispatchers.IO) {
+        val aiProviderId = prefs.getString(KEY_AI_PROVIDER_ID, null) ?: AiProviders.default.id
         AppSettings(
             homeApiLineId = prefs.getString(KEY_HOME_API_LINE_ID, AppSettings().homeApiLineId)
                 ?: AppSettings().homeApiLineId,
@@ -35,12 +39,11 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             customVideoApiLines = readCustomVideoApiLines(),
             theme = TvTheme.fromStorageKey(prefs.getString(KEY_THEME, TvTheme.Default.storageKey)),
             fontScale = TvFontScale.fromStorageKey(prefs.getString(KEY_FONT_SCALE, TvFontScale.Normal.storageKey)),
-            aiProviderId = prefs.getString(KEY_AI_PROVIDER_ID, AppSettings().aiProviderId)
-                ?: AppSettings().aiProviderId,
-            aiModelName = prefs.getString(KEY_AI_MODEL_NAME, AppSettings().aiModelName)
-                ?: AppSettings().aiModelName,
-            aiApiKey = prefs.getString(KEY_AI_API_KEY, AppSettings().aiApiKey)
-                ?: AppSettings().aiApiKey,
+            aiProviderId = aiProviderId,
+            aiModelConfigs = readAiModelConfigs(aiProviderId),
+            customAiConfig = prefs.getString(KEY_CUSTOM_AI_CONFIG, null)?.let { raw ->
+                runCatching { json.decodeFromString<CustomAiConfig>(raw) }.getOrNull()
+            },
             checkUpdatesOnStartup = prefs.getBoolean(KEY_CHECK_UPDATES_ON_STARTUP, true),
             playbackAgentAutoSwitchEnabled = prefs.getBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, true),
             videoScaleMode = VideoScaleMode.fromStorageKey(prefs.getString(KEY_VIDEO_SCALE_MODE, null)),
@@ -61,8 +64,10 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             .putString(KEY_THEME, settings.theme.storageKey)
             .putString(KEY_FONT_SCALE, settings.fontScale.storageKey)
             .putString(KEY_AI_PROVIDER_ID, settings.aiProviderId)
-            .putString(KEY_AI_MODEL_NAME, settings.aiModelName)
-            .putString(KEY_AI_API_KEY, settings.aiApiKey)
+            .putString(KEY_AI_MODEL_CONFIGS, json.encodeToString(settings.aiModelConfigs))
+            .putString(KEY_CUSTOM_AI_CONFIG, settings.customAiConfig?.let { json.encodeToString(it) })
+            .remove(KEY_AI_MODEL_NAME)
+            .remove(KEY_AI_API_KEY)
             .putBoolean(KEY_CHECK_UPDATES_ON_STARTUP, settings.checkUpdatesOnStartup)
             .putBoolean(KEY_PLAYBACK_AGENT_AUTO_SWITCH, settings.playbackAgentAutoSwitchEnabled)
             .putString(KEY_VIDEO_SCALE_MODE, settings.videoScaleMode.storageKey)
@@ -80,6 +85,19 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
             .getOrDefault(emptyList())
     }
 
+    private fun readAiModelConfigs(providerId: String): Map<String, AiModelConfig> {
+        val raw = prefs.getString(KEY_AI_MODEL_CONFIGS, null)
+        if (raw != null) {
+            return runCatching { json.decodeFromString<Map<String, AiModelConfig>>(raw) }
+                .getOrDefault(emptyMap())
+        }
+        val model = prefs.getString(KEY_AI_MODEL_NAME, null)
+        val key = prefs.getString(KEY_AI_API_KEY, null)
+        val provider = AiProviders.find(providerId)
+        if (provider.isCustom || (model == null && key == null)) return emptyMap()
+        return mapOf(provider.id to AiModelConfig(model.orEmpty(), key.orEmpty()))
+    }
+
     private companion object {
         const val KEY_HOME_API_LINE_ID = "home_api_line_id"
         const val KEY_HOME_SOURCE_PROMPT_HANDLED = "home_source_prompt_handled"
@@ -89,6 +107,8 @@ class SharedAppSettingsRepository(context: Context) : AppSettingsRepository {
         const val KEY_AI_PROVIDER_ID = "ai_provider_id"
         const val KEY_AI_MODEL_NAME = "ai_model_name"
         const val KEY_AI_API_KEY = "ai_api_key"
+        const val KEY_AI_MODEL_CONFIGS = "ai_model_configs"
+        const val KEY_CUSTOM_AI_CONFIG = "custom_ai_config"
         const val KEY_CHECK_UPDATES_ON_STARTUP = "check_updates_on_startup"
         const val KEY_PLAYBACK_AGENT_AUTO_SWITCH = "playback_agent_auto_switch"
         const val KEY_VIDEO_SCALE_MODE = "video_scale_mode"

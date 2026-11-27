@@ -29,13 +29,17 @@ class PlaybackParserTest {
         assertEquals(listOf("量子", "如意", "360"), lines.take(3).map { it.name })
         assertTrue(lines.any { it.id == "dyttzy" && it.name == "电影天堂" })
         assertEquals(lines.size, lines.map { it.id }.distinct().size)
+        assertEquals(22, lines.size)
+        assertEquals(23, lines.sumOf { it.baseUrls.size })
         assertEquals(
-            listOf(
-                "https://api.ffzyapi.com/api.php/provide/vod/",
-                "http://api.ffzyapi.com/api.php/provide/vod/",
-            ),
-            lines.last().baseUrls,
+            listOf("https://api.dyttcj.com/api.php/provide/vod/at/json/"),
+            lines.single { it.id == "dyttzy" }.baseUrls,
         )
+        assertEquals(
+            listOf("https://tyyszy.com/api.php/provide/vod/", "https://tyyszyapi.com/api.php/provide/vod/"),
+            lines.single { it.id == "tyyszy" }.baseUrls,
+        )
+        assertTrue(lines.none { it.id in setOf("wolong", "dbzy", "mozhua", "yinghua", "ikun", "ukuapi", "1080zyk", "p2100", "yzzy") })
     }
 
     @Test

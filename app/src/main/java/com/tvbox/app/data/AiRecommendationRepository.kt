@@ -1,6 +1,8 @@
 ﻿package com.tvbox.app.data
 
 import com.tvbox.app.domain.AiRecommendationResult
+import com.tvbox.app.domain.AiProviders
+import com.tvbox.app.domain.AppSettings
 import com.tvbox.app.domain.parseAiRecommendationContent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,12 +28,32 @@ data class AiRequestConfig(
     val chatCompletionsUrl: String,
     val model: String,
     val apiKey: String,
+    val isCustom: Boolean = false,
 )
+
+internal fun AppSettings.userAiRequestConfigOrNull(): AiRequestConfig? {
+    val provider = AiProviders.find(aiProviderId)
+    if (provider.isCustom) {
+        val config = requireNotNull(customAiConfig) { "请先在设置中完成自定义大模型配置" }
+        val endpoints = requireNotNull(AiApiEndpoints.parse(config.apiBaseUrl)) { "请检查自定义 API 地址" }
+        require(config.apiKey.isAiApiKey() && config.modelId.isAiModelId()) { "请检查自定义模型 ID 和 API Key" }
+        return AiRequestConfig(endpoints.chatCompletionsUrl, config.modelId, config.apiKey, isCustom = true)
+    }
+    val config = aiModelConfigs[provider.id] ?: return null
+    val apiKey = config.apiKey.trim()
+    if (apiKey.isEmpty()) return null
+    val model = config.modelId.trim().ifEmpty { provider.defaultModel }
+    return AiRequestConfig(provider.chatCompletionsUrl, model, apiKey)
+}
 
 class DefaultAiRecommendationRepository(
     private val bundledApiKey: String,
     private val client: OkHttpClient = defaultAiClient,
 ) : AiRecommendationRepository {
+    private val customClient by lazy {
+        client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+    }
+
     override suspend fun getRecommendations(
         query: String,
         userConfig: AiRequestConfig?,
@@ -62,7 +84,8 @@ class DefaultAiRecommendationRepository(
             .post(aiJson.encodeToString(requestBody).toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
-        client.newCall(request).execute().use { response ->
+        val requestClient = if (config.isCustom) customClient else client
+        requestClient.newCall(request).execute().use { response ->
             val body = response.body.string()
             if (!response.isSuccessful) {
                 throw IllegalStateException("AI 请求失败：HTTP ${response.code}")

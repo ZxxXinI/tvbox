@@ -1,6 +1,10 @@
 ﻿package com.tvbox.app.data
 
 import com.tvbox.app.domain.AiProviders
+import com.tvbox.app.domain.AiModelConfig
+import com.tvbox.app.domain.AppSettings
+import com.tvbox.app.domain.CustomAiConfig
+import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
 import java.net.URI
 import java.net.URLEncoder
 import java.util.concurrent.CountDownLatch
@@ -71,6 +76,111 @@ class PhoneConfigServerTest {
         } finally {
             server.stop()
         }
+    }
+
+    @Test
+    fun customFormListsModelsAndSavesAnExplicitSelection() = withScope { scope ->
+        val selected = AtomicReference<CustomAiConfig>()
+        val upstreamCalls = AtomicInteger()
+        val authorization = AtomicReference<String>()
+        val upstream = HttpServer.create(InetSocketAddress(loopback(), 0), 0).apply {
+            createContext("/compatible/v1/models") { exchange ->
+                upstreamCalls.incrementAndGet()
+                authorization.set(exchange.requestHeaders.getFirst("Authorization"))
+                val bytes = """{"data":[{"id":"model/one"},{"id":"model/one"},{"id":"model-two"},{"id":1}]}""".toByteArray()
+                exchange.sendResponseHeaders(200, bytes.size.toLong())
+                exchange.responseBody.use { it.write(bytes) }
+            }
+            start()
+        }
+        val base = "http://127.0.0.1:${upstream.address.port}/compatible/v1"
+        val server = customAiConfigServer(scope, null, onSubmit = {
+            selected.set(it)
+            PhoneFormSubmission.Accepted
+        }, hostProvider = ::loopback)
+        try {
+            val url = server.start()
+            val page = request(url)
+            val nonce = Regex("""<script nonce="([^"]+)">""").find(page.body)!!.groupValues[1]
+            assertTrue(page.contentSecurityPolicy.orEmpty().contains("'nonce-$nonce'"))
+            val listUrl = url.substringBefore("/?") + "/models"
+            val fields = "apiBaseUrl=${encode("$base/chat/completions/")}&apiKey=fixture-key"
+            assertEquals(403, request(listUrl, fields).code)
+            assertEquals(0, upstreamCalls.get())
+            val listed = request(listUrl, "${tokenForm(url)}&$fields")
+            assertEquals(200, listed.code)
+            assertTrue(listed.contentType.orEmpty().startsWith("application/json"))
+            assertEquals("""{"models":["model/one","model-two"]}""", listed.body)
+            assertEquals("Bearer fixture-key", authorization.get())
+            assertEquals(null, selected.get())
+            assertTrue(server.isSessionActive)
+            assertEquals(200, request(saveUrl(url), "${tokenForm(url)}&$fields&modelId=${encode("model/one")}").code)
+            assertEquals(CustomAiConfig(base, "model/one", "fixture-key"), selected.get())
+            awaitClosed(server)
+        } finally {
+            server.stop()
+            upstream.stop(0)
+        }
+    }
+
+    @Test
+    fun failedDiscoveryAllowsManualModelAndNeverReusesAKeyAtAnotherAddress() = withScope { scope ->
+        val upstreamCalls = AtomicInteger()
+        val upstream = HttpServer.create(InetSocketAddress(loopback(), 0), 0).apply {
+            createContext("/") { exchange ->
+                upstreamCalls.incrementAndGet()
+                exchange.sendResponseHeaders(404, -1)
+                exchange.close()
+            }
+            start()
+        }
+        val base = "http://127.0.0.1:${upstream.address.port}/v1"
+        val saved = CustomAiConfig(base, "prior-model", "saved-fixture-key")
+        val selected = AtomicReference<CustomAiConfig>()
+        val server = customAiConfigServer(scope, saved, onSubmit = {
+            selected.set(it)
+            PhoneFormSubmission.Accepted
+        }, hostProvider = ::loopback)
+        try {
+            val url = server.start()
+            val token = tokenForm(url)
+            val listUrl = url.substringBefore("/?") + "/models"
+            assertFalse(request(url).body.contains(saved.apiKey))
+
+            val changed = "$token&apiBaseUrl=${encode("$base/other")}"
+            assertTrue(request(listUrl, changed).body.contains("请填写此地址的有效 API Key"))
+            assertEquals(400, request(saveUrl(url), "$changed&modelId=manual-model").code)
+            assertEquals(0, upstreamCalls.get())
+
+            val unchanged = "$token&apiBaseUrl=${encode(base)}"
+            assertTrue(request(listUrl, unchanged).body.contains("404"))
+            assertEquals(1, upstreamCalls.get())
+            assertEquals(200, request(saveUrl(url), "$unchanged&modelId=manual-model").code)
+            assertEquals(saved.copy(modelId = "manual-model"), selected.get())
+        } finally {
+            server.stop()
+            upstream.stop(0)
+        }
+    }
+
+    @Test
+    fun chatRequestsUseOnlyTheSelectedProviderSettings() {
+        val customConfig = CustomAiConfig("https://example.invalid/prefix/v1", "custom/model", "custom-fixture")
+        val settings = AppSettings(
+            aiProviderId = AiProviders.custom.id,
+            aiModelConfigs = mapOf(AiProviders.default.id to AiModelConfig("preset-model", "preset-fixture")),
+            customAiConfig = customConfig,
+        )
+        assertEquals(
+            AiRequestConfig("https://example.invalid/prefix/v1/chat/completions", "custom/model", "custom-fixture", isCustom = true),
+            settings.userAiRequestConfigOrNull(),
+        )
+        assertEquals(
+            AiRequestConfig(AiProviders.default.chatCompletionsUrl, "preset-model", "preset-fixture"),
+            settings.copy(aiProviderId = AiProviders.default.id).userAiRequestConfigOrNull(),
+        )
+        assertEquals(null, settings.copy(aiProviderId = "deepseek").userAiRequestConfigOrNull())
+        assertTrue(runCatching { settings.copy(customAiConfig = null).userAiRequestConfigOrNull() }.isFailure)
     }
 
     @Test
@@ -132,7 +242,13 @@ class PhoneConfigServerTest {
         }
     }
 
-    private data class Response(val code: Int, val body: String, val cacheControl: String?)
+    private data class Response(
+        val code: Int,
+        val body: String,
+        val cacheControl: String?,
+        val contentType: String?,
+        val contentSecurityPolicy: String?,
+    )
 
     private fun request(url: String, body: String? = null): Response {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
@@ -147,8 +263,13 @@ class PhoneConfigServerTest {
             }
             val code = connection.responseCode
             val stream = if (code < 400) connection.inputStream else connection.errorStream
-            return Response(code, stream?.bufferedReader()?.use { it.readText() }.orEmpty(),
-                connection.getHeaderField("Cache-Control"))
+            return Response(
+                code,
+                stream?.bufferedReader()?.use { it.readText() }.orEmpty(),
+                connection.getHeaderField("Cache-Control"),
+                connection.getHeaderField("Content-Type"),
+                connection.getHeaderField("Content-Security-Policy"),
+            )
         } finally {
             connection.disconnect()
         }
@@ -168,6 +289,7 @@ class PhoneConfigServerTest {
 
     private fun tokenForm(url: String): String = URI(url).rawQuery
     private fun saveUrl(url: String): String = url.substringBefore("/?") + "/save"
+    private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
     private fun loopback() = "127.0.0.1"
 
     private fun withScope(test: (CoroutineScope) -> Unit) {

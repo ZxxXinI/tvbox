@@ -41,6 +41,7 @@ data class MovieDetailUpdate(
 interface MovieRepository {
     val apiLines: List<ApiLine>
     fun updateCustomApiLines(customApiLines: List<ApiLine>)
+    fun replaceDefaultApiLines(defaultApiLines: List<ApiLine>) = Unit
     suspend fun getCategories(apiLineId: String): List<Category>
     suspend fun getMovies(apiLineId: String, page: Int, typeId: Int? = null, keyword: String? = null): PagedMovies
     suspend fun getHomeCatalogMovies(apiLineId: String, page: Int): PagedMovies =
@@ -80,14 +81,19 @@ class DefaultMovieRepository(
     private val apiFactory: (String) -> MacCmsApi = MacCmsNetwork::api,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) : MovieRepository {
-    private var customApiLines: List<ApiLine> = emptyList()
+    @Volatile private var customApiLines: List<ApiLine> = emptyList()
+    @Volatile private var defaultApiLines: List<ApiLine> = builtInApiLines
     private val categoriesCache = TimedLruCache<List<Category>>(maxEntries = 24)
     private val moviesCache = TimedLruCache<PagedMovies>(maxEntries = 80)
     private val detailsCache = TimedLruCache<Movie?>(maxEntries = 60)
     private val sourceHealth = SourceHealthTracker(nowMs)
 
     override val apiLines: List<ApiLine>
-        get() = builtInApiLines + customApiLines
+        get() = (defaultApiLines + customApiLines).distinctBy { it.id }
+
+    override fun replaceDefaultApiLines(defaultApiLines: List<ApiLine>) {
+        if (defaultApiLines.isNotEmpty()) this.defaultApiLines = defaultApiLines.toList()
+    }
 
     override fun updateCustomApiLines(customApiLines: List<ApiLine>) {
         this.customApiLines = customApiLines
@@ -97,7 +103,7 @@ class DefaultMovieRepository(
 
     override suspend fun getCategories(apiLineId: String): List<Category> = withContext(Dispatchers.IO) {
         val line = requireLine(apiLineId)
-        val key = "categories:${line.id}"
+        val key = "categories:${line.cacheIdentity}"
         categoriesCache.get(key, nowMs())?.let { return@withContext it }
         val categories = withFallback(line) { api ->
             api.getVod(action = "list").categories.mapNotNull { it.toDomainOrNull() }
@@ -376,7 +382,8 @@ class DefaultMovieRepository(
     }
 
     private fun requireLine(apiLineId: String): ApiLine {
-        return apiLines.firstOrNull { it.id == apiLineId } ?: apiLines.first()
+        return apiLines.firstOrNull { it.id == apiLineId }
+            ?: throw IllegalArgumentException("影视来源已不可用")
     }
 
     private suspend fun <T> withFallback(
@@ -467,7 +474,7 @@ class DefaultMovieRepository(
         bypassCache: Boolean = false,
     ): PagedMovies {
         val normalizedKeyword = keyword?.trim().orEmpty()
-        val key = "movies:${line.id}:${page.coerceAtLeast(1)}:${typeId ?: "all"}:$normalizedKeyword"
+        val key = "movies:${line.cacheIdentity}:${page.coerceAtLeast(1)}:${typeId ?: "all"}:$normalizedKeyword"
         if (!bypassCache) {
             moviesCache.get(key, nowMs())
                 ?.takeIf { allowCachedEmpty || it.movies.isNotEmpty() }
@@ -487,7 +494,7 @@ class DefaultMovieRepository(
 
     private suspend fun loadPrimaryDetail(apiLineId: String, id: Int, bypassCache: Boolean = false): Movie? {
         val line = requireLine(apiLineId)
-        val key = "detail:${line.id}:$id"
+        val key = "detail:${line.cacheIdentity}:$id"
         if (!bypassCache) detailsCache.get(key, nowMs())?.let { return it }
         val detail = withFallback(line) { api ->
             api.getVod(action = "videolist", ids = id.toString())
@@ -500,11 +507,12 @@ class DefaultMovieRepository(
     }
 
     private fun prioritizedLines(primaryLineId: String, includeCoolingDown: Boolean = false): List<ApiLine> {
-        val primary = requireLine(primaryLineId)
+        val lines = apiLines
+        val primary = lines.firstOrNull { it.id == primaryLineId } ?: lines.firstOrNull() ?: return emptyList()
         return buildList {
             add(primary)
             addAll(
-                apiLines
+                lines
                     .filter { it.id != primary.id && (includeCoolingDown || !sourceHealth.isCoolingDown(it.id)) }
                     .sortedByDescending { sourceHealth.score(it.id) },
             )
@@ -528,6 +536,9 @@ class DefaultMovieRepository(
         const val DETAIL_CACHE_TTL_MS = 30 * 60_000L
     }
 }
+
+private val ApiLine.cacheIdentity: String
+    get() = "$id:${baseUrls.joinToString(",")}"
 
 private fun Movie.isResumeMovie(movieName: String, expectedYear: String?): Boolean {
     val wanted = normalizeResumeTitle(movieName)
