@@ -1,6 +1,7 @@
 ﻿package com.tvbox.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,8 +44,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.Movie
 import com.tvbox.app.domain.PlayEpisode
@@ -60,8 +68,11 @@ import com.tvbox.app.ui.components.LoadingState
 import com.tvbox.app.ui.components.PageSurface
 import com.tvbox.app.ui.components.PosterImage
 import com.tvbox.app.ui.components.SmallMeta
-import com.tvbox.app.ui.components.tvFocusScale
+import com.tvbox.app.ui.theme.TvColors
 import com.tvbox.app.ui.theme.TvLayout
+
+private val EpisodeButtonHorizontalPadding = 12.dp
+private val EpisodeButtonVerticalPadding = 10.dp
 
 @Composable
 fun DetailScreen(
@@ -279,24 +290,61 @@ private fun EpisodeGrid(
         }
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = TvLayout.EpisodeGridMinWidth),
-        state = gridState,
-        contentPadding = PaddingValues(bottom = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = modifier.fillMaxSize(),
-    ) {
-        itemsIndexed(
-            items = episodes,
-            key = { index, episode -> "$index-${episode.url}" },
-        ) { index, episode ->
-            EpisodeButton(
-                episode = episode,
-                selected = index == safeSelectedEpisodeIndex,
-                focusRequester = focusRequesters[index],
-                onClick = { onEpisode(index) },
-            )
+    val textStyle = MaterialTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Heading)
+    val textMeasurer = rememberTextMeasurer()
+    val spacing = 12.dp
+    val density = LocalDensity.current
+    val gapWidth = with(density) { spacing.roundToPx() }
+    val horizontalPadding = with(density) { EpisodeButtonHorizontalPadding.roundToPx() } * 2
+    val verticalPadding = with(density) { EpisodeButtonVerticalPadding.roundToPx() } * 2
+    val baseWidth = TvLayout.EpisodeGridMinWidth
+    val baseWidthPx = with(density) { baseWidth.roundToPx() }
+    val titles = remember(episodes) { episodes.map { it.title }.distinct() }
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val gridWidth = constraints.maxWidth
+        val (columnCount, textHeight) = remember(
+            titles, textMeasurer, textStyle, gridWidth, baseWidthPx, gapWidth, horizontalPadding,
+        ) {
+            val unwrappedSizes = titles.map { title ->
+                textMeasurer.measure(title, style = textStyle, softWrap = false).size
+            }
+            val widest = unwrappedSizes.maxOf { it.width } + horizontalPadding
+            // Cap the requested width near two standard cells; longer titles can wrap.
+            val desiredWidth = widest.coerceIn(baseWidthPx, baseWidthPx * 2 + gapWidth)
+            val columns = ((gridWidth + gapWidth) / (desiredWidth + gapWidth)).coerceAtLeast(1)
+            val cellWidth = (gridWidth - gapWidth * (columns - 1)) / columns
+            val textWidth = (cellWidth - horizontalPadding).coerceAtLeast(1)
+            val tallest = unwrappedSizes.indices.maxOf { index ->
+                val unwrapped = unwrappedSizes[index]
+                if (unwrapped.width <= textWidth) unwrapped.height else {
+                    textMeasurer.measure(titles[index], style = textStyle, constraints = Constraints(maxWidth = textWidth))
+                        .size.height
+                }
+            }
+            columns to tallest
+        }
+        val buttonHeight = with(density) { (textHeight + verticalPadding).toDp() }.coerceAtLeast(48.dp)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columnCount),
+            state = gridState,
+            contentPadding = PaddingValues(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            itemsIndexed(
+                items = episodes,
+                key = { index, episode -> "$index-${episode.url}" },
+            ) { index, episode ->
+                EpisodeButton(
+                    episode = episode,
+                    height = buttonHeight,
+                    textStyle = textStyle,
+                    selected = index == safeSelectedEpisodeIndex,
+                    focusRequester = focusRequesters[index],
+                    onClick = { onEpisode(index) },
+                )
+            }
         }
     }
 }
@@ -304,6 +352,8 @@ private fun EpisodeGrid(
 @Composable
 private fun EpisodeButton(
     episode: PlayEpisode,
+    height: Dp,
+    textStyle: TextStyle,
     selected: Boolean,
     focusRequester: FocusRequester,
     onClick: () -> Unit,
@@ -322,10 +372,10 @@ private fun EpisodeButton(
     }
     Surface(
         modifier = Modifier
-            .tvFocusScale(shape = shape)
             .focusRequester(focusRequester)
-            .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .border(if (focused) 3.dp else 1.dp, if (focused) TvColors.Accent else TvColors.Border, shape)
+            .clip(shape)
             .background(containerColor)
             .clickable(onClick = onClick)
             .focusable(),
@@ -333,12 +383,18 @@ private fun EpisodeButton(
         color = containerColor,
         contentColor = contentColor,
     ) {
-        Text(
-            text = episode.title,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Box(
+            modifier = Modifier.fillMaxWidth().heightIn(min = height)
+                .padding(horizontal = EpisodeButtonHorizontalPadding, vertical = EpisodeButtonVerticalPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = episode.title,
+                modifier = Modifier.fillMaxWidth(),
+                style = textStyle,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

@@ -1,5 +1,11 @@
 ﻿# Settings - 2026-06-28
 
+## 2026-11-28 08:03 - 关于页添加开源项目入口
+
+- `app/src/main/java/com/tvbox/app/ui/SettingsScreen.kt` 在 QQ 群下方添加「开源项目」，方便用户前往源码仓库。地址可换行，入口沿用设置行的遥控器焦点样式。
+- 使用系统网页打开方式。设备无法打开网页时，在设置页提示用户在浏览器中访问该地址。 [TVBox GitHub 仓库](https://github.com/ZxxXinI/tvbox)
+- `:app:compileDebugKotlin --offline` 通过。 [返回主日志](README.md)
+
 ## 2026-11-27 22:15 - 大模型自定义 API 与手机选模型
 
 - `SettingsScreen.kt` 和 `TvBoxApp.kt` 增加「自定义」服务商、API 地址与模型摘要、Key 配置状态和手机扫码入口。

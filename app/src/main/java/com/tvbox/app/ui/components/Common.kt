@@ -306,6 +306,16 @@ private fun HeaderActionButton(
 }
 
 @Composable
+internal fun ShortcutKeyLabel(number: Int, enabled: Boolean = true) {
+    Text(
+        text = number.toString(),
+        style = MaterialTheme.typography.labelSmall,
+        color = TvColors.Accent.copy(alpha = if (enabled) 1f else 0.38f),
+        maxLines = 1,
+    )
+}
+
+@Composable
 fun LoadingState(text: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxSize(),
@@ -461,6 +471,23 @@ fun MoviePosterCard(
 }
 
 @Composable
+internal fun rememberDoubanPosterRequest(posterUrl: String): ImageRequest {
+    val context = LocalContext.current
+    return remember(context, posterUrl) {
+        ImageRequest.Builder(context)
+            .data(posterUrl)
+            .apply {
+                val host = Uri.parse(posterUrl).host.orEmpty()
+                if (host.endsWith(".doubanio.com", ignoreCase = true)) {
+                    addHeader("Referer", DOUBAN_REFERER)
+                    addHeader("User-Agent", DOUBAN_USER_AGENT)
+                }
+            }
+            .build()
+    }
+}
+
+@Composable
 fun DoubanHotPosterCard(
     item: DoubanHotItem,
     resolving: Boolean,
@@ -469,21 +496,9 @@ fun DoubanHotPosterCard(
     posterAspectRatio: Float = 0.78f,
 ) {
     val shape = RoundedCornerShape(8.dp)
-    val context = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     var posterFailed by remember(item.doubanId, item.posterUrl) { mutableStateOf(item.posterUrl.isBlank()) }
-    val imageRequest = remember(item.posterUrl) {
-        ImageRequest.Builder(context)
-            .data(item.posterUrl)
-            .apply {
-                val host = Uri.parse(item.posterUrl).host.orEmpty()
-                if (host.endsWith(".doubanio.com", ignoreCase = true)) {
-                    addHeader("Referer", DOUBAN_REFERER)
-                    addHeader("User-Agent", DOUBAN_USER_AGENT)
-                }
-            }
-            .build()
-    }
+    val imageRequest = rememberDoubanPosterRequest(item.posterUrl)
 
     Column(
         modifier = modifier
@@ -728,7 +743,7 @@ fun TinySpacer() {
     Spacer(modifier = Modifier.size(8.dp))
 }
 
-private fun formatPlaybackPosition(positionMs: Long): String {
+internal fun formatPlaybackPosition(positionMs: Long): String {
     val totalSeconds = (positionMs / 1000).coerceAtLeast(0)
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60

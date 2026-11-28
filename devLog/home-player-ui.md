@@ -1,5 +1,24 @@
 ﻿# Home / Player UI - 2026-06-30
 
+## 2026-11-28 08:59 - 详情页选集对齐与播放快捷键样式
+
+- 用户反馈详情页短集名靠左，长标题在单行按钮内被截断；同时要求长短按钮等宽等高，并统一播放页快捷键数字样式。
+- `DetailScreen.kt` 按每条线路的标题和可用宽度统一计算列数，再以实际换行后的最大文字高度确定按钮高度。短标题保持原网格密度，长标题完整换行，所有标题居中。焦点使用绿色描边，按钮位置和尺寸保持对齐。
+- `PlayerControls.kt` 显示「上一集 1」「下一集 3」。`DefaultHome.kt` 与播放操作栏复用 `components/Common.kt` 的小号绿色数字，禁用按钮用低亮度绿色。
+- 使用受控 MacCMS 接口在 1600×900 设备上验证短集名七列、长标题居中换行以及方向键焦点移动。播放本地第 2 集时验证小号绿色数字，按 3 切至第 3 集，再按 1 回第 2 集。
+- 155 项单元测试、Release 构建、关键 Lint、签名和 ZIP 对齐校验通过。测试包为 `app/build/outputs/tvbox-test-apks/TVBox-v1.4.2-episode-alignment-test.apk`，版本 v1.4.2（10402），5248167 字节，SHA-256 `71a1fb21a7fd478fb0b20db84f56d00ab434a3cb82cad9d66167dba7b09fba07`。
+- 最终复验截图确认长标题和短日期的按钮等宽等高，焦点绿色描边与同排按钮对齐。截图位于 `app/build/episode-layout-validation/final-aligned-episodes.png` 与 `app/build/episode-layout-validation/player-episode-shortcuts.png`。
+- [返回主日志](README.md)
+
+## 2026-11-28 08:30 - 默认主题首页换用绿色设计稿
+
+- `app/src/main/java/com/tvbox/app/ui/DefaultHome.kt` 实现新设计的品牌栏、数字快捷胶囊、分类、分区标题、续播及海报卡。使用实际数据源的封面、评分和更新信息。续播时间未知时显示已观看时间。
+- `app/src/main/java/com/tvbox/app/ui/TvBoxApp.kt` 在默认主题首页应用新组件，按可用宽度和字号计算网格，宽屏正常字号最多六列，续播最多四张同屏。接入新增分区标题时同步调整遥控器返回焦点的列表下标。沿用现有数字快捷键、分类、续播和分页动作。
+- `app/src/main/java/com/tvbox/app/ui/components/Common.kt` 提取豆瓣海报请求与进度格式供首页复用。搜索、历史页和影院主题继续使用各自的旧组件。
+- 153 项单元测试和 Debug 构建通过。隔离包 `com.tvbox.app.homepreview` 在 `emulator-5554` 使用受控片单。确认 1600×900 画面显示六个数字入口、四张续播卡及六列影视卡，可横向浏览到第六条续播、按上键回顶部及数字 1 进入历史。影院主题仍显示侧栏与原卡片样式。
+- 空历史时自动隐藏续播区。实机确认首行海报按上可回分类。顶栏滚动隐藏后重显的分支与在线豆瓣海报加载在本轮未单独复测。
+- 验收截图位于 `app/build/default-home-validation/default-home-device.png`。其中素材为空封面，是用于验证布局和焦点的受控片单。 [返回主日志](README.md)
+
 ## 2026-10-13 11:37 - PR #5：搜索页重新进入时定位光标
 
 ### 文件修改、原因与目的

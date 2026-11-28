@@ -7,6 +7,9 @@ import com.tvbox.app.data.HistoryRepository
 import com.tvbox.app.data.MovieDetailUpdate
 import com.tvbox.app.data.MovieRepository
 import com.tvbox.app.data.AppSettingsRepository
+import com.tvbox.app.data.AiRecommendationRepository
+import com.tvbox.app.data.AiRequestConfig
+import com.tvbox.app.data.DefaultAiRecommendationRepository
 import com.tvbox.app.data.MultiSourceSearchUpdate
 import com.tvbox.app.data.PlatformLiveCategoryTree
 import com.tvbox.app.data.PlatformLiveFavoritesRepository
@@ -14,6 +17,9 @@ import com.tvbox.app.data.PlatformLiveRepository
 import com.tvbox.app.data.PlatformLiveRoomsPage
 import com.tvbox.app.domain.ApiLine
 import com.tvbox.app.domain.AppSettings
+import com.tvbox.app.domain.AiModelConfig
+import com.tvbox.app.domain.AiProviders
+import com.tvbox.app.domain.AiRecommendationResult
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.DoubanHotItem
 import com.tvbox.app.domain.Movie
@@ -42,6 +48,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -50,6 +57,61 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TvBoxBrowseRecoveryTest {
+    @Test
+    fun aiWithoutConfigurationOpensSetupAndDoesNotSendRequests() = runBlocking {
+        val requests = mutableListOf<String>()
+        val ai = object : AiRecommendationRepository {
+            override suspend fun getRecommendations(query: String, userConfig: AiRequestConfig): AiRecommendationResult {
+                requests += query
+                return AiRecommendationResult("Test", emptyList())
+            }
+        }
+        withViewModel(ai = ai) { vm ->
+            vm.await { it.appSettingsLoaded }
+            vm.openAiRecommend()
+            assertEquals(TvScreen.AiRecommend, vm.state.value.screen)
+            assertFalse(vm.state.value.aiConfigured)
+
+            vm.submitAiRecommendation("悬疑电影")
+            vm.refreshAiRecommendationBatch()
+            yield()
+            assertTrue(requests.isEmpty())
+            assertFalse(vm.state.value.aiLoading)
+
+            vm.openAiSettings()
+            assertEquals(TvScreen.Settings, vm.state.value.screen)
+            assertEquals(TvScreen.AiRecommend, vm.state.value.settingsReturnScreen)
+            assertTrue(vm.goBack())
+            assertEquals(TvScreen.AiRecommend, vm.state.value.screen)
+            vm.openSettings()
+            assertTrue(vm.goBack())
+            assertEquals(TvScreen.Home, vm.state.value.screen)
+        }
+    }
+
+    @Test
+    fun aiWithConfigurationSubmitsUsingTheSelectedProvider() = runBlocking {
+        val provider = AiProviders.default
+        val settings = Settings(AppSettings(
+            homeSourcePromptHandled = true,
+            aiModelConfigs = mapOf(provider.id to AiModelConfig("chosen-model", "fixture-key")),
+        ))
+        val ai = object : AiRecommendationRepository {
+            override suspend fun getRecommendations(query: String, userConfig: AiRequestConfig): AiRecommendationResult {
+                assertEquals(AiRequestConfig(provider.chatCompletionsUrl, "chosen-model", "fixture-key"), userConfig)
+                assertTrue(query.contains("悬疑电影"))
+                return AiRecommendationResult("测试结果", emptyList())
+            }
+        }
+        withViewModel(settings = settings, ai = ai) { vm ->
+            vm.await { it.appSettingsLoaded }
+            vm.openAiRecommend()
+            assertTrue(vm.state.value.aiConfigured)
+            vm.submitAiRecommendation("悬疑电影")
+            vm.await { it.aiTitle == "测试结果" }
+        }
+    }
+
     @Test
     fun cinemaPlatformLiveUsesItsOwnNavigationAndHomeKeepsTheAppRail() {
         val browsing = TvBoxUiState(
@@ -601,6 +663,7 @@ class TvBoxBrowseRecoveryTest {
         douban: DoubanHotRepository = Douban { _, _ -> throw IOException("Douban unavailable") },
         platformLive: PlatformLiveRepository = DefaultPlatformLiveRepository(),
         settings: Settings = Settings(AppSettings(homeSourcePromptHandled = true)),
+        ai: AiRecommendationRepository = DefaultAiRecommendationRepository(),
         test: suspend (TvBoxViewModel) -> Unit,
     ) {
         val scope = CoroutineScope(coroutineContext + SupervisorJob())
@@ -609,6 +672,7 @@ class TvBoxBrowseRecoveryTest {
                 repository = movies,
                 doubanHotRepository = douban,
                 platformLiveRepository = platformLive,
+                aiRecommendationRepository = ai,
                 appSettingsRepository = settings,
                 historyRepository = object : HistoryRepository {
                     override suspend fun getHistory() = listOf(history)

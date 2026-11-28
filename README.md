@@ -151,18 +151,8 @@ https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
 
 AI 找片配置：
 
-- APK 默认使用打包时配置的 `TVBOX_AI_API_KEY` 和内置 Agnes 参数。
-- 用户可在设置页选择 Agnes、DeepSeek、SiliconFlow 或 Qwen。
-- 模型名称和 API Key 不需要用遥控器输入；点击“模型”或“API Key”按钮后，电视会弹出二维码，手机扫码填写后自动同步到电视。
-- 设置页只有手机提交了 API Key 后才会覆盖 APK 内置 AI 配置；未填写时继续使用默认配置。
-
-打包时的默认 API Key 可放在本地配置中：
-
-```properties
-TVBOX_AI_API_KEY=你的测试密钥
-```
-
-`TVBOX_AI_API_KEY` 可以放在 `local.properties`、Gradle 属性或环境变量中。`local.properties` 已被 `.gitignore` 忽略，不会上传到仓库。
+- 首次使用前，在「设置 → 大模型」配置当前服务商的模型和 API Key。打开「AI 推荐」时可点击「去配置」。
+- 内置服务商可沿用默认模型，点击「模型」或「API Key」生成二维码，用手机填写。自定义服务商还需填写兼容的 API 地址，并选择或手动填写模型 ID。
 
 视频接口配置：
 

@@ -41,6 +41,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.ui.components.ErrorState
@@ -55,6 +56,21 @@ fun AiRecommendScreen(
     actions: TvBoxViewModel,
     onStartVoiceInput: () -> Unit,
 ) {
+    if (!state.appSettingsLoaded || !state.aiConfigured) {
+        PageSurface { padding ->
+            if (state.appSettingsLoaded) {
+                AiSetupRequiredState(
+                    modifier = Modifier.padding(padding),
+                    onConfigure = actions::openAiSettings,
+                    onBack = actions::goBack,
+                )
+            } else {
+                LoadingState("正在读取大模型设置", Modifier.padding(padding))
+            }
+        }
+        return
+    }
+
     val findFocusRequester = remember { FocusRequester() }
     val inputEnabled = !state.aiLoading && !state.aiVoiceListening && state.aiResolvingKeyword == null
 
@@ -152,6 +168,35 @@ fun AiRecommendScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiSetupRequiredState(
+    modifier: Modifier,
+    onConfigure: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val configureFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { configureFocus.requestPlayerControlFocus() }
+    Column(modifier.fillMaxSize()) {
+        Text("AI 推荐", style = MaterialTheme.typography.headlineLarge)
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        ) {
+            Text("请先配置大模型", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "在「设置 → 大模型」配置模型和 API Key 后，即可使用 AI 推荐。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AiActionButton("去配置", onConfigure, modifier = Modifier.focusRequester(configureFocus))
+                AiActionButton("返回", onBack)
             }
         }
     }

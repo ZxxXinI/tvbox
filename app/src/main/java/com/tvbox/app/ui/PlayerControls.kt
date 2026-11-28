@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.tvbox.app.domain.PlaySource
 import com.tvbox.app.domain.VideoScaleMode
+import com.tvbox.app.ui.components.ShortcutKeyLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,8 +141,14 @@ internal fun PlayerControls(
                 ) {
                     ControlButton(if (playing) "暂停" else "播放", onToggle,
                         Modifier.focusRequester(playFocus).then(barFocus), primary = true)
-                    ControlButton("上一集(1)", { onEpisode(episodeIndex - 1) }, barFocus, enabled = episodeIndex > 0)
-                    ControlButton("下一集(3)", { onEpisode(episodeIndex + 1) }, barFocus, enabled = episodeIndex < source.episodes.lastIndex)
+                    ControlButton(
+                        "上一集", { onEpisode(episodeIndex - 1) }, barFocus,
+                        enabled = episodeIndex > 0, shortcutKey = 1,
+                    )
+                    ControlButton(
+                        "下一集", { onEpisode(episodeIndex + 1) }, barFocus,
+                        enabled = episodeIndex < source.episodes.lastIndex, shortcutKey = 3,
+                    )
                     if (!compact) Spacer(Modifier.weight(1f))
                     ControlButton(formatPlaybackSpeed(speed), onCycleSpeed, barFocus)
                     if (!sidebarOpen) {
@@ -180,6 +187,7 @@ internal fun ControlButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     primary: Boolean = false,
+    shortcutKey: Int? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(if (primary) 24.dp else 10.dp)
@@ -196,6 +204,10 @@ internal fun ControlButton(
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
     ) {
         Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
+        if (shortcutKey != null) {
+            Spacer(Modifier.width(6.dp))
+            ShortcutKeyLabel(shortcutKey, enabled)
+        }
     }
 }
 

@@ -29,7 +29,6 @@ val releaseStoreFile = configProperty("TVBOX_RELEASE_STORE_FILE")
 val releaseStorePassword = configProperty("TVBOX_RELEASE_STORE_PASSWORD")
 val releaseKeyAlias = configProperty("TVBOX_RELEASE_KEY_ALIAS")
 val releaseKeyPassword = configProperty("TVBOX_RELEASE_KEY_PASSWORD")
-val aiApiKey = configProperty("TVBOX_AI_API_KEY")
 val platformLiveServiceUrl = configProperty("TVBOX_PLATFORM_LIVE_SERVICE_URL")
 val hasReleaseSigning = listOf(
     releaseStoreFile,
@@ -48,7 +47,6 @@ android {
         targetSdk = 36
         versionCode = 10402
         versionName = "1.4.2"
-        buildConfigField("String", "AI_API_KEY", aiApiKey.toBuildConfigString())
         buildConfigField("String", "PLATFORM_LIVE_SERVICE_URL", platformLiveServiceUrl.toBuildConfigString())
     }
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,6 +74,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.tvbox.app.domain.Category
 import com.tvbox.app.domain.AiProviders
 import com.tvbox.app.domain.TvTheme
@@ -356,148 +359,160 @@ private fun HomeScreen(
     actions: TvBoxViewModel,
 ) {
     PageSurface { padding ->
-        val apiLineName = state.selectedApiLine?.name ?: "资源"
-        val cinemaTheme = state.appSettings.theme == TvTheme.Cinema
-        val homeSubtitle = when {
-            state.isShowingDoubanHot -> "豆瓣热播 / 共 ${state.total} 部"
-            state.doubanHotFallbackActive -> "$apiLineName 最近更新 / 共 ${state.total} 部"
-            else -> "$apiLineName 数据 / 共 ${state.total} 部影片"
+        val homePadding = if (state.appSettings.theme == TvTheme.Default) {
+            PaddingValues(start = TvDimens.PageHorizontalPadding, top = 20.dp, end = TvDimens.PageHorizontalPadding)
+        } else padding
+        BoxWithConstraints(Modifier.fillMaxSize().padding(homePadding)) {
+            HomeContent(state, actions, maxWidth)
         }
-        val allCategoryFocusRequester = remember { FocusRequester() }
-        val navigationFocusRequester = remember { FocusRequester() }
-        val navigationScope = rememberCoroutineScope()
-        var forceNavigationVisible by remember { mutableStateOf(false) }
-        var movingToNavigation by remember { mutableStateOf(false) }
-        var navigationUpHeld by remember { mutableStateOf(false) }
-        val movieGridState = rememberLazyGridState()
-        val homeFocus = rememberReturnFocus()
-        val homeTopContentVisible by remember {
-            derivedStateOf {
-                movieGridState.firstVisibleItemIndex == 0 &&
-                    movieGridState.firstVisibleItemScrollOffset == 0
-            }
-        }
-        val showHomeTopContent = forceNavigationVisible || homeTopContentVisible || state.homeLoading || state.homeError != null
-        LaunchedEffect(Unit) {
-            if (homeFocus.lastKey == null) runCatching { allCategoryFocusRequester.requestFocus() }
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .onPreviewKeyEvent { event ->
-                    if (event.nativeKeyEvent.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP && navigationUpHeld) {
-                        if (event.type == KeyEventType.KeyUp) navigationUpHeld = false
-                        return@onPreviewKeyEvent true
-                    }
-                    if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
-                    when (event.nativeKeyEvent.keyCode) {
-                        AndroidKeyEvent.KEYCODE_1,
-                        AndroidKeyEvent.KEYCODE_NUMPAD_1,
-                        -> {
-                            actions.openHistory()
-                            true
-                        }
-                        AndroidKeyEvent.KEYCODE_2,
-                        AndroidKeyEvent.KEYCODE_NUMPAD_2,
-                        -> {
-                            actions.openSearch()
-                            true
-                        }
-                        AndroidKeyEvent.KEYCODE_3,
-                        AndroidKeyEvent.KEYCODE_NUMPAD_3,
-                        -> {
-                            actions.openAiRecommend()
-                            true
-                        }
-                        AndroidKeyEvent.KEYCODE_4,
-                        AndroidKeyEvent.KEYCODE_NUMPAD_4,
-                        -> {
-                            actions.openLive()
-                            true
-                        }
-                        AndroidKeyEvent.KEYCODE_5,
-                        AndroidKeyEvent.KEYCODE_NUMPAD_5,
-                        -> {
-                            actions.openPlatformLive()
-                            true
-                        }
-                        AndroidKeyEvent.KEYCODE_6,
-                        AndroidKeyEvent.KEYCODE_NUMPAD_6,
-                        -> {
-                            actions.openSettings()
-                            true
-                        }
-                        else -> false
-                    }
+    }
+}
+
+@Composable
+private fun HomeContent(state: TvBoxUiState, actions: TvBoxViewModel, contentWidth: Dp) {
+    val apiLineName = state.selectedApiLine?.name ?: "资源"
+    val cinemaTheme = state.appSettings.theme == TvTheme.Cinema
+    val homeSubtitle = when {
+        state.isShowingDoubanHot -> "豆瓣热播 / 共 ${state.total} 部"
+        state.doubanHotFallbackActive -> "$apiLineName 最近更新 / 共 ${state.total} 部"
+        else -> "$apiLineName 数据 / 共 ${state.total} 部影片"
+    }
+    val allCategoryFocusRequester = remember { FocusRequester() }
+    val navigationFocusRequester = remember { FocusRequester() }
+    val navigationScope = rememberCoroutineScope()
+    var forceNavigationVisible by remember { mutableStateOf(false) }
+    var movingToNavigation by remember { mutableStateOf(false) }
+    var navigationUpHeld by remember { mutableStateOf(false) }
+    val movieGridState = rememberLazyGridState()
+    val homeFocus = rememberReturnFocus()
+    val homeTopContentVisible by remember {
+        derivedStateOf { movieGridState.isAtStart() }
+    }
+    val showHomeTopContent = forceNavigationVisible || homeTopContentVisible || state.homeLoading || state.homeError != null
+    LaunchedEffect(Unit) {
+        if (homeFocus.lastKey == null) runCatching { allCategoryFocusRequester.requestFocus() }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP && navigationUpHeld) {
+                    if (event.type == KeyEventType.KeyUp) navigationUpHeld = false
+                    return@onPreviewKeyEvent true
                 }
-                .padding(padding),
-        ) {
-            AnimatedVisibility(visible = showHomeTopContent) {
-                Column {
+                if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
+                when (event.nativeKeyEvent.keyCode) {
+                    AndroidKeyEvent.KEYCODE_1,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_1,
+                    -> {
+                        actions.openHistory()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_2,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_2,
+                    -> {
+                        actions.openSearch()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_3,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_3,
+                    -> {
+                        actions.openAiRecommend()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_4,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_4,
+                    -> {
+                        actions.openLive()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_5,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_5,
+                    -> {
+                        actions.openPlatformLive()
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_6,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_6,
+                    -> {
+                        actions.openSettings()
+                        true
+                    }
+                    else -> false
+                }
+            },
+    ) {
+        AnimatedVisibility(visible = showHomeTopContent) {
+            Column {
+                val firstActionModifier = Modifier.focusRequester(navigationFocusRequester)
+                if (cinemaTheme) {
                     AppHeader(
-                        title = if (cinemaTheme) "首页" else "TVBox",
+                        title = "首页",
                         subtitle = homeSubtitle,
                         onHistory = actions::openHistory,
                         onSearch = actions::openSearch,
-                        onAiRecommend = actions::openAiRecommend,
-                        onLive = actions::openLive,
-                        onPlatformLive = actions::openPlatformLive,
-                        onSettings = actions::openSettings,
-                        showShortcutActions = !cinemaTheme,
-                        firstActionModifier = Modifier.focusRequester(navigationFocusRequester),
+                        firstActionModifier = firstActionModifier,
                     )
-                    if (cinemaTheme && !state.isShowingDoubanHot) {
-                        state.movies.firstOrNull()?.let { featuredMovie ->
-                            FeaturedMovieHero(
-                                movie = featuredMovie,
-                                onOpen = { actions.openDetail(featuredMovie.id) },
-                            )
-                            Spacer(modifier = Modifier.height(TvDimens.SectionGap))
-                        }
-                    }
-                    HomeCategoryRows(
-                        state = state,
-                        onHot = actions::selectDoubanHot,
-                        onParent = actions::selectParentCategory,
-                        onChild = actions::selectChildCategory,
-                        hotCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
+                } else {
+                    DefaultHomeHeader(
+                        sourceName = state.selectedApiLine?.name,
+                        fontScale = state.appSettings.fontScale.typographyScale,
+                        actions = actions,
+                        firstActionModifier = firstActionModifier,
                     )
-                    Spacer(modifier = Modifier.height(20.dp))
                 }
+                if (cinemaTheme && !state.isShowingDoubanHot) {
+                    state.movies.firstOrNull()?.let { featuredMovie ->
+                        FeaturedMovieHero(
+                            movie = featuredMovie,
+                            onOpen = { actions.openDetail(featuredMovie.id) },
+                        )
+                        Spacer(modifier = Modifier.height(TvDimens.SectionGap))
+                    }
+                }
+                HomeCategoryRows(
+                    state = state,
+                    contentWidth = contentWidth,
+                    onHot = actions::selectDoubanHot,
+                    onParent = actions::selectParentCategory,
+                    onChild = actions::selectChildCategory,
+                    hotCategoryModifier = Modifier.focusRequester(allCategoryFocusRequester),
+                )
+                Spacer(modifier = Modifier.height(if (cinemaTheme) 20.dp else 14.dp))
             }
-            MovieGrid(
-                state = state,
-                gridState = movieGridState,
-                onMovieClick = actions::openDetail,
-                onDoubanHotClick = actions::openDoubanHotDetail,
-                onLoadMore = actions::loadNextPage,
-                onRetryHome = { actions.refreshHome(forceRefresh = true) },
-                focus = homeFocus,
-                onContinue = { actions.resumeHistory(it, TvScreen.Home) },
-                onMoveToNavigation = {
-                    navigationUpHeld = true
-                    forceNavigationVisible = true
-                    if (!movingToNavigation) {
-                        movingToNavigation = true
-                        navigationScope.launch {
-                            try {
-                                movieGridState.scrollToItem(0, 0)
-                                // The navigation can be outside composition until AnimatedVisibility expands it.
-                                for (attempt in 0..20) {
-                                    withFrameNanos { }
-                                    if (runCatching { navigationFocusRequester.requestFocus() }.getOrDefault(false)) break
-                                }
-                            } finally {
-                                movingToNavigation = false
+        }
+        MovieGrid(
+            state = state,
+            gridState = movieGridState,
+            onMovieClick = actions::openDetail,
+            onDoubanHotClick = actions::openDoubanHotDetail,
+            onLoadMore = actions::loadNextPage,
+            onRetryHome = { actions.refreshHome(forceRefresh = true) },
+            focus = homeFocus,
+            onContinue = { actions.resumeHistory(it, TvScreen.Home) },
+            onMoveToNavigation = {
+                navigationUpHeld = true
+                forceNavigationVisible = true
+                if (!movingToNavigation) {
+                    movingToNavigation = true
+                    navigationScope.launch {
+                        try {
+                            movieGridState.scrollToItem(0, 0)
+                            // The navigation can be outside composition until AnimatedVisibility expands it.
+                            for (attempt in 0..20) {
+                                withFrameNanos { }
+                                if (runCatching { navigationFocusRequester.requestFocus() }.getOrDefault(false)) break
                             }
+                        } finally {
+                            movingToNavigation = false
                         }
                     }
-                },
-                onContentFocused = { if (!movingToNavigation) forceNavigationVisible = false },
-                showSectionHeader = cinemaTheme,
-                modifier = Modifier.weight(1f),
-            )
-        }
+                }
+            },
+            onContentFocused = { if (!movingToNavigation) forceNavigationVisible = false },
+            contentWidth = contentWidth,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -818,11 +833,15 @@ internal fun SettingsActionButton(
 @Composable
 private fun HomeCategoryRows(
     state: TvBoxUiState,
+    contentWidth: Dp,
     onHot: () -> Unit,
     onParent: (Int) -> Unit,
     onChild: (Int) -> Unit,
     hotCategoryModifier: Modifier = Modifier,
 ) {
+    val defaultHome = state.appSettings.theme == TvTheme.Default
+    val showCount = defaultHome && state.total > 0 && !state.homeLoading && state.homeError == null
+    val inlineCount = showCount && contentWidth >= (640 * state.appSettings.fontScale.typographyScale).dp
     val parentCategories = state.categories.filter { it.parentId == 0 }
     val selectedParent = state.selectedParentCategoryId
         ?.let { parentId -> state.categories.firstOrNull { it.id == parentId } }
@@ -831,41 +850,89 @@ private fun HomeCategoryRows(
         .orEmpty()
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            item {
-                CategoryPill(
-                    label = "热播",
-                    selected = state.homeFeedMode == HomeFeedMode.DoubanHot,
-                    onClick = onHot,
-                    modifier = hotCategoryModifier,
-                )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(vertical = if (defaultHome) 3.dp else 0.dp),
+            ) {
+                item {
+                    HomeCategory(
+                        label = "热播",
+                        selected = state.homeFeedMode == HomeFeedMode.DoubanHot,
+                        defaultHome = defaultHome,
+                        onClick = onHot,
+                        modifier = hotCategoryModifier,
+                    )
+                }
+                items(parentCategories, key = { it.id }) { category ->
+                    val label = if (defaultHome) when (category.name) {
+                        "电影片", "综艺片", "动漫片" -> category.name.removeSuffix("片")
+                        else -> category.name
+                    } else category.name
+                    HomeCategory(
+                        label = label,
+                        selected = state.selectedParentCategoryId == category.id,
+                        defaultHome = defaultHome,
+                        onClick = { onParent(category.id) },
+                    )
+                }
             }
-            items(parentCategories, key = { it.id }) { category ->
-                CategoryPill(
-                    label = category.name,
-                    selected = state.selectedParentCategoryId == category.id,
-                    onClick = { onParent(category.id) },
-                )
-            }
+            if (inlineCount) DefaultHomeFeedCount(state.total, state.page)
         }
         if (selectedParent != null && childCategories.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
-                    CategoryPill(
+                    HomeCategory(
                         label = selectedParent.allChildrenLabel(),
                         selected = state.selectedCategoryId == null,
+                        defaultHome = defaultHome,
                         onClick = { onParent(selectedParent.id) },
                     )
                 }
                 items(childCategories, key = { it.id }) { category ->
-                    CategoryPill(
+                    HomeCategory(
                         label = category.name,
                         selected = state.selectedCategoryId == category.id,
+                        defaultHome = defaultHome,
                         onClick = { onChild(category.id) },
                     )
                 }
             }
         }
+        if (showCount && !inlineCount) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                DefaultHomeFeedCount(state.total, state.page)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeCategory(
+    label: String,
+    selected: Boolean,
+    defaultHome: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (defaultHome) DefaultHomeCategory(label, selected, onClick, modifier)
+    else CategoryPill(label, selected, onClick, modifier)
+}
+
+private fun LazyGridState.isAtStart(): Boolean =
+    firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
+
+private fun Modifier.homeNavigationUp(
+    enabled: () -> Boolean,
+    onMoveToNavigation: () -> Unit,
+): Modifier = onPreviewKeyEvent { event ->
+    val keyEvent = event.nativeKeyEvent
+    if (keyEvent.keyCode != AndroidKeyEvent.KEYCODE_DPAD_UP || !enabled()) {
+        false
+    } else {
+        if (event.type == KeyEventType.KeyDown && keyEvent.repeatCount == 0) onMoveToNavigation()
+        true
     }
 }
 
@@ -877,7 +944,7 @@ private fun MovieGrid(
     onDoubanHotClick: (com.tvbox.app.domain.DoubanHotItem) -> Unit,
     onLoadMore: () -> Unit,
     onRetryHome: () -> Unit,
-    showSectionHeader: Boolean,
+    contentWidth: Dp,
     focus: ReturnFocus,
     onContinue: (com.tvbox.app.domain.WatchHistoryItem) -> Unit,
     onMoveToNavigation: () -> Unit,
@@ -897,13 +964,30 @@ private fun MovieGrid(
     }
     val recent = state.historyItems.continueWatching()
     val feedUnavailable = state.homeLoading || state.homeError != null
-    val itemOffset = (if (recent.isNotEmpty()) 1 else 0) + (if (state.homeNotice != null) 1 else 0)
+    val defaultHome = state.appSettings.theme == TvTheme.Default
+    val showFeedTitle = defaultHome && !feedUnavailable && state.homeItemCount > 0
+    val itemOffset = listOf(recent.isNotEmpty(), state.homeNotice != null, showFeedTitle).count { it }
+    val gridGap = if (defaultHome) 16.dp else 18.dp
+    val minPosterWidth = TvLayout.PosterGridMinWidth
+    val posterSlots = ((contentWidth + gridGap) / (minPosterWidth * 0.9f + gridGap)).toInt().coerceIn(1, 6)
+    val columns = if (defaultHome) GridCells.Fixed(posterSlots) else GridCells.Adaptive(minPosterWidth)
+    val resumeGap = if (defaultHome) 16.dp else 12.dp
+    val resumeSlots = ((contentWidth + resumeGap) / (144.dp + resumeGap)).toInt().coerceIn(1, 4)
+    val resumeWidth = if (defaultHome) (contentWidth - resumeGap * (resumeSlots - 1)) / resumeSlots else 220.dp
     val focusItems = recent.map { "continue:${it.apiLineId}:${it.movieId}" to 0 } +
         if (state.isShowingDoubanHot) state.doubanHotMovies.mapIndexed { index, item -> "douban:${item.doubanId}" to index + itemOffset }
         else state.movies.mapIndexed { index, movie -> "${movie.apiLineId}:${movie.id}" to index + itemOffset }
     RestoreGridFocus(focus, gridState, focusItems)
+    fun posterFocusModifier(key: String, index: Int): Modifier {
+        val modifier = focus.modifier(key, index + itemOffset)
+            .onFocusChanged { if (it.hasFocus) onContentFocused() }
+        // A scrolled-away heading can also hide the navigation when the history strip is absent.
+        return if (defaultHome && recent.isEmpty() && index < posterSlots) {
+            modifier.homeNavigationUp(enabled = { !gridState.isAtStart() }, onMoveToNavigation)
+        } else modifier
+    }
     Column(modifier = modifier.fillMaxSize()) {
-        if (showSectionHeader && !feedUnavailable) {
+        if (!defaultHome && !feedUnavailable) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -923,35 +1007,33 @@ private fun MovieGrid(
             }
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = TvLayout.PosterGridMinWidth),
+            columns = columns,
             state = gridState,
             contentPadding = PaddingValues(bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            horizontalArrangement = Arrangement.spacedBy(gridGap),
+            verticalArrangement = Arrangement.spacedBy(if (defaultHome) 14.dp else 22.dp),
             modifier = Modifier.weight(1f),
         ) {
             if (recent.isNotEmpty()) {
                 item(key = "continue-watching", span = { GridItemSpan(maxLineSpan) }) {
-                    Column(Modifier.padding(bottom = 16.dp)) {
-                        Text("继续观看", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(8.dp))
+                    Column(Modifier.padding(bottom = if (defaultHome) 0.dp else 16.dp)) {
+                        if (defaultHome) DefaultHomeSectionTitle("继续观看")
+                        else Text("继续观看", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(if (defaultHome) 10.dp else 8.dp))
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.onPreviewKeyEvent { event ->
-                                if (event.nativeKeyEvent.keyCode != AndroidKeyEvent.KEYCODE_DPAD_UP) false
-                                else {
-                                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) onMoveToNavigation()
-                                    true
-                                }
-                            }.focusGroup(),
+                            horizontalArrangement = Arrangement.spacedBy(resumeGap),
+                            modifier = Modifier.homeNavigationUp(enabled = { true }, onMoveToNavigation).focusGroup(),
                         ) {
                             items(recent, key = { "${it.apiLineId}:${it.movieId}" }) { history ->
-                                HistoryItemCard(history, {
-                                    focus.mark("continue:${history.apiLineId}:${history.movieId}", 0)
+                                val key = "continue:${history.apiLineId}:${history.movieId}"
+                                val open = {
+                                    focus.mark(key, 0)
                                     onContinue(history)
-                                },
-                                    Modifier.width(220.dp).then(focus.modifier("continue:${history.apiLineId}:${history.movieId}", 0))
-                                        .onFocusChanged { if (it.hasFocus) onContentFocused() })
+                                }
+                                val cardModifier = Modifier.width(resumeWidth).then(focus.modifier(key, 0))
+                                    .onFocusChanged { if (it.hasFocus) onContentFocused() }
+                                if (defaultHome) DefaultHomeResumeCard(history, open, cardModifier)
+                                else HistoryItemCard(history, open, cardModifier)
                             }
                         }
                     }
@@ -986,32 +1068,33 @@ private fun MovieGrid(
                     }
                 }
             }
+            if (showFeedTitle) {
+                item(key = "home-feed-title", span = { GridItemSpan(maxLineSpan) }) {
+                    DefaultHomeSectionTitle(if (state.isShowingDoubanHot) "豆瓣热播剧集" else "影视列表")
+                }
+            }
             if (state.isShowingDoubanHot) {
-                items(state.doubanHotMovies, key = { it.doubanId.ifBlank { it.title } }) { item ->
-                    DoubanHotPosterCard(
-                        item = item,
-                        resolving = state.resolvingDoubanHotId == item.doubanId,
-                        onClick = {
-                            focus.mark("douban:${item.doubanId}", state.doubanHotMovies.indexOf(item) + itemOffset)
-                            onDoubanHotClick(item)
-                        },
-                        modifier = focus.modifier("douban:${item.doubanId}", state.doubanHotMovies.indexOf(item) + itemOffset)
-                            .onFocusChanged { if (it.hasFocus) onContentFocused() },
-                        posterAspectRatio = 0.78f,
-                    )
+                itemsIndexed(state.doubanHotMovies, key = { _, item -> item.doubanId.ifBlank { item.title } }) { index, item ->
+                    val key = "douban:${item.doubanId}"
+                    val open = {
+                        focus.mark(key, index + itemOffset)
+                        onDoubanHotClick(item)
+                    }
+                    val cardModifier = posterFocusModifier(key, index)
+                    val resolving = state.resolvingDoubanHotId == item.doubanId
+                    if (defaultHome) DefaultHomeDoubanCard(item, resolving, open, cardModifier)
+                    else DoubanHotPosterCard(item, resolving, open, cardModifier, posterAspectRatio = 0.78f)
                 }
             } else {
-                items(state.movies, key = { "${it.apiLineId}-${it.id}" }) { movie ->
-                    MoviePosterCard(
-                        movie = movie,
-                        onClick = {
-                            focus.mark("${movie.apiLineId}:${movie.id}", state.movies.indexOf(movie) + itemOffset)
-                            onMovieClick(movie.id)
-                        },
-                        modifier = focus.modifier("${movie.apiLineId}:${movie.id}", state.movies.indexOf(movie) + itemOffset)
-                            .onFocusChanged { if (it.hasFocus) onContentFocused() },
-                        posterAspectRatio = 0.78f,
-                    )
+                itemsIndexed(state.movies, key = { _, movie -> "${movie.apiLineId}-${movie.id}" }) { index, movie ->
+                    val key = "${movie.apiLineId}:${movie.id}"
+                    val open = {
+                        focus.mark(key, index + itemOffset)
+                        onMovieClick(movie.id)
+                    }
+                    val cardModifier = posterFocusModifier(key, index)
+                    if (defaultHome) DefaultHomeMovieCard(movie, open, cardModifier)
+                    else MoviePosterCard(movie, open, cardModifier, posterAspectRatio = 0.78f)
                 }
             }
             if (state.canLoadMore || state.loadingMore) {

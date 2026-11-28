@@ -1,5 +1,15 @@
 ﻿# AI 找片 - 2026-06-26
 
+## 2026-11-28 08:41 - AI 推荐增加配置引导
+
+- `AiRecommendScreen.kt` 在设置读取结束后检查当前服务商。配置不完整时显示「请先配置大模型」，默认聚焦「去配置」。
+- `TvBoxViewModel.kt` 在发送推荐请求前取得本机配置，缺少配置时直接返回，并保存大模型设置的返回入口。`SettingsScreen.kt` 从 AI 推荐进入时聚焦「大模型」的服务商行。
+- `AiRecommendationRepository.kt` 仅接收完整的用户配置。内置服务商可使用各自默认模型，自定义服务商还会检查 API 地址。`app/build.gradle.kts` 停止将默认 Key 写入 APK，`README.md` 同步配置路径。
+- `TvBoxBrowseRecoveryTest.kt` 覆盖空配置不发请求、设置返回和使用已配置服务商。`PhoneConfigServerTest.kt` 核对自定义配置缺少字段及地址无效时的判定。
+- 155 项单元测试成功，Release 构建及关键 Lint 通过。校验 APK 对齐与此前 v1.4.2 签名一致，包名 `com.tvbox.app`，版本 v1.4.2（10402）。
+- 测试包位于 `app/build/outputs/tvbox-test-apks/TVBox-v1.4.2-ai-setup-test.apk`，5248167 字节，SHA-256 为 `af93af9656f7915bffe215898485be4c7e5865baa23429353d0903c2ee228da3`。包含新版默认首页与关于页项目链接。设备验收待进行。
+- [返回主日志](README.md)
+
 ## 2026-08-02 09:53 - 更新 Agnes 默认模型与请求地址确认
 
 ## File Changes

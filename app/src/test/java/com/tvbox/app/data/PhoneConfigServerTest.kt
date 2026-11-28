@@ -180,7 +180,11 @@ class PhoneConfigServerTest {
             settings.copy(aiProviderId = AiProviders.default.id).userAiRequestConfigOrNull(),
         )
         assertEquals(null, settings.copy(aiProviderId = "deepseek").userAiRequestConfigOrNull())
-        assertTrue(runCatching { settings.copy(customAiConfig = null).userAiRequestConfigOrNull() }.isFailure)
+        assertEquals(null, settings.copy(customAiConfig = null).userAiRequestConfigOrNull())
+        for (incomplete in listOf(customConfig.copy(modelId = ""), customConfig.copy(apiKey = ""),
+            customConfig.copy(apiBaseUrl = "invalid"))) {
+            assertEquals(null, settings.copy(customAiConfig = incomplete).userAiRequestConfigOrNull())
+        }
     }
 
     @Test

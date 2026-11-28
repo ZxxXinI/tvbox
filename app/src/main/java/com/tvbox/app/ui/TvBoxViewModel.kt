@@ -120,6 +120,7 @@ data class HistoryResumeState(
 
 data class TvBoxUiState(
     val screen: TvScreen = TvScreen.Home,
+    val settingsReturnScreen: TvScreen = TvScreen.Home,
     val apiLines: List<ApiLine> = emptyList(),
     val selectedApiLineId: String = "",
     val homeSourcePicker: HomeSourcePickerState? = null,
@@ -204,6 +205,7 @@ data class TvBoxUiState(
     val updateExportMessage: String? = null,
     val updateError: String? = null,
     val appSettings: AppSettings = AppSettings(),
+    val appSettingsLoaded: Boolean = false,
     val playbackHealth: PlaybackHealthSnapshot = PlaybackHealthSnapshot(),
     val aiQuery: String = "",
     val aiTitle: String = "推荐",
@@ -242,6 +244,9 @@ data class TvBoxUiState(
     val preferredHomeApiLine: ApiLine?
         get() = apiLines.firstOrNull { it.id == appSettings.homeApiLineId }
 
+    internal val aiConfigured: Boolean
+        get() = appSettings.userAiRequestConfigOrNull() != null
+
     internal val showCinemaNavigation: Boolean
         get() = appSettings.theme == TvTheme.Cinema && when (screen) {
             TvScreen.Live, TvScreen.Player, TvScreen.PlatformLive -> false
@@ -254,7 +259,7 @@ class TvBoxViewModel(
     private val doubanHotRepository: DoubanHotRepository = DefaultDoubanHotRepository(),
     private val liveRepository: LiveRepository = DefaultLiveRepository(),
     private val platformLiveRepository: PlatformLiveRepository = DefaultPlatformLiveRepository(),
-    private val aiRecommendationRepository: AiRecommendationRepository = DefaultAiRecommendationRepository(BuildConfig.AI_API_KEY),
+    private val aiRecommendationRepository: AiRecommendationRepository = DefaultAiRecommendationRepository(),
     private val appUpdateRepository: AppUpdateRepository = DefaultAppUpdateRepositoryPlaceholder(),
     private val appSettingsRepository: AppSettingsRepository = DefaultAppSettingsRepositoryPlaceholder(),
     private val videoSourceCatalogRepository: VideoSourceCatalogRepository? = null,
@@ -322,6 +327,7 @@ class TvBoxViewModel(
                     apiLines = availableApiLines,
                     selectedApiLineId = selectedApiLineId,
                     appSettings = settings,
+                    appSettingsLoaded = true,
                     playbackHealth = playbackHealth,
                 )
             }
@@ -606,7 +612,15 @@ class TvBoxViewModel(
     }
 
     fun openSettings() {
-        _state.update { it.copy(screen = TvScreen.Settings, updateError = null) }
+        openSettings(returnTo = TvScreen.Home)
+    }
+
+    fun openAiSettings() {
+        if (_state.value.screen == TvScreen.AiRecommend) openSettings(returnTo = TvScreen.AiRecommend)
+    }
+
+    private fun openSettings(returnTo: TvScreen) {
+        _state.update { it.copy(screen = TvScreen.Settings, settingsReturnScreen = returnTo, updateError = null) }
         refreshPlaybackHealth()
     }
 
@@ -1158,6 +1172,7 @@ class TvBoxViewModel(
     }
 
     private fun submitAiRecommendationInternal(query: String, refreshBatch: Boolean) {
+        val config = _state.value.appSettings.userAiRequestConfigOrNull() ?: return
         val trimmedQuery = query.trim()
         if (trimmedQuery.isBlank()) {
             _state.update { it.copy(aiVoiceListening = false, aiResults = emptyList(), aiError = "请输入找片需求") }
@@ -1185,7 +1200,7 @@ class TvBoxViewModel(
             runCatching {
                 val recommendations = aiRecommendationRepository.getRecommendations(
                     query = requestQuery,
-                    userConfig = _state.value.appSettings.userAiRequestConfigOrNull(),
+                    userConfig = config,
                 )
                 recommendations.title to recommendations.items.map { AiRecommendationUiItem(recommendation = it) }
             }.onSuccess { (title, items) ->
@@ -2137,7 +2152,11 @@ class TvBoxViewModel(
                 _state.update { it.copy(screen = it.detailReturnScreen) }
                 true
             }
-            TvScreen.Search, TvScreen.History, TvScreen.Settings, TvScreen.AiRecommend -> {
+            TvScreen.Settings -> {
+                _state.update { it.copy(screen = current.settingsReturnScreen, settingsReturnScreen = TvScreen.Home) }
+                true
+            }
+            TvScreen.Search, TvScreen.History, TvScreen.AiRecommend -> {
                 _state.update { it.copy(screen = TvScreen.Home) }
                 true
             }

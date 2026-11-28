@@ -21,7 +21,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 interface AiRecommendationRepository {
-    suspend fun getRecommendations(query: String, userConfig: AiRequestConfig? = null): AiRecommendationResult
+    suspend fun getRecommendations(query: String, userConfig: AiRequestConfig): AiRecommendationResult
 }
 
 data class AiRequestConfig(
@@ -34,20 +34,20 @@ data class AiRequestConfig(
 internal fun AppSettings.userAiRequestConfigOrNull(): AiRequestConfig? {
     val provider = AiProviders.find(aiProviderId)
     if (provider.isCustom) {
-        val config = requireNotNull(customAiConfig) { "请先在设置中完成自定义大模型配置" }
-        val endpoints = requireNotNull(AiApiEndpoints.parse(config.apiBaseUrl)) { "请检查自定义 API 地址" }
-        require(config.apiKey.isAiApiKey() && config.modelId.isAiModelId()) { "请检查自定义模型 ID 和 API Key" }
+        val config = customAiConfig ?: return null
+        val endpoints = AiApiEndpoints.parse(config.apiBaseUrl) ?: return null
+        if (!config.apiKey.isAiApiKey() || !config.modelId.isAiModelId()) return null
         return AiRequestConfig(endpoints.chatCompletionsUrl, config.modelId, config.apiKey, isCustom = true)
     }
     val config = aiModelConfigs[provider.id] ?: return null
     val apiKey = config.apiKey.trim()
-    if (apiKey.isEmpty()) return null
+    if (!apiKey.isAiApiKey()) return null
     val model = config.modelId.trim().ifEmpty { provider.defaultModel }
+    if (!model.isAiModelId()) return null
     return AiRequestConfig(provider.chatCompletionsUrl, model, apiKey)
 }
 
 class DefaultAiRecommendationRepository(
-    private val bundledApiKey: String,
     private val client: OkHttpClient = defaultAiClient,
 ) : AiRecommendationRepository {
     private val customClient by lazy {
@@ -56,20 +56,16 @@ class DefaultAiRecommendationRepository(
 
     override suspend fun getRecommendations(
         query: String,
-        userConfig: AiRequestConfig?,
+        userConfig: AiRequestConfig,
     ): AiRecommendationResult = withContext(Dispatchers.IO) {
         val trimmedQuery = query.trim()
         require(trimmedQuery.isNotBlank()) { "请输入找片需求" }
-        val config = userConfig ?: AiRequestConfig(
-            chatCompletionsUrl = BUNDLED_AI_CHAT_COMPLETIONS_URL,
-            model = BUNDLED_AI_MODEL,
-            apiKey = bundledApiKey,
-        )
-        require(config.apiKey.isNotBlank()) { "请先在设置中配置 AI API Key" }
-        require(config.model.isNotBlank()) { "请先在设置中填写模型名称" }
+        require(userConfig.apiKey.isAiApiKey() && userConfig.model.isAiModelId()) {
+            "请先在设置中配置大模型和 API Key"
+        }
 
         val requestBody = ChatCompletionRequest(
-            model = config.model,
+            model = userConfig.model,
             messages = listOf(
                 ChatMessage(role = "system", content = buildSystemPrompt()),
                 ChatMessage(role = "user", content = trimmedQuery),
@@ -78,13 +74,13 @@ class DefaultAiRecommendationRepository(
             maxTokens = 1200,
         )
         val request = Request.Builder()
-            .url(config.chatCompletionsUrl)
-            .header("Authorization", "Bearer ${config.apiKey}")
+            .url(userConfig.chatCompletionsUrl)
+            .header("Authorization", "Bearer ${userConfig.apiKey}")
             .header("Content-Type", "application/json")
             .post(aiJson.encodeToString(requestBody).toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
-        val requestClient = if (config.isCustom) customClient else client
+        val requestClient = if (userConfig.isCustom) customClient else client
         requestClient.newCall(request).execute().use { response ->
             val body = response.body.string()
             if (!response.isSuccessful) {
@@ -178,5 +174,3 @@ private val aiJson = Json {
 }
 
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-private const val BUNDLED_AI_CHAT_COMPLETIONS_URL = "https://apihub.agnes-ai.com/v1/chat/completions"
-private const val BUNDLED_AI_MODEL = "agnes-2.5-flash"

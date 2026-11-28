@@ -1,5 +1,9 @@
 ﻿package com.tvbox.app.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,17 +41,24 @@ import com.tvbox.app.domain.TvFontScale
 import com.tvbox.app.domain.TvTheme
 import com.tvbox.app.ui.components.PageSurface
 
+private const val OPEN_SOURCE_PROJECT_URL = "https://github.com/ZxxXinI/tvbox"
+
 private enum class SettingsEditor {
     Device, Theme, Font, Intro, Statistics, ClearStatistics, Provider,
 }
 
 @Composable
 internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
+    val context = LocalContext.current
     val settings = state.appSettings
     val provider = AiProviders.find(settings.aiProviderId)
     var editor by remember { mutableStateOf<SettingsEditor?>(null) }
     val dismiss = { editor = null }
     val homeSourceFocus = remember { FocusRequester() }
+    val aiProviderFocus = remember { FocusRequester() }
+    LaunchedEffect(state.settingsReturnScreen) {
+        if (state.settingsReturnScreen == TvScreen.AiRecommend) aiProviderFocus.requestPlayerControlFocus()
+    }
     var sourcePickerOpened by remember { mutableStateOf(false) }
     LaunchedEffect(state.homeSourcePicker != null) {
         if (state.homeSourcePicker != null) {
@@ -75,7 +86,6 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
 
     when (editor) {
         SettingsEditor.Device -> {
-            val context = LocalContext.current
             val detectedMode = remember(context) { context.detectDeviceMode() }
             SettingsChoices(
                 "设备模式", DeviceMode.entries, settings.deviceMode, DeviceMode::displayName, dismiss,
@@ -188,6 +198,14 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
+                        SettingsDivider()
+                        SettingsRow("开源项目", OPEN_SOURCE_PROJECT_URL, valueMaxLines = Int.MAX_VALUE) {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(OPEN_SOURCE_PROJECT_URL)))
+                            } catch (_: ActivityNotFoundException) {
+                                Toast.makeText(context, "当前设备无法打开网页，请在浏览器中访问上方地址", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 },
                 right = {
@@ -203,7 +221,9 @@ internal fun SettingsScreen(state: TvBoxUiState, actions: TvBoxViewModel) {
                         SettingsRow("扫码添加接口", onClick = actions::openVideoApiConfigDialog)
                     }
                     SettingsGroup("大模型") {
-                        SettingsRow("服务商", provider.name) { editor = SettingsEditor.Provider }
+                        SettingsRow("服务商", provider.name, modifier = Modifier.focusRequester(aiProviderFocus)) {
+                            editor = SettingsEditor.Provider
+                        }
                         SettingsDivider()
                         if (provider.isCustom) {
                             val config = settings.customAiConfig
@@ -296,12 +316,14 @@ private fun SettingsRow(
     value: String = "",
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    valueMaxLines: Int = 1,
     onClick: () -> Unit,
 ) {
     SettingsRowContent(
         title, value, enabled,
         input = Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         modifier = modifier,
+        valueMaxLines = valueMaxLines,
     ) {
         Text("›", Modifier.clearAndSetSemantics { }, color = MaterialTheme.colorScheme.primary)
     }
@@ -326,6 +348,7 @@ private fun SettingsRowContent(
     input: Modifier,
     modifier: Modifier = Modifier,
     announceValue: Boolean = true,
+    valueMaxLines: Int = 1,
     trailing: @Composable () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -350,7 +373,7 @@ private fun SettingsRowContent(
                     if (announceValue) Modifier else Modifier.clearAndSetSemantics { },
                     color = colors.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
+                    maxLines = valueMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
