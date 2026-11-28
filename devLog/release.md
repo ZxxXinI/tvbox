@@ -1,5 +1,13 @@
 ﻿# Release - 2026-06-25
 
+## 2026-11-28 09:24 - v1.4.3 构建和 Gitee OTA 迁移
+
+- `app/build.gradle.kts` 升级到 10403 / 1.4.3。`AppUpdateRepository.kt` 将固定 OTA 清单入口更新为 Gitee 的 `main/update.json`。
+- `README.md` 记录新版更新入口和双仓库发布顺序。`CHANGELOG.md` 使用用户确认的发布说明，致谢 QQ 群用户「眼里有星星」提供 Gitee 更新源建议。`AGENTS.md` 归档双平台同步流程。
+- 155 项单元测试、Release 构建和关键 Lint 通过。APK 经 v2 签名和 ZIP 对齐校验，签名证书与此前正式版一致，最低 API 28。Release DEX 中已核对 Gitee 更新入口。
+- `TVBox-v1.4.3.apk`，5248167 字节，SHA-256 为 `eb3b2fb31b55f1ca4658dc2a26e40148cf84c1e1c450c211386eafddc72b94b0`。
+- 新版直接读取 Gitee，使用 GitHub 更新入口的旧版仍通过原地址过渡。发布代码和 APK 后，待 Gitee 附件可匿名下载且校验一致，再同步启用两个 `main` 分支上的新清单。
+
 ## 2026-11-27 13:29 - 发布 v1.4.2
 
 - `app/build.gradle.kts` 升级至 `10402 / 1.4.2`，便于旧版通过 OTA 更新。

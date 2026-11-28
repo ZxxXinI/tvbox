@@ -82,64 +82,25 @@ TVBox 是一个面向 Android TV / 电视盒子的影视播放应用，使用 Ko
 
 ## 安装
 
-从 Release 下载最新 APK：
+从发行版页面下载适用于 Android 9 及以上的 APK。
 
-- [Latest Release](https://github.com/ZxxXinI/tvbox/releases/latest)
-- OTA 更新清单：`https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json`
+- [GitHub 发行版](https://github.com/ZxxXinI/tvbox/releases/latest)
+- [Gitee 发行版](https://gitee.com/zhen-xin/tv-box/releases)
 
-通过 ADB 安装：
-
-```powershell
-adb install -r app\build\outputs\apk\release\app-release.apk
-```
-
-如果是从 Release 下载的 APK：
+通过 ADB 覆盖安装可保留本机数据。
 
 ```powershell
-adb install -r TVBox-v1.4.2.apk
+adb install -r TVBox-v1.4.3.apk
 ```
 
 ## OTA 更新机制
 
-应用启动后会请求：
+v1.4.3 起，应用检查 [Gitee 更新清单](https://gitee.com/zhen-xin/tv-box/raw/main/update.json)，从清单里的 `apkUrl` 下载安装包。仍通过 GitHub 检查更新的旧版本可以通过 [GitHub 更新清单](https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json) 升级到本版。
 
-```text
-https://raw.githubusercontent.com/ZxxXinI/tvbox/main/update.json
-```
-
-`update.json` 示例：
-
-```json
-{
-  "versionCode": 10402,
-  "versionName": "1.4.2",
-  "apkUrl": "https://gh-proxy.org/https://github.com/ZxxXinI/tvbox/releases/download/v1.4.2/TVBox-v1.4.2.apk",
-  "apkSha256": "2ad8acd7ed8bffa5674e9472fa5e2926073e5c6e4004da17198c5abcf5015817",
-  "apkSize": 5165505,
-  "force": false,
-  "changelog": [
-    "新增首页视频接口批量测速。新安装和旧版升级后首次打开时，会显示一次「选择首页数据源」。测速完成后，遥控器焦点停在最快的可用接口。",
-    "在「设置 → 视频接口 → 首页数据源」可重新测速并选源。按确认才保存，按返回则继续使用原设置。",
-    "修复「继续观看」遇到原接口失效、原线路缺集或备用线路晚到时无法续播的问题。可从其他来源查找同一部、同一集，并保留原进度。",
-    "所有可用线路均无法起播时，可按原历史记录重试。失败尝试不会覆盖已保存的观看进度。"
-  ]
-}
-```
-
-说明：
-
-- `versionCode` 必须大于当前应用版本，才会提示更新。
-- v1.4.2 可通过旧版应用的 OTA 提示更新，也可手动下载 APK 覆盖安装，保留本机数据。
-- 手机用户请到“设置 → 设备模式”选择手机模式；默认电视模式用于避免盒子播放短剧时切成竖屏。
-- 已下载的 APK 可从小窗选择“保存安装包”。系统没有文件选择器时保存到下载目录的 `TVBox` 文件夹；Android 9 需存储授权，手动安装仍受系统权限限制。
-- 旧版若无法在线更新，可从 Release 页面下载 APK 手动覆盖安装。
-- 下载开始后关闭弹窗或按返回不取消任务；后台下载完成时，回到应用后打开安装界面。系统安装仍需用户确认，取消后可从小型进度卡片手动安装；无需悬浮窗权限。
-- `apkUrl` 是 APK 下载地址，目前通过 `gh-proxy.org` 转发 GitHub Release 附件。
-- `apkSha256` 用于下载完成后的完整性校验。
-- `force` 预留强制更新能力，当前普通更新可选择稍后再说。
-- `update.json` 放在 GitHub 仓库根目录，随 `main` 分支更新后，应用会通过 raw 地址读取。
-- APK 附件上传到 GitHub Release，`update.json` 中的 `apkUrl` 指向对应 GitHub Release 附件。
-- `git push` 只会上传代码和 tag，不会自动上传 Release 附件。
+- `versionCode` 大于当前版本时会提示更新。APK 下载完成后校验大小和 SHA-256。
+- 关闭更新弹窗后，后台下载会继续。文件校验完成后可打开系统安装界面，安装仍由用户确认。
+- 若电视盒子无法调用安装界面，可从更新小窗选择「保存安装包」，再用文件管理器手动安装。遇到下载失败时，也可以从发行版页面下载安装包。
+- 手机用户可在「设置 → 设备模式」选择手机模式。默认电视模式保持横屏。
 
 ## 本地构建
 
@@ -220,31 +181,10 @@ apksigner verify --print-certs app\build\outputs\apk\release\app-release.apk
 
 ## 发布新版本流程
 
-1. 更新版本号、CHANGELOG 和 README；构建签名 APK 后，根据实际 SHA-256 和大小填写根目录 `update.json`。
-2. 仅暂存本次发布涉及的主工程代码及文档；如开发日志含无关修改，使用分段暂存。
-
-```powershell
-git add CHANGELOG.md README.md update.json app\build.gradle.kts app\src\main app\src\test app\src\debug devLog\home-player-ui.md devLog\playback-experience.md devLog\release.md
-git add -p devLog\README.md
-git commit -m "Release v1.4.2"
-git tag -a v1.4.2 -m "TVBox v1.4.2"
-git push origin v1.4.2
-```
-
-3. 创建草稿 Release 并上传 APK 与相同版本的 OTA 清单，检查附件完整性。
-
-```powershell
-gh release create v1.4.2 app\build\outputs\apk\release\TVBox-v1.4.2.apk app\build\outputs\apk\release\update.json --repo ZxxXinI/tvbox --verify-tag --draft --title "TVBox v1.4.2" --notes-file app\build\outputs\apk\release\release-notes.md
-```
-
-4. 公开 Release 后推送主分支，使 OTA 清单指向已经可下载的附件。
-
-```powershell
-gh release edit v1.4.2 --repo ZxxXinI/tvbox --draft=false --latest
-git push origin main
-```
-
-> GitHub Release 包含对应版本的 APK 和 `update.json`；应用启动时从 GitHub `main` 分支读取更新清单。
+1. 更新版本号和 CHANGELOG，构建并校验签名 APK，给源码打上对应版本标签。
+2. 在 GitHub 和 Gitee 的对应发行版上传同一份 APK。Gitee 网页上传方式见 [AGENTS.md](AGENTS.md)。
+3. 以未登录状态完整下载 Gitee 的 APK，核对文件大小和 SHA-256，用下载链接生成 `update.json`。
+4. 将同一份 `update.json` 上传到两个发行版并同步到两个仓库的 `main`，核对两个 OTA 清单都能读取。
 
 ## 项目结构
 
