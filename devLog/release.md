@@ -1,5 +1,13 @@
 ﻿# Release - 2026-06-25
 
+## 2026-11-28 09:36 - v1.4.3 双平台发行与 OTA 清单
+
+- GitHub 和 Gitee 发行版均为 v1.4.3，版本标签指向 `b82086d`。发布说明包含用户确认的「眼里有星星」致谢。
+- GitHub 和 Gitee 的 `TVBox-v1.4.3.apk` 均已完整匿名下载，大小为 5248167 字节，SHA-256 为 `eb3b2fb31b55f1ca4658dc2a26e40148cf84c1e1c450c211386eafddc72b94b0`。
+- `update.json` 的 APK 地址使用 Gitee 公开附件链接，版本码为 10403。两个发行版上的 JSON 均已匿名下载并逐字节核对，文件为 747 字节，SHA-256 为 `2f9ae1edea78c6993c87303c0f9d1f357dc5a78a3999038da5d3a4247c35aa97`。
+- 将同一份清单提交到 GitHub 与 Gitee 的 `main`。新版使用 Gitee 清单，旧版通过已有的 GitHub 清单获取本次更新。
+- [GitHub Release](https://github.com/ZxxXinI/tvbox/releases/tag/v1.4.3) · [Gitee Release](https://gitee.com/zhen-xin/tv-box/releases/tag/v1.4.3)
+
 ## 2026-11-28 09:24 - v1.4.3 构建和 Gitee OTA 迁移
 
 - `app/build.gradle.kts` 升级到 10403 / 1.4.3。`AppUpdateRepository.kt` 将固定 OTA 清单入口更新为 Gitee 的 `main/update.json`。

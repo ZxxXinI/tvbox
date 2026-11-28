@@ -1,5 +1,10 @@
 ﻿# TVBox AI Dev Log
 
+### 2026-11-28 09:36 - v1.4.3 双平台发行与 OTA 清单
+
+- GitHub 和 Gitee 发行版使用已确认的发布说明，附件采用同一份签名 APK 和 `update.json`。
+- 已匿名下载 Gitee APK 并核对大小和 SHA-256。两个仓库的 `main/update.json` 指向这份 Gitee 附件，GitHub 清单为使用旧入口的应用提供一次升级。 [发布日志](release.md)
+
 ### 2026-11-28 09:24 - v1.4.3 构建和 Gitee OTA 迁移
 
 - 将新版首页、选集和播放控件、自定义大模型及默认数据源在线同步纳入 v1.4.3（10403）。
